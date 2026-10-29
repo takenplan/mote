@@ -6,7 +6,7 @@ require('../../../scripts/fixture-language.cjs');
  * JSON {token}), MOTE_FINAL_SCENARIO_PATH (JSON {generatedOnly:true,question,
  * conversationId?,expectedMarker?,evidenceRef?,noteText?,noteDescription?,
  * deleteAfterSubmit?:false,searchQuery?:string,materialRef?:string,
- * expectedCitationIds?:string[]}). Optional MOTE_FINAL_UI_OUTPUT selects private output.
+ * expectedCitationIds?:string[],verifySavedNoteCitation?:boolean}). Optional MOTE_FINAL_UI_OUTPUT selects private output.
  * The Central remains running for other clients; only this browser is cleaned up.
  */
 const {app,BrowserWindow}=require('electron');
@@ -46,12 +46,30 @@ async function run(){
  await until(async()=>{run=await request('/api/query-runs/'+encodeURIComponent(run.id));return ['completed','failed','cancelled'].includes(run.status);},'real Terra completion',630000);assert.equal(run.status,'completed','Actual Terra run must complete');assert.ok(run.conversationId&&run.turnId);if(scenario.conversationId)assert.equal(run.conversationId,scenario.conversationId,'Continue the same cross-client conversation');
  const conversation=await request('/api/conversations/'+encodeURIComponent(run.conversationId)),turn=conversation.turns.find(value=>value.id===run.turnId);assert.ok(turn?.result);assert.equal(turn.question,scenario.question);assert.equal(turn.result.modelSelection?.model,'gpt-6.1-terra','Persisted selected model');if(scenario.expectedMarker)assert.ok(turn.result.answer.includes(scenario.expectedMarker),'Actual model answer contains generated evidence marker');
  report.conversationId=conversation.id;report.turnId=turn.id;report.actualModel=turn.result.modelSelection.model;report.citationIds=turn.result.citations.map(value=>value.id);report.answer=turn.result.answer;report.scope=conversation.scope;report.tools=turn.result.trace?.map(value=>value.tool);
+ if(scenario.verifySavedNoteCitation){
+  assert.ok(report.savedNoteId,'The expected note was saved through the actual UI');
+  const original=await request('/api/capture-browser/'+encodeURIComponent(report.savedNoteId));
+  const links=[];
+  for(const cite of turn.result.citations){
+   if(cite.id===original.id){links.push({originalId:original.id,evidenceId:cite.id,kind:'original'});continue;}
+   const origin=cite.provenance;
+   if(!/^mat_[a-f0-9]{64}$/.test(origin?.externalId??'')||!/^[a-f0-9]{64}$/.test(origin?.revision??''))continue;
+   const pinned=await request('/api/materials/'+origin.externalId+'/revisions/'+origin.revision);
+   if(pinned.origin.externalId!==original.id||pinned.origin.deviceId!==original.deviceId||pinned.origin.sourceId!==origin.sourceId)continue;
+   const cited=await request('/api/capture-browser/'+encodeURIComponent(cite.id));
+   assert.equal(cited.ocrText,original.ocrText,'The delivered current block preserves the exact original note bytes');
+   assert.equal(cited.provenance.revision,pinned.revision,'The citation opens its exact stored version');
+   links.push({originalId:original.id,evidenceId:cite.id,materialRef:pinned.ref,kind:'stored-material-block',readerBytesMatch:true});
+  }
+  assert.ok(links.length>0,'An actual citation must identify the UI-saved note or its verified stored primary block');
+  report.savedNoteCitationLinks=links;
+ }
  if(scenario.materialRef){assert.equal(conversation.scope.anchorMaterialRef,scenario.materialRef,'Keep the one exact whole-Material version reference');assert.equal(conversation.scope.anchorEvidenceIds,undefined,'Do not replace the whole Material with a partial original list');assert.ok(report.tools?.includes('material_read'),'The real model reads through the existing Material tool');}
  for(const id of scenario.expectedCitationIds??[])assert.ok(report.citationIds.includes(id),'Actual model cites the expected generated original '+id);
  await until(()=>js(`!!document.querySelector('#conversation-turn-${turn.id} .answer-view, #conversation-turn-${turn.id} .markdown')`),'persisted answer rendered');await snap('ask-terra-complete');report.checks.push('Actual Web submission completed with local Codex Server gpt-6.1-terra and persisted same conversation/turn identity');
  const citation=scenario.evidenceRef?.startsWith('capture:')?scenario.evidenceRef.slice(8):turn.result.citations[0]?.id;
  if(citation){assert.ok(turn.result.citations.some(value=>value.id===citation),'Expected original is an actual citation');const original=await request('/api/capture-browser/'+encodeURIComponent(citation));await js(`(()=>{const buttons=[...document.querySelectorAll('#conversation-turn-${turn.id} .citation')];const i=${JSON.stringify(turn.result.citations.findIndex(value=>value.id===citation))};if(!buttons[i])throw Error('Missing actual citation button');buttons[i].click();})()`);await until(()=>js(`!!document.querySelector('.evidence-modal')`),'exact cited reader');await until(()=>js(`document.querySelector('.evidence-text pre')?.textContent===${JSON.stringify(original.ocrText)}`),'exact stored original bytes');await snap('citation-original');
-  if(scenario.deleteAfterSubmit){await click('删除这条记录');await snap('delete-original-confirm');await click('确认删除');await until(()=>js(`!document.querySelector('.evidence-modal')`),'delete returns to conversation');const after=await request('/api/conversations/'+encodeURIComponent(conversation.id)),retained=after.turns.find(value=>value.id===turn.id);assert.equal(retained.result.answer,turn.result.answer);assert.deepEqual(retained.result.citations.map(value=>value.id),turn.result.citations.map(value=>value.id));await until(()=>js(`document.querySelector('#conversation-turn-${turn.id}')?.textContent.includes(${JSON.stringify(turn.result.answer.slice(0,30))})`),'history retained in UI');await snap('ordinary-delete-history-retained');report.checks.push('Ordinary generated-original deletion preserves submitted answer and citation identity');}
+  if(scenario.deleteAfterSubmit){await js(`document.querySelector('.evidence-modal .reader-more-button').click()`);await until(()=>js(`!!document.querySelector('.reader-tools-dialog')`),'source-defined original More actions');await click('删除这条记录');await snap('delete-original-confirm');await click('确认删除');await until(()=>js(`!document.querySelector('.evidence-modal')`),'delete returns to conversation');const after=await request('/api/conversations/'+encodeURIComponent(conversation.id)),retained=after.turns.find(value=>value.id===turn.id);assert.equal(retained.result.answer,turn.result.answer);assert.deepEqual(retained.result.citations.map(value=>value.id),turn.result.citations.map(value=>value.id));await until(()=>js(`document.querySelector('#conversation-turn-${turn.id}')?.textContent.includes(${JSON.stringify(turn.result.answer.slice(0,30))})`),'history retained in UI');await snap('ordinary-delete-history-retained');report.checks.push('Ordinary generated-original deletion preserves submitted answer and citation identity');}
   else{await js(`document.querySelector('[aria-label="关闭证据详情"]').click()`);await until(()=>js(`!document.querySelector('.evidence-modal')`),'citation returns to same turn');assert.ok(await js(`!!document.querySelector('#conversation-turn-${turn.id}')`));report.checks.push('Exact authorized citation original opened and returned to same rendered conversation');}
  }
  for(const [name,hash] of [['library','#/library?view=materials'],['memory','#/library?view=memories'],['sources','#/connections'],['models','#/system/models'],['processing','#/system/models?category=processing'],['settings','#/preferences'],['directory','#/guide']]){await route(hash);await snap(name);}
