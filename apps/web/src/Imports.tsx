@@ -4,7 +4,7 @@ import {readImportDrop} from './import-drop';
 import {ImportQueueRow,ImportQueueDetail} from './ImportQueueEntry';
 import { moteText } from '@mote/shared/i18n';
 import React,{useEffect,useState,useRef,useSyncExternalStore} from 'react';
-import {Check,FileArchive,FileText,FolderOpen,LoaderCircle,Plus,RefreshCw,Trash2,Upload,X} from 'lucide-react';
+import {Check,FileArchive,FileText,FolderOpen,LoaderCircle,Plus,RefreshCw,Trash2,X} from 'lucide-react';
 import type {ImportJob,ImportStatus} from '@mote/shared';
 import {ApiError,type Api,bytes,dateTime,errorMessage} from './api';
 import {ArchivedFileButton} from './ArchivedFileButton';
@@ -26,8 +26,8 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   const [loadError,setLoadError]=useState('');
   const loadedApi=useRef<Api|null>(null);
   const [items,setItems]=useState<ImportJob[]>([]),[selected,setSelected]=useState('');
-  const [creating,setCreating]=useState(true),[mode,setMode]=useState<'files'|'directory'>('files');
-  const [files,setFiles]=useState<File[]>([]),[directory,setDirectory]=useState(''),[name,setName]=useState(''),[instruction,setInstruction]=useState('');
+  const [creating,setCreating]=useState(true);
+  const [files,setFiles]=useState<File[]>([]),[name,setName]=useState(''),[instruction,setInstruction]=useState('');
   const [sourcePackId,setSourcePackId]=useState(''),[imageProfileId,setImageProfileId]=useState('');
   const imagePlans=useResource<{policy:{profiles:import('@mote/shared').ProcessingProfile[]};processors:{id:string;stage:string;mediaTypes:string[]}[]}>(api,'/api/file-processing');
   const sourcePacks=useResource<{items:{id:string;version:string;description?:string}[]}>(api,'/api/import-source-packs');
@@ -48,7 +48,7 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   const [revision,setRevision]=useState(0);
   useEffect(()=>{const controller=new AbortController();scope.current=controller;return()=>controller.abort();},[api]);
   useEffect(()=>{confirmGeneration.current++;setConfirmError(null);},[api,selected]);
-  useEffect(()=>{fileRead.current?.abort();fileRead.current=null;loadedApi.current=null;setReadingFiles(false);setItems([]);setSelected('');setCreating(true);setLoadError('');setError('');setPending(new Set());setActionErrors({});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');setDirectory('');pendingJobs.current=new Set();queueVersion.current=0;},[api]);
+  useEffect(()=>{fileRead.current?.abort();fileRead.current=null;loadedApi.current=null;setReadingFiles(false);setItems([]);setSelected('');setCreating(true);setLoadError('');setError('');setPending(new Set());setActionErrors({});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');pendingJobs.current=new Set();queueVersion.current=0;},[api]);
   useEffect(()=>{
     if(queueVersion.current===queueState.completedVersion)return;
     queueVersion.current=queueState.completedVersion;
@@ -86,14 +86,14 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   }
   function update(job:ImportJob){setItems(current=>[job,...current.filter(item=>item.id!==job.id)]);setRevision(v=>v+1);}
   function create(){
-    if(readingFiles||(mode==='files'?!files.length:!directory.trim()))return;
-    try{queue.enqueue({source:mode==='files'?{kind:'files',files}:{kind:'directory',path:directory},name,instruction,sourcePackId,imageProfileId});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');setDirectory('');setError('');}
+    if(readingFiles||!files.length)return;
+    try{queue.enqueue({source:{kind:'files',files},name,instruction,sourcePackId,imageProfileId});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');setError('');}
     catch(error){setError(errorMessage(error));}
   }
   function editEntry(entry:ImportQueueEntry){
-    const draft=queue.draft(entry.id);if(!draft)return;
+    const draft=queue.draft(entry.id);if(!draft||draft.source.kind!=='files')return;
     fileRead.current?.abort();fileRead.current=null;setReadingFiles(false);
-    queue.discard(entry.id);setMode(draft.source.kind);setFiles([]);setDirectory(draft.source.kind==='directory'?draft.source.path:'');setName(draft.name);setInstruction(draft.instruction);setSourcePackId(draft.sourcePackId);setImageProfileId(draft.imageProfileId??'');setCreating(true);setSelected('');setError('');
+    queue.discard(entry.id);setFiles([]);setName(draft.name);setInstruction(draft.instruction);setSourcePackId(draft.sourcePackId);setImageProfileId(draft.imageProfileId??'');setCreating(true);setSelected('');setError('');
   }
   async function mutate(id:string,work:(signal:AbortSignal)=>Promise<ImportJob|void>,confirmJobId?:string,success?:()=>void){
     const jobs=pendingJobs.current;if(jobs.has(id))return;
@@ -125,15 +125,14 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
       </aside>
       <div className="workspace-content">
       {creating?<form className="panel import-form" onSubmit={e=>{e.preventDefault();void create();}}>
-        <div className="section-heading"><div><h2>{moteText("添加一份资料")}</h2><p>{moteText("支持多个文件、ZIP 压缩包，或中央服务器上的目录。")}</p></div></div>
+        <div className="section-heading"><div><h2>{moteText("添加一份资料")}</h2><p>{moteText("支持多个文件、文件夹和 ZIP 压缩包。")}</p></div></div>
         <p>{moteText('图片默认使用中央图片方案，原件保存后自动处理。')}</p><details><summary>{moteText('更改本次图片处理')}</summary><label>{moteText('中央图片方案')}<select value={imageProfileId} onChange={e=>setImageProfileId(e.target.value)}><option value="">{moteText('跟随默认设置')}</option><option value="archive">{moteText('仅保存原件')}</option>{imagePlans.data?.policy?.profiles.filter(p=>p.processorId!=='archive'&&(p.imageRecipe||imagePlans.data?.processors?.some(x=>x.id===p.processorId&&x.stage==='extract'&&x.mediaTypes.some(t=>t==='image/'||t==='image/*'||t.startsWith('image/'))))).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label></details>
-        <nav className="segmented-nav" aria-label={moteText("导入方式")}><button type="button" className={mode==='files'?'active':''} onClick={()=>setMode('files')}><Upload size={15}/>{moteText("选择文件")}</button><button type="button" className={mode==='directory'?'active':''} onClick={()=>setMode('directory')}><FolderOpen size={15}/>{moteText("服务器目录")}</button></nav>
-        {mode==='files'?<><label className={'file-drop '+(dragging?'dragging':'')} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);void addDrop(e.dataTransfer);}}><FileArchive size={30}/><strong>{moteText("选择文件，或将文件和文件夹拖到这里")}</strong><span>{moteText("聊天导出、文档、笔记与附件可以一起提交")}</span><input type="file" multiple disabled={readingFiles} aria-label={moteText("选择导入文件")} onChange={e=>{addFiles(Array.from(e.target.files??[]));e.target.value='';}}/></label><label className="button secondary import-folder-picker"><FolderOpen size={15}/>{moteText("选择文件夹…")}<input type="file" multiple {...{webkitdirectory:''}} disabled={readingFiles} aria-label={moteText("选择文件夹…")} onChange={e=>{addFiles(Array.from(e.target.files??[]));e.target.value='';}}/></label>{readingFiles&&<p role="status">{moteText("正在读取所选文件…")}</p>}{files.length>0&&<div className="selected-files"><div className="source-toolbar"><strong>{moteText("已选")}{' '}{files.length}{' '}{moteText("个文件")}</strong><span className="muted">{bytes(files.reduce((sum,file)=>sum+file.size,0))}</span><button type="button" className="text-button" disabled={readingFiles} onClick={()=>setFiles([])}>{moteText("清空")}</button></div>{files.map((file,index)=><div key={index} className="file-row"><FileText size={15}/><span>{file.webkitRelativePath||file.name}</span><small>{bytes(file.size)}</small><button type="button" className="icon-button" disabled={readingFiles} aria-label={moteText("移除 ")+(file.webkitRelativePath||file.name)} onClick={()=>setFiles(value=>value.filter((_,i)=>i!==index))}><X size={14}/></button></div>)}</div>}</>:<label className="field-label">{moteText("中央服务器上的目录")}<input value={directory} onChange={e=>setDirectory(e.target.value)} placeholder="/data/imports/my-notes" required maxLength={4000}/><small>{moteText("这是运行 Mote 中央节点的机器上的路径。节点会复制可读取的文件到归档。")}</small></label>}
+        <label className={'file-drop '+(dragging?'dragging':'')} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);void addDrop(e.dataTransfer);}}><FileArchive size={30}/><strong>{moteText("选择文件，或将文件和文件夹拖到这里")}</strong><span>{moteText("聊天导出、文档、笔记与附件可以一起提交")}</span><input type="file" multiple disabled={readingFiles} aria-label={moteText("选择导入文件")} onChange={e=>{addFiles(Array.from(e.target.files??[]));e.target.value='';}}/></label><label className="button secondary import-folder-picker"><FolderOpen size={15}/>{moteText("选择文件夹…")}<input type="file" multiple {...{webkitdirectory:''}} disabled={readingFiles} aria-label={moteText("选择文件夹…")} onChange={e=>{addFiles(Array.from(e.target.files??[]));e.target.value='';}}/></label>{readingFiles&&<p role="status">{moteText("正在读取所选文件…")}</p>}{files.length>0&&<div className="selected-files"><div className="source-toolbar"><strong>{moteText("已选")}{' '}{files.length}{' '}{moteText("个文件")}</strong><span className="muted">{bytes(files.reduce((sum,file)=>sum+file.size,0))}</span><button type="button" className="text-button" disabled={readingFiles} onClick={()=>setFiles([])}>{moteText("清空")}</button></div>{files.map((file,index)=><div key={index} className="file-row"><FileText size={15}/><span>{file.webkitRelativePath||file.name}</span><small>{bytes(file.size)}</small><button type="button" className="icon-button" disabled={readingFiles} aria-label={moteText("移除 ")+(file.webkitRelativePath||file.name)} onClick={()=>setFiles(value=>value.filter((_,i)=>i!==index))}><X size={14}/></button></div>)}</div>}
         <label className="field-label">{moteText("资料名称")}{' '}<span className="muted">{moteText("选填")}</span><input value={name} onChange={e=>setName(e.target.value)} placeholder={moteText("例如：过去一年的随手记")} maxLength={200}/></label>
         {Boolean(sourcePacks.data?.items?.length)&&<label className="field-label import-parser-field">{moteText("解析方式")}<select value={sourcePackId} onChange={event=>setSourcePackId(event.target.value)}><option value="">{moteText("默认格式处理或模型解析")}</option>{sourcePacks.data!.items.map(pack=><option key={pack.id} value={pack.id}>{pack.description||pack.id} · {pack.version}</option>)}</select><small className="import-parser-selection">{sourcePackId?(()=>{const pack=sourcePacks.data!.items.find(pack=>pack.id===sourcePackId);return pack?`${pack.description||pack.id} · ${pack.version}`:sourcePackId;})():moteText("默认格式处理或模型解析")}</small><small>{moteText('格式按所选 Source Pack 解析；说明用于资料背景和归属范围。')}</small></label>}
         <label className="field-label">{moteText('格式、作者与归属说明')}{' '}<span className="muted">{moteText('选填')}</span><textarea value={instruction} onChange={e=>setInstruction(e.target.value)} rows={4} maxLength={12000} placeholder={moteText('例如：这是我的日记，引用和 AI 回复属于原说话人。时间是北京时间；每篇日记独立保存。')}/><small>{moteText('可一次说明格式、时间、作者，以及哪些内容属于你。模型按说明范围理解，第三方和 AI 引用保留原角色。')}</small><small>{moteText('未填写也会保留原件，可检索已提取的正文；身份未知时，可保存有用的来源限定观察。')}</small></label>
         {error&&<div className="error-banner" role="alert">{error}</div>}
-        <div className="form-footer"><span className="muted">{moteText("明确可靠且无歧义的解析结果会自动保存；其余需要你确认。")}</span><button className="button primary" disabled={readingFiles||(mode==='files'?!files.length:!directory.trim())}><Plus size={15}/>{moteText("加入导入队列")}</button></div>
+        <div className="form-footer"><span className="muted">{moteText("明确可靠且无歧义的解析结果会自动保存；其余需要你确认。")}</span><button className="button primary" disabled={readingFiles||!files.length}><Plus size={15}/>{moteText("加入导入队列")}</button></div>
         <p className="import-session-hint">{moteText('切换页面后队列继续运行。未上传完的本地文件需保持当前浏览器会话。')}</p>
       </form>:active?<article className="panel import-detail">
         <div className="section-heading"><div><div className="eyebrow">{label(active)}</div><h2>{active.name}</h2><p>{dateTime(active.createdAt)} · {active.archive.files}{' '}{moteText("个原件 ·")}{' '}{bytes(active.archive.bytes)}</p></div></div>
