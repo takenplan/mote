@@ -139,7 +139,7 @@ test('draft survives background/locale refresh and supplemental routing, while n
  assert.equal(f.input(),null);await act(async()=>{f.dom.window.history.replaceState(null,'','#/ask');f.dom.window.dispatchEvent(new f.dom.window.HashChangeEvent('hashchange'));});assert.equal(f.input().value,'Generated preserved draft');
  revision=2;await act(async()=>resources(api).invalidate(path=>path==='/api/conversations/A'));assert.equal(f.d.querySelectorAll('.conversation-turn').length,1);assert.equal(f.d.querySelectorAll('.inline-citation').length,0);assert.match(f.d.body.textContent!,/相关证据已删除/);assert.equal(f.input().value,'Generated preserved draft');
  await f.click('新对话');assert.equal(f.input().value,'Generated preserved draft');await f.click('舍弃并切换');assert.equal(f.input().value,'');await f.type('Generated new draft');await act(async()=>f.d.querySelector<HTMLButtonElement>('.conversation-item')!.click());assert.equal(f.input().value,'Generated new draft');await f.click('舍弃并切换');assert.equal(f.input().value,'');
- await f.type('Generated deleted draft');await act(async()=>f.d.querySelector<HTMLButtonElement>('[aria-label="对话更多"]')!.click());await f.click('删除此对话');await f.click('确认删除对话');assert.equal(f.input().value,'');
+ await f.type('Generated deleted draft');await act(async()=>f.d.querySelector<HTMLButtonElement>('[aria-label="对话更多"]')!.click());await f.click('删除这段对话');await f.click('删除对话');assert.equal(f.input().value,'');
  await f.type('Generated old API draft');await f.render(apiWith(read,'A'));assert.equal(f.input().value,'');await f.type('Generated old connection draft');await f.render(apiWith(read,'B'));assert.equal(f.input().value,'');assert.doesNotMatch(f.d.body.textContent!,/Generated old connection draft/);
 });
 
