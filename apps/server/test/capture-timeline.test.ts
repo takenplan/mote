@@ -97,3 +97,14 @@ test('an unloaded source-head replacement invalidates locators and never present
  await node.request('/api/capture-browser/timeline/members',{...scope,group:group.id},owner,409);
  const after=await node.request('/api/capture-browser/timeline',scope) as CaptureTimelinePage,recordIds=after.items.flatMap(item=>item.type==='record'?[item.record.id]:[]);assert.ok(recordIds.includes(current.id));assert.ok(!recordIds.includes(old.id));assert.notEqual(current.id,old.id);
 });
+
+test('a retained metadata-only screen series has distinct date rows when its original precedes the selected range',async t=>{
+ const node=await fixture(t),id=randomUUID(),at='2026-10-28T23:59:00.000Z';
+ await node.add({id,deviceId:'generated-screen-series',deviceName:'Generated screen',platform:'android',capturedAt:at,durationMs:0,appId:'generated.app',appName:'Generated app',windowTitle:'',source:'screen',ocrText:'',ocr:{status:'disabled'},metadata:{version:1,observedAt:at,capture:{deduplication:{mode:'exact',duplicate:true}}},privacy:{collection:'content',mode:'none'},stateSeries:{version:1,samples:[{at,durationMs:0},{at:'2026-10-28T23:59:40.000Z',durationMs:0},{at:'2026-10-29T00:00:10.000Z',durationMs:0}]}});
+ const range={after:'2026-10-28T23:59:30.000Z',before:'2026-10-29T00:01:00.000Z',timeZone:'UTC'};
+ const page=await node.request('/api/capture-browser/timeline',range) as CaptureTimelinePage;
+ assert.equal(page.items.length,2,'The two observed dates cannot collapse into an arbitrary date');
+ assert.equal(new Set(page.items.map(item=>item.id)).size,2,'Projection identities stay distinct while original identity stays exact');
+ for(const [index,day] of ['2026-10-29','2026-10-28'].entries()){const item=page.items[index];assert.equal(item.type,'record');if(item.type!=='record')assert.fail('Expected one original row per observed date');assert.equal(item.record.id,id);assert.equal(item.day,day);assert.equal(item.sampleCount,1);assert.equal(item.firstAt,item.lastAt);assert.ok(item.firstAt.startsWith(day));}
+ const first=await node.request('/api/capture-browser/timeline',{...range,limit:1}) as CaptureTimelinePage;assert.ok(first.nextCursor);const next=await node.request('/api/capture-browser/timeline',{...range,limit:1,cursor:first.nextCursor!}) as CaptureTimelinePage;assert.equal(next.items[0].day,'2026-10-28');assert.equal(next.nextCursor,null);
+});

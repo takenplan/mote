@@ -70,7 +70,7 @@ export class CaptureTimeline {
     WHEN source IN ('ui_page','notification','device_event','activity','media') THEN 'source' ELSE 'record' END kind FROM filtered
   ), identified AS (
    SELECT *,CASE WHEN kind='screen-session' THEN json_array(kind,device_id,day,session_id)
-    WHEN kind='source' THEN json_array(kind,device_id,day,source) ELSE json_array(kind,id) END group_key FROM classified
+    WHEN kind='source' THEN json_array(kind,device_id,day,source) ELSE json_array(kind,id,day) END group_key FROM classified
   ), ranked AS (
    SELECT *,ROW_NUMBER() OVER (PARTITION BY group_key ORDER BY observation_at DESC,id DESC) rn FROM identified
   ), grouped AS (
@@ -93,7 +93,7 @@ export class CaptureTimeline {
   const context=this.prepare(input,ownerIdentity),position=input.cursor?this.open(input.cursor,'groups-page'):undefined;if(position)this.current(position,context);
   if(position&&(!position.at||!position.key))throw new StoreError('Invalid timeline cursor');
   const rows=this.store.db.prepare(context.sql+` SELECT * FROM grouped ${position?'WHERE last_at<? OR (last_at=? AND group_key<?)':''} ORDER BY last_at DESC,group_key DESC LIMIT ?`).all(...context.values,...(position?[position.at!,position.at!,position.key!]:[]),input.limit+1) as unknown as GroupRow[];
-  const selected=rows.slice(0,input.limit),items:CaptureTimelinePage['items']=selected.map(row=>row.kind==='record'?{type:'record',id:row.representative,day:row.day,firstAt:row.first_at,lastAt:row.last_at,sampleCount:row.sample_count===null?null:Number(row.sample_count),record:this.store.preview(this.store.evidence([row.representative])[0])}:this.group(row,context)),last=selected.at(-1);
+  const selected=rows.slice(0,input.limit),items:CaptureTimelinePage['items']=selected.map(row=>row.kind==='record'?{type:'record',id:this.seal({type:'group',scope:context.scope,revision:context.revision,key:row.group_key}),day:row.day,firstAt:row.first_at,lastAt:row.last_at,sampleCount:row.sample_count===null?null:Number(row.sample_count),record:this.store.preview(this.store.evidence([row.representative])[0])}:this.group(row,context)),last=selected.at(-1);
   return {revision:context.revision,items,nextCursor:rows.length>input.limit&&last?this.seal({type:'groups-page',scope:context.scope,revision:context.revision,at:last.last_at,key:last.group_key}):null};
  });}
  members(input:TimelineRange,ownerIdentity:string,groupId:string):CaptureTimelineMembers{return this.snapshot(()=>{

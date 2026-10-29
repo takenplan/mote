@@ -10,6 +10,7 @@ export interface CaptureTimelineGroup {
   /** Only screen sessions have an observed common application identity. */
   appId?:string; appName?:string;
 }
+/** id identifies this dated projection; record.id retains the exact original. */
 export interface CaptureTimelineRecord {type:'record';id:string;day:string;firstAt:string;lastAt:string;sampleCount:number|null;record:CapturePreview}
 export interface CaptureTimelinePage {revision:string;items:(CaptureTimelineGroup|CaptureTimelineRecord)[];nextCursor:string|null}
 export interface CaptureTimelineMember {record:CapturePreview;firstAt:string;lastAt:string;sampleCount:number|null}
