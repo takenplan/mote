@@ -3,6 +3,7 @@ export const english: Readonly<Record<string, string>> = {
   "引用原文已删除，历史问答仍保留。": "The cited original was deleted. Your past questions and answers are preserved.",
   "引用不可用": "Citation unavailable",
   "返回原对话": "Back to conversation",
+  "日历能力或范围已变化，请在设备重新连接日历，再保存和确认新的范围。": "The calendar capability or scope has changed. Reconnect the calendar on the device, then save and confirm a new scope.",
   "生成任务": "Generation tasks",
   "查看发现": "View discovery",
   "上次提交结果尚未确认；先重试原要求，当前草稿会保留。": "The previous submission is not confirmed. Retry its original request first; your current draft will be kept.",

@@ -3,6 +3,7 @@ export const german: Readonly<Record<string, string>> = {
   "引用原文已删除，历史问答仍保留。": "Die zitierte Quelle wurde gelöscht. Ihre bisherigen Fragen und Antworten bleiben erhalten.",
   "引用不可用": "Quelle nicht verfügbar",
   "返回原对话": "Zurück zum Gespräch",
+  "日历能力或范围已变化，请在设备重新连接日历，再保存和确认新的范围。": "Kalenderfunktion oder Umfang haben sich geändert. Verbinden Sie den Kalender auf dem Gerät erneut und speichern und bestätigen Sie dann einen neuen Umfang.",
   "生成任务": "Generierungsaufgaben",
   "查看发现": "Entdeckung ansehen",
   "上次提交结果尚未确认；先重试原要求，当前草稿会保留。": "Die vorherige Übermittlung wurde nicht bestätigt. Wiederholen Sie zuerst die ursprüngliche Anfrage; Ihr aktueller Entwurf bleibt erhalten.",

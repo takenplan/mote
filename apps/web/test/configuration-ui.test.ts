@@ -206,3 +206,17 @@ test('malformed calendar inventory reports a recoverable error without rendering
  payload=emptyCapabilities();await act(async()=>button(d,'刷新').click());
  assert.equal(d.querySelector('[role=alert]'),null);assert.match(d.body.textContent!,/暂无已连接的可写日历/);assert.equal(writes,0);
 });
+
+test('old calendar capabilities and scope drafts are not offered as current authorization choices',async t=>{
+ const {root,d}=await fixture(t),target={deviceId:'generated-device',calendarId:'generated-calendar',declarationRevision:1};let writes=0;
+ const declaration={deviceId:target.deviceId,connectionActive:true,permission:'granted',revision:1,calendars:[{id:target.calendarId,title:'Generated calendar'}]};
+ const draft={id:'generated-draft',revision:1,target,inputs:{sources:[],existingArchived:true,futureInputs:true},state:'draft',updatedAt:'2026-10-29T00:00:00Z'};
+ let capability={id:'calendar.create',version:1};
+ const api={request:async(_path:string,init?:RequestInit)=>{if(init?.method)writes++;return {...emptyCapabilities(),declarations:[{...declaration,capability}],drafts:[{...draft,capability}]};}} as Api;
+ await act(async()=>root.render(React.createElement(ActionCapabilitySettings,{api})));
+ assert.match(d.body.textContent!,/请在设备重新连接日历，再保存和确认新的范围/);
+ assert.equal(d.querySelectorAll('select option').length,1);assert.doesNotMatch(d.body.textContent!,/继续草稿 ·/);
+ assert.equal(button(d,'保存范围草稿').disabled,true);
+ capability={id:'calendar.manage',version:1};await act(async()=>button(d,'刷新').click());
+ assert.equal(d.querySelectorAll('select option').length,2);assert.match(d.body.textContent!,/继续草稿 ·/);assert.equal(writes,0);
+});
