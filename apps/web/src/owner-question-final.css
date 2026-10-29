@@ -1,0 +1,34 @@
+/* Final supplemental questions: explicit replies and a quiet, source-first reading order. */
+.owner-question-final { color:var(--mote-ink); }
+.owner-question-final .owner-question-tabs { display:flex;gap:22px;border-bottom:1px solid var(--mote-divider);margin:12px 0 18px; }
+.owner-question-final .owner-question-tabs button { background:none;border:0;border-radius:0;color:var(--mote-muted);padding:10px 0;cursor:pointer;font:inherit; }
+.owner-question-final .owner-question-tabs button[aria-pressed="true"] { color:var(--mote-ink);border-bottom:2px solid var(--mote-accent); }
+.owner-question-final .owner-question-empty,.owner-question-final .owner-question-status,.owner-question-final .owner-question-reason { color:var(--mote-muted);font-size:var(--mote-font-support,13px);line-height:1.65; }
+.owner-question-final.owner-question-conversation { width:100%;max-width:850px;margin:0 auto;padding:28px 34px 40px;overflow:auto; }
+.owner-question-final .conversation-heading { margin-bottom:12px; }
+.owner-question-final .owner-question-status { margin-bottom:12px; }
+.owner-question-final .owner-question-reason { margin:0 0 18px; }
+.owner-question-final .owner-question-evidence { padding:15px 0;border-top:1px solid var(--mote-divider);border-bottom:1px solid var(--mote-divider);margin-bottom:26px; }
+.owner-question-final .owner-question-evidence summary { cursor:pointer;font-size:14px; }
+.owner-question-final .owner-question-quote { white-space:pre-wrap;overflow-wrap:anywhere;margin:16px 0 10px;padding:12px 16px;border-left:2px solid var(--mote-control-border);color:var(--mote-muted);line-height:1.8; }
+.owner-question-final .owner-question-dialogue { display:grid;gap:16px; }
+.owner-question-final .owner-question-message { border:1px solid var(--mote-border);border-radius:var(--mote-radius-reading,12px);padding:18px 20px;background:var(--mote-surface); }
+.owner-question-final .owner-question-message.user { margin-left:32px;background:var(--mote-tint); }
+.owner-question-final .owner-question-role { display:block;font-size:12px;color:var(--mote-muted);margin-bottom:8px; }
+.owner-question-final .owner-question-message p { white-space:pre-wrap;overflow-wrap:anywhere;margin:0;line-height:1.8; }
+.owner-question-final .owner-question-notice { margin:20px 0;padding:14px 16px;border:1px solid var(--mote-border);border-radius:10px;color:var(--mote-muted);font-size:13px;line-height:1.7; }
+.owner-question-final .owner-question-notice strong { color:var(--mote-ink);font-weight:600; }
+.owner-question-final .owner-question-notice p { margin:5px 0 0; }
+.owner-question-final .owner-question-form { position:static;background:none;border:0;box-shadow:none;margin-top:26px; }
+.owner-question-final .owner-question-choices { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px; }
+.owner-question-final .owner-question-choices [aria-pressed="true"] { border-color:var(--mote-accent);background:var(--mote-tint); }
+.owner-question-final .owner-question-form label { display:grid;gap:9px;font-size:13px; }
+.owner-question-final .owner-question-form textarea { width:100%;min-height:112px;resize:vertical;box-sizing:border-box;border:1px solid var(--mote-control-border);border-radius:var(--mote-radius-control,8px);background:var(--mote-surface);padding:13px 15px;color:var(--mote-ink);font:inherit;font-size:14px;line-height:1.65; }
+.owner-question-final .owner-question-form textarea:focus-visible { outline:2px solid var(--mote-accent);outline-offset:2px; }
+.owner-question-final .owner-question-actions { display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:16px; }
+.owner-question-final .owner-question-followup { margin-top:20px; }
+.owner-question-final .owner-question-followup .notice { margin-top:12px; }
+@media (max-width:700px) { .owner-question-final.owner-question-conversation { padding:20px 18px 30px; }.owner-question-final .owner-question-message.user { margin-left:18px; }.owner-question-final .owner-question-actions { gap:10px; } }
+
+.owner-question-final .button.subtle { background:var(--mote-surface);border:1px solid var(--mote-control-border);color:var(--mote-ink); }
+.owner-question-final .button.primary { background:var(--mote-primary-background);border:1px solid transparent;color:var(--mote-primary-ink); }
