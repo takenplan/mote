@@ -9571,5 +9571,15 @@
   "关闭资料操作": "Close material actions",
   "日程建议与执行": "Calendar suggestions and execution",
   "发现、设备与日程执行范围": "Discovery, devices and calendar execution scope",
-  "连接、处理与维护": "Connections, processing and maintenance"
+  "连接、处理与维护": "Connections, processing and maintenance",
+  "先留下一点内容。": "Start by saving something.",
+  "记一句想法，或导入一份文件。自动采集可以稍后再设置。": "Write a thought or import a file. You can set up automatic collection later.",
+  "查看状态": "View status",
+  "需要时再开启": "Enable when you need it",
+  "选择范围后，再开始采集": "Choose the scope before starting collection",
+  "文件夹与本机来源": "Folders and local sources",
+  "文件夹、Coding Agent、日历": "Folders, Coding Agents and calendars",
+  "先留下，再慢慢想。": "Save first. Take your time.",
+  "接收结果待核实": "Receipt not yet confirmed",
+  "原文已经保存在这台 Mac，可以随时打开。": "The original is saved on this Mac and can be opened any time."
 }

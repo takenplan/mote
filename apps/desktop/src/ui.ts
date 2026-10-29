@@ -50,9 +50,9 @@ let pageEnteredAt = Date.now();
 const pageScroll = new Map<Page, number>();
 const settingsPages = new Set<Page>(['screen','connection', 'sync', 'capture', 'privacy', 'developer','storage','chrome']);
 const memoryTopicsUi=createMemoryTopicsUi(desktopApi,document.getElementById('memory-topics-dialog') as HTMLDialogElement);
-const workbenchUi=createWorkbenchUi(desktopApi,{question:openWorkbenchQuestion,conversation:openWorkbenchConversation});
+const workbenchUi=createWorkbenchUi(desktopApi,{question:openWorkbenchQuestion,conversation:openWorkbenchConversation,content:item=>void libraryUi.open(item)});
 let contentOrigin:Page='records';
-const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),hasContent=>workbenchUi.setHasContent(hasContent),{
+const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),(hasContent,rows)=>{workbenchUi.setHasContent(hasContent);workbenchUi.setHomeRows(rows);},{
   open(){contentOrigin=currentPage;const title=document.querySelector<HTMLElement>(`[data-page="${currentPage}"] [data-page-title]`)?.textContent?.trim()??moteText('内容');byId('content-detail-close').textContent='← '+title;showPage('content-reader');},
   close(){if(currentPage==='content-reader')showPage(contentOrigin,true,false,true,true);},
 });
@@ -94,6 +94,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
   if (currentPage === 'work' && page !== 'work') {workActivityUi.hide();workPendingUi.hide();}
   if (currentPage === 'permissions' && page !== 'permissions') permissionsUi.hide();
   if (currentPage === 'content-reader' && page !== 'content-reader') libraryUi.close(false);
+  workbenchUi.leave(page);
   currentPage = page;
   if(initialized) renderOperations(currentStatus.operations??[]);
   if(page==='chrome')chromeCaptureUi.refresh();

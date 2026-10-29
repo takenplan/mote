@@ -3,7 +3,7 @@ import type {DesktopApi,Status} from './contracts';
 import type {ContentItem,ContentDetail} from './content-library';
 import type {SyncContent} from './sync-content';
 /** Home and Content share one evidence reader; no markup from evidence becomes UI. */
-export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,homeContentChanged?:(hasContent:boolean|undefined)=>void,reader?:{open():void;close():void}){
+export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,homeContentChanged?:(hasContent:boolean|undefined,rows:readonly ContentItem[])=>void,reader?:{open():void;close():void}){
   const el=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
   const dialog=el<HTMLDialogElement>('content-detail-dialog');
   document.getElementById('content-memories')?.addEventListener('click',()=>openMemories?.());
@@ -14,7 +14,7 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
   const sourceName=(source:ContentItem['source'])=>({screen:moteText('截图'),ui_page:moteText('页面内容采集'),note:moteText('随手记'),activity:moteText('应用活动'),notification:moteText('通知'),media:moteText('媒体状态'),file:moteText('文件'),calendar:moteText('日历'),coding:moteText('编码对话')} as Partial<Record<ContentItem['source'],string>>)[source]??moteText('内容');
   function renderFeed(id:string,rows:ContentItem[],known=true){
     const compact=id==='home-recent',root=el(id);root.replaceChildren();
-    if(compact)homeContentChanged?.(known?rows.length>0:undefined);
+    if(compact)homeContentChanged?.(known?rows.length>0:undefined,rows);
     if(compact&&!rows.length){if(known){const empty=document.createElement('p');empty.className='home-empty';empty.textContent=moteText('还没有本机内容');root.append(empty);}return;}
     if(!rows.length){const empty=document.createElement('div');empty.className='content-empty';const title=document.createElement('strong');title.textContent=moteText('还没有内容，从一个小动作开始');const copy=document.createElement('p');copy.textContent=moteText('同步文件夹、导入文件、记录屏幕或写一条随手记。内容会先保存在本机。');empty.append(title,copy);root.append(empty);return;}
     for(const item of rows){const button=document.createElement('button');button.type='button';button.className='content-row';button.dataset.contentKey=item.key;

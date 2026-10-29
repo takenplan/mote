@@ -9572,5 +9572,15 @@ export const german: Readonly<Record<string, string>> = {
   "关闭资料操作": "Close material actions",
   "日程建议与执行": "Calendar suggestions and execution",
   "发现、设备与日程执行范围": "Discovery, devices and calendar execution scope",
-  "连接、处理与维护": "Connections, processing and maintenance"
+  "连接、处理与维护": "Connections, processing and maintenance",
+  "先留下一点内容。": "Speichere zuerst etwas.",
+  "记一句想法，或导入一份文件。自动采集可以稍后再设置。": "Notiere einen Gedanken oder importiere eine Datei. Automatische Erfassung kannst du später einrichten.",
+  "查看状态": "Status ansehen",
+  "需要时再开启": "Bei Bedarf einschalten",
+  "选择范围后，再开始采集": "Vor der Erfassung den Umfang wählen",
+  "文件夹与本机来源": "Ordner und lokale Quellen",
+  "文件夹、Coding Agent、日历": "Ordner, Coding Agents und Kalender",
+  "先留下，再慢慢想。": "Erst festhalten, dann in Ruhe nachdenken.",
+  "接收结果待核实": "Empfang noch nicht bestätigt",
+  "原文已经保存在这台 Mac，可以随时打开。": "Das Original ist auf diesem Mac gespeichert und jederzeit verfügbar."
 };

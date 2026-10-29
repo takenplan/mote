@@ -45,6 +45,7 @@ it('preserves the home question when changing drafts is cancelled and never subm
 });
 
 it('keeps collection and sending independent and only dismisses first-use after real content or a source',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});
   ui.update(status);await flush();expect(el('home-onboarding').hidden).toBe(true);
   ui.setHasContent(false);
   ui.update({...status,config:{...status.config,syncPaused:true}});await flush();
@@ -62,4 +63,49 @@ it('keeps IPC diagnostics out of the home error and retries history in place',as
   expect(el('home-conversations').textContent).not.toMatch(/mote:ask|503/);
   el('home-conversations').querySelector('button')!.click();await flush();
   expect(el('home-conversations').textContent).toContain(conversation.title);
+});
+
+
+it('does not hide retained conversations behind first-use when all original materials are gone',async()=>{
+  ui.setHasContent(false);ui.update(status);await flush();
+  expect(el('home-onboarding').hidden).toBe(true);
+  expect(document.querySelector('[data-page=overview]')!.classList.contains('first-use-home')).toBe(false);
+  expect(el('home-conversations').textContent).toContain(conversation.title);
+});
+
+it('does not claim an empty profile when its conversation history cannot be read',async()=>{
+  vi.mocked(api.ask).mockRejectedValue(Error('Generated unavailable archive'));
+  ui.setHasContent(false);ui.update(status);await flush();
+  expect(el('home-onboarding').hidden).toBe(true);
+  expect(el('home-conversations').textContent).toContain('对话暂不可读取');
+});
+
+it('tracks the explicitly selected first note by its draft ID and keeps its exact original through a reader return',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});
+  document.querySelector<HTMLElement>('[data-page=overview]')!.hidden=false;
+  api.noteDraft=vi.fn(async()=>({id:conversation.id,text:'',description:'',mood:'',revision:0}));
+  api.localContentDetail=vi.fn(async()=>({text:'  Generated exact original\n第二行  ',metadata:'',sourceName:'Generated Mac'}));
+  ui.update(status);ui.setHasContent(false);await flush();
+  el('home-onboarding').querySelector<HTMLButtonElement>('[data-add-choice=note]')!.click();await flush();
+  ui.setHasContent(true);
+  ui.setHomeRows([{key:'queue:unrelated',source:'note',title:'Unrelated',preview:'Wrong record',observedAt:new Date().toISOString()}]);
+  expect(el('home-first-record').hidden).toBe(true);
+  ui.setHomeRows([{key:'queue:'+conversation.id,source:'note',title:'Generated exact original',preview:'Short preview',observedAt:new Date().toISOString()}]);await flush();
+  expect(el('home-first-record-preview').textContent).toBe('  Generated exact original\n第二行  ');
+  expect(api.localContentDetail).toHaveBeenCalledWith('queue:'+conversation.id);
+  ui.leave('content-reader');expect(el('home-onboarding').hidden).toBe(false);
+  ui.leave('records');expect(el('home-onboarding').hidden).toBe(true);expect(el('home-first-record-preview').textContent).toBe('');
+});
+
+it('cannot restore first-note content after the owner connection changes while its read is pending',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});
+  document.querySelector<HTMLElement>('[data-page=overview]')!.hidden=false;
+  api.noteDraft=vi.fn(async()=>({id:conversation.id,text:'',description:'',mood:'',revision:0}));
+  let finish!:(value:{text:string;metadata:string;sourceName:string})=>void;
+  api.localContentDetail=vi.fn(()=>new Promise(resolve=>{finish=resolve;}));
+  ui.update(status);ui.setHasContent(false);await flush();el('note-action').click();await flush();ui.setHasContent(true);
+  ui.setHomeRows([{key:'queue:'+conversation.id,source:'note',title:'Generated original',preview:'',observedAt:new Date().toISOString()}]);
+  ui.update({...status,authorizationGeneration:2,config:{...status.config,tokenConfigured:false}});
+  finish({text:'Previous owner generated original',metadata:'',sourceName:'Previous owner'});await flush();
+  expect(el('home-first-record-preview').textContent).toBe('');expect(el('home-first-record').hidden).toBe(true);
 });

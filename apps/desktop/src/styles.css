@@ -1227,3 +1227,33 @@ input,select,textarea { accent-color:var(--mote-accent); }
 [data-page="capture"] .narrow-field{max-width:none}
 [data-page="capture"] .disclosure .panel{margin:10px 0;padding:12px 0;border:0;background:transparent}
 #ask-scope .ask-scope>p{flex-basis:100%}
+
+.first-use-home>.page-header{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.first-use-home>.home-ask,.first-use-home>.home-section,.first-use-home>.home-quiet{display:none}
+.first-use-home .home-onboarding{max-width:800px;margin:34px auto 0;padding:0;border:0}
+.first-use-home .home-onboarding>h2{font-size:28px;font-weight:600;margin:15px 0}
+.first-use-home .home-onboarding>p{font-size:13px;line-height:1.9}
+.first-use-home #home-first-status{font-size:11px}
+.first-use-home .home-task-actions{margin-top:24px}
+.first-connection{display:grid;grid-template-columns:1fr auto;gap:8px 20px;margin:40px 0 32px;padding:22px 0;border-block:1px solid var(--mote-divider);align-items:center}
+.first-connection h3{font-size:14px;margin:0 0 6px;font-weight:550}
+.first-connection p{font-size:12px;color:var(--mote-muted);margin:0;line-height:1.9}
+#home-first-help{grid-column:1/-1;width:max-content;padding:0;font-size:11px}
+.first-optional h3{font-size:12px;font-weight:500;color:var(--mote-muted);margin:0 0 12px}
+.first-optional>div{display:flex;align-items:center;gap:20px;padding:15px 0}
+.first-optional>div>span{flex:1}
+.first-optional strong{display:block;font-size:13px;font-weight:500}
+.first-optional small{display:block;color:var(--mote-muted);font-size:11px;margin-top:5px}
+
+.first-use-home .home-task-actions>[data-add-choice=file],.first-use-home #home-first-connect,.first-use-home #home-first-connected,.first-use-home .first-optional button{background:transparent;border-color:transparent;box-shadow:none}
+.first-use-home .first-connection{border-top:0;margin-top:24px;padding-top:0}
+.first-use-home #home-first-help{border-top:1px solid var(--mote-divider);width:100%;text-align:left;margin-top:8px;padding-top:17px}
+.first-use-home .first-optional{border-top:1px solid var(--mote-divider);padding-top:20px}
+
+.first-use-home .first-connection{border-bottom:0}
+.first-use-home .home-task-actions>[data-add-choice=file],.first-use-home #home-first-connect,.first-use-home #home-first-connected{color:var(--mote-muted);font-size:12px;font-weight:400}
+.first-use-home .first-optional button{color:var(--mote-accent);font-size:11px;font-weight:400}
+
+.first-record{margin:28px 0;padding:20px;border:1px solid var(--mote-divider);border-radius:8px;background:var(--mote-surface)}
+#home-first-record-preview{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.9}
+#home-first-read{font-size:12px;padding-left:0}

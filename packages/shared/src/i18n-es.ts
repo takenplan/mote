@@ -9572,5 +9572,15 @@ export const spanish: Readonly<Record<string, string>> = {
   "关闭资料操作": "Close material actions",
   "日程建议与执行": "Calendar suggestions and execution",
   "发现、设备与日程执行范围": "Discovery, devices and calendar execution scope",
-  "连接、处理与维护": "Connections, processing and maintenance"
+  "连接、处理与维护": "Connections, processing and maintenance",
+  "先留下一点内容。": "Empieza guardando algo.",
+  "记一句想法，或导入一份文件。自动采集可以稍后再设置。": "Escribe una idea o importa un archivo. Puedes configurar la captura automática más tarde.",
+  "查看状态": "Ver estado",
+  "需要时再开启": "Actívalo cuando lo necesites",
+  "选择范围后，再开始采集": "Elige el alcance antes de iniciar la captura",
+  "文件夹与本机来源": "Carpetas y fuentes locales",
+  "文件夹、Coding Agent、日历": "Carpetas, agentes de código y calendarios",
+  "先留下，再慢慢想。": "Guarda primero, piensa con calma.",
+  "接收结果待核实": "Recepción aún sin confirmar",
+  "原文已经保存在这台 Mac，可以随时打开。": "El original está guardado en este Mac y se puede abrir en cualquier momento."
 };

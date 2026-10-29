@@ -110,7 +110,7 @@ app.on('browser-window-created', (_event, window) => {
       assert.deepEqual(await js(`Array.from(document.querySelectorAll('.main-nav [data-nav]')).map(b => b.lastElementChild.textContent.trim())`), ['工作台','内容','来源','问一问']);
       assert(await js(`!document.querySelector('[data-page=overview]').hidden`),'A new profile opens Workbench');
       await navigate('overview');
-      assert.equal(await js(`document.querySelectorAll('.home-task-actions [data-add-choice]').length`), 4, 'First use offers note, import, source and capture setup actions');
+      assert.equal(await js(`document.querySelectorAll('#home-onboarding [data-add-choice]').length`), 4, 'First use offers note, import, source and capture setup actions');
       assert.deepEqual(await js(`(()=>{const styles=getComputedStyle(document.body);return ['muted','accent'].map(role=>styles.getPropertyValue('--mote-'+role).trim().toLowerCase());})()`),['#777066','#7651a4'],'Default Home uses the owner-selected final source palette; the prior D34 contrast variance is superseded');
       assert(await js(`document.querySelector('#start').getClientRects().length === 0`), 'Home starts with content actions');
       await navigate('sources');await js(`document.querySelector('#source-add').click()`);
@@ -348,7 +348,7 @@ app.on('browser-window-created', (_event, window) => {
       await js(`document.querySelector('#server-url').value = 'https://discarded.example'; document.querySelector('#server-url').dispatchEvent(new Event('input', {bubbles: true}));`);
       await navigate('overview');
       assert(await js(`document.querySelector('#settings-save-bar').hidden`));
-      await navigate('connection');
+      await navigate('settings');await navigate('connection');
       assert.equal(await js(`document.querySelector('#server-url').value`), status.config.serverUrl, 'Sidebar navigation discards unsaved settings');
       await js(`document.querySelector('#device-name').value = 'Discard with Escape'; document.querySelector('#device-name').dispatchEvent(new Event('input', {bubbles: true})); document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',bubbles:true}));`);
       assert(await js(`!document.querySelector('[data-page="settings"]').hidden && document.querySelector('#settings-save-bar').hidden`), 'Escape returns to the actual Settings entry that opened this connection');

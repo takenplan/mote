@@ -20,7 +20,7 @@ mkdirSync(output,{recursive:true});
 const token='generated-final-workbench-token-'.repeat(3),id='11111111-1111-4111-8111-111111111111';
 const requests=[],errors=[],captures=[];
 const summary={id,title:'周五评审需要准备什么？',turnCount:1,updatedAt:'2026-10-28T08:20:00Z'};
-let historyFailure=false,localReadFailure=false,finished=false,main;
+let historyFailure=false,localReadFailure=false,historyEmpty=true,finished=false,main;const offlineFirstUse=process.env.MOTE_FIRST_USE_OFFLINE==='1';
 const registerHandler=ipcMain.handle.bind(ipcMain);
 ipcMain.handle=(channel,handler)=>registerHandler(channel,(event,...args)=>{if(channel==='mote:content-local'&&localReadFailure)throw Error('Generated local content read failure');return handler(event,...args);});
 const server=createServer((req,res)=>{
@@ -28,7 +28,7 @@ const server=createServer((req,res)=>{
   assert.equal(req.headers.authorization,'Bearer '+token);
   const path=new URL(req.url,'http://fixture').pathname;
   if(path==='/api/conversations'){
-    res.statusCode=historyFailure?503:200;res.end(JSON.stringify({items:[summary]}));return;
+    res.statusCode=historyFailure?503:200;res.end(JSON.stringify({items:historyEmpty?[]:[summary]}));return;
   }
   if(path==='/api/conversations/'+id){res.end(JSON.stringify({...summary,revision:1,turns:[{id:'22222222-2222-4222-8222-222222222222',question:summary.title,status:'completed',result:{answer:'Generated answer for UI verification.',citations:[]}}]}));return;}
   if(path==='/api/query-runs'){res.end(JSON.stringify({items:[]}));return;}
@@ -47,6 +47,7 @@ app.on('browser-window-created',(_event,window)=>{
     const quick=()=>BrowserWindow.getAllWindows().find(candidate=>candidate!==window&&candidate.webContents.getURL().endsWith('#quick-note'));
     const waitQuick=async()=>{await until(async()=>{const note=quick();return note&&!note.webContents.isLoading()&&await note.webContents.executeJavaScript('!document.querySelector("#note-text").disabled');},'quick note');return quick();};
     const shot=async(name)=>{
+      window.webContents.sendInputEvent({type:'mouseMove',x:1000,y:12});
       await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
       const image=await window.webContents.capturePage();const file=join(output,name+'.png');writeFileSync(file,image.toPNG());
       captures.push({name,file,pixels:image.getSize(),viewport:await js('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio})'),at:new Date().toISOString()});
@@ -54,6 +55,11 @@ app.on('browser-window-created',(_event,window)=>{
     await until(()=>js('!!document.querySelector("[data-presentation-nav]")&&!document.querySelector("#settings-fields").disabled'),'renderer ready');
     assert.equal(window.isVisible(),false);
     window.setContentSize(1440,936);
+    await until(()=>js('!document.querySelector("#home-onboarding").hidden'),'confirmed first-use');
+    assert.equal(await js('document.querySelector("#home-first-connect").hidden'),!offlineFirstUse);await shot(offlineFirstUse?'first-use-local':'first-use-connected');window.setContentSize(820,620);assert(await js('document.documentElement.scrollWidth<=innerWidth'));await shot(offlineFirstUse?'first-use-local-compact':'first-use-connected-compact');window.setContentSize(1440,936);
+    if(offlineFirstUse){await js('document.querySelector("#home-onboarding [data-add-choice=note]").click()');const first=await waitQuick();await first.webContents.executeJavaScript('document.querySelector("#note-text").value="Generated first local note";document.querySelector("#note-text").dispatchEvent(new Event("input"));document.querySelector("#note-form").requestSubmit();true');await until(()=>!quick(),'first local note saved');await until(()=>js('!!document.querySelector("#home-recent .content-row")'),'first local original visible');assert.equal((await js('window.mote.status()')).running,false);await until(()=>js('document.querySelector("#home-first-record-preview").textContent==="Generated first local note"'),'tracked first record original');await shot('first-use-saved-local');await js('document.querySelector("#home-first-read").click()');await until(()=>js('document.querySelector("#content-detail-body").textContent==="Generated first local note"'),'first original reader');await shot('first-use-original');await js('document.querySelector("#content-detail-close").click()');assert.equal(await js('document.querySelector("#home-onboarding").hidden'),false,'Returning from the exact first original keeps this temporary first-use path');await js('document.querySelector("aside [data-nav=records]").click();document.querySelector("aside [data-nav=overview]").click()');assert.equal(await js('document.querySelector("#home-onboarding").hidden'),true,'Leaving the first-use path restores the regular workbench from actual content');assert.deepEqual(errors,[]);writeFileSync(join(output,'first-use-result.json'),JSON.stringify({passed:true,generatedOnly:true,hidden:true,liveModel:false,nativePermission:false,captures},null,2));finished=true;clearTimeout(timeout);console.log(JSON.stringify({passed:true,output,captures:captures.length,firstUse:true}));app.quit();return;}
+    historyEmpty=false;await js('document.querySelector("aside [data-nav=records]").click();document.querySelector("aside [data-nav=overview]").click()');await until(()=>js('!!document.querySelector("#home-conversations button")'),'existing history');
+
     await js('window.confirm=()=>true;document.querySelector("#note-action").click()');
     const note=await waitQuick();assert.equal(note.isVisible(),false);
     await note.webContents.executeJavaScript('document.querySelector("#note-text").value="评审前的提醒";document.querySelector("#note-text").dispatchEvent(new Event("input",{bubbles:true}));document.querySelector("#note-form").requestSubmit()');
@@ -106,7 +112,7 @@ app.on('browser-window-created',(_event,window)=>{
     await until(()=>js('!document.querySelector("#home-recent").textContent.includes("内容暂不可完整读取")'),'local read retry');
     window.setContentSize(820,620);await shot('home-compact');assert(await js('document.documentElement.scrollWidth<=innerWidth'));
     assert.deepEqual(errors,[]);
-    const result={passed:true,generatedOnly:true,hidden:true,electron:process.versions.electron,sourcePrototypeRendered:false,realRendererPreloadIpc:true,liveModel:false,palette:'baseline linear tokens; coordinated final light palette pending',sourceReference:'pre-existing home.png (1440x936 element screenshot from 1440x1000 DPR1 source viewport)',checks:['real local note and conversation summaries','same conversation ID','home input preserved on cancel','home entry does not send','global note preserves settings draft and origin','quick-note draft survives close','capture and send pause independent','history failure/retry preserves local content','compact window has no horizontal overflow'],captures};
+    const result={passed:true,generatedOnly:true,hidden:true,electron:process.versions.electron,sourceComparison:'Source rendered separately through CUA; this fixture captures the product only',realRendererPreloadIpc:true,liveModel:false,palette:'source light #777066 muted; coordinated tokens',sourceReference:'http://127.0.0.1:61985/index.html and first-use.html; separate source comparison',checks:['real local note and conversation summaries','same conversation ID','home input preserved on cancel','home entry does not send','global note preserves settings draft and origin','quick-note draft survives close','capture and send pause independent','history failure/retry preserves local content','compact window has no horizontal overflow'],captures};
     writeFileSync(join(output,'result.json'),JSON.stringify(result,null,2));
     finished=true;clearTimeout(timeout);console.log(JSON.stringify({passed:true,output,captures:captures.length}));app.quit();
   })().catch(error=>{console.error(error.stack);console.error(errors);clearTimeout(timeout);app.exit(1);}));
@@ -114,7 +120,7 @@ app.on('browser-window-created',(_event,window)=>{
 app.on('window-all-closed',()=>{if(!finished)app.exit(1);});
 app.on('quit',()=>{server.close();rmSync(profile,{recursive:true,force:true});rmSync(profile+'-profiles',{recursive:true,force:true});});
 server.listen(0,'127.0.0.1',()=>{
-  const config={...defaultConfig(),serverUrl:'http://127.0.0.1:'+server.address().port,deviceName:'这台 Mac',metadataEnabled:false,syncMode:'manual',credentialScope:'owner'};
-  writeFileSync(join(dataDirectory,'config.json'),JSON.stringify({version:4,developmentToken:token,config}),{mode:0o600});
+  const config={...defaultConfig(),serverUrl:offlineFirstUse?'':'http://127.0.0.1:'+server.address().port,deviceName:'这台 Mac',metadataEnabled:false,syncMode:'manual',credentialScope:'owner'};
+  writeFileSync(join(dataDirectory,'config.json'),JSON.stringify({version:4,...(offlineFirstUse?{}:{developmentToken:token}),config}),{mode:0o600});
   writeFileSync(join(dataDirectory,'storage-format.json'),JSON.stringify({version:4}),{mode:0o600});require('../dist/main');
 });
