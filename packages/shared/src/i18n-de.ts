@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "当前待传事件及其关联图片。来源文件使用独立的传输队列。": "Aktuell ausstehende Ereignisse und zugehörige Bilder. Quelldateien verwenden eine eigene Übertragungswarteschlange.",
+  "不包含 Central 归档、来源文件原件、未提交草稿、设置或登录凭据。": "Enthält keine Central-Archive, ursprünglichen Quelldateien, nicht gesendeten Entwürfe, Einstellungen oder Anmeldedaten.",
+  "备份文件包含个人资料，请保存在自己的位置。": "Sicherungsdateien enthalten persönliche Daten. Speichern Sie sie an einem Ort unter Ihrer Kontrolle.",
+  "仅导出本机元数据 JSON": "Nur lokale Metadaten als JSON exportieren",
   "适用于这台 Mac 的{0}来源。": "Gilt für die Quelle „{0}“ auf diesem Mac.",
   "应用到草稿": "Auf Entwurf anwenden",
   "补充这类记录的背景（选填）": "Hintergrund für diese Art von Aufzeichnung ergänzen (optional)",

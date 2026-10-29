@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const spanish: Readonly<Record<string, string>> = {
+  "当前待传事件及其关联图片。来源文件使用独立的传输队列。": "Eventos pendientes de envío e imágenes asociadas. Los archivos de origen usan una cola de transferencia independiente.",
+  "不包含 Central 归档、来源文件原件、未提交草稿、设置或登录凭据。": "No incluye archivos de Central, archivos originales de las fuentes, borradores sin enviar, ajustes ni credenciales de acceso.",
+  "备份文件包含个人资料，请保存在自己的位置。": "Las copias de seguridad contienen datos personales. Guárdalas en una ubicación que controles.",
+  "仅导出本机元数据 JSON": "Exportar solo los metadatos locales en JSON",
   "适用于这台 Mac 的{0}来源。": "Se aplica a la fuente «{0}» de este Mac.",
   "应用到草稿": "Aplicar al borrador",
   "补充这类记录的背景（选填）": "Añadir contexto para este tipo de registro (opcional)",
