@@ -16,7 +16,7 @@ const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-b
 const when='2026-09-01T10:00:00Z',activity:Activity={apps:[],devices:[],totalDurationMs:0,captures:0};
 const row=(value=id)=>({id:value,deviceId:'fixture-device',deviceName:'Generated device',platform:'macos',capturedAt:when,source:'note',appName:'Generated note',windowTitle:'Generated '+value[0],durationMs:0,hasImage:false,ocr:{status:'not_applicable'},textPreview:'Generated original text'});
 const timeline=(rows:ReturnType<typeof row>[],nextCursor:string|null=null)=>({revision:'generated-current',items:rows.map(record=>({type:'record',id:'projection-'+record.id,day:'2026-10-29',firstAt:when,lastAt:when,sampleCount:null,record})),nextCursor});
-const capture=(value=id):Capture=>({...row(value),source:'note',ocrText:'<script>Generated untrusted evidence</script>',blobHash:null,indexingStatus:'text_ready',privacy:{redacted:false,mode:'none'},provenance:{sourceId:'fixture-source',externalId:'fixture-original',revision:'fixture-version',layer:'snapshot',document:{recordedAt:when,path:'generated/note.txt',contentRole:'authored'}}} as Capture);
+const capture=(value=id):Capture=>({...row(value),source:'note',ocrText:'<script>Generated untrusted evidence</script>',blobHash:null,indexingStatus:'text_ready',privacy:{redacted:false,mode:'none'},deletion:{available:true,kind:'capture'},provenance:{sourceId:'fixture-source',externalId:'fixture-original',revision:'fixture-version',layer:'snapshot',document:{recordedAt:when,path:'generated/note.txt',contentRole:'authored'}}} as Capture);
 function deferred(){let resolve!:(value:unknown)=>void;const promise=new Promise<unknown>(done=>{resolve=done;});return {promise,resolve};}
 
 async function fixture(t:any){

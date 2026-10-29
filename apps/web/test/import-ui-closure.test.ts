@@ -137,7 +137,7 @@ test('import guidance is optional and completed detail preserves the exact text 
  const {root,d}=await fixture(t),guidance='Generated scoped authorship guidance.\nQuotes remain third-party: <img src="fixture.invalid">',job=importJob({instruction:guidance});
  const api=apiWith(path=>path==='/api/imports'?{items:[job]}:{items:[]});
  await act(async()=>root.render(view(api)));assert.equal(d.querySelector('form'),null,'import opens on the list');await act(async()=>button(d,'新建导入').click());const input=d.querySelector('textarea')!;
- assert.equal(input.required,false);assert.equal(input.value,'');assert.match(d.querySelector('.import-form')!.textContent!,/格式、作者与归属说明/);assert.match(d.querySelector('.import-form')!.textContent!,/未填写也会保留原件/);assert.match(d.querySelector('.import-form')!.textContent!,/来源限定观察/);
+ assert.equal(input.required,false);assert.equal(input.value,'');assert.match(d.querySelector('.import-form')!.textContent!,/资料说明/);assert.match(d.querySelector('.import-form')!.textContent!,/未填写也会保留原件/);assert.match(d.querySelector('.import-form')!.textContent!,/来源限定观察/);
  await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());
  const details=Array.from(d.querySelectorAll('details')).find(item=>item.querySelector('summary')?.textContent==='本次导入说明')!;
  assert.equal(details.querySelector('.file-text')!.textContent,guidance);assert.equal(details.querySelector('img'),null);assert.equal(details.querySelector('textarea'),null);assert.match(details.textContent!,/不会把第三方和 AI 引用整批变成你的表达/);
