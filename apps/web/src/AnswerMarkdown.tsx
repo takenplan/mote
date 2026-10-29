@@ -3,6 +3,7 @@ import {useMemo} from 'react';
 import { moteText } from '@mote/shared/i18n';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {remarkCjkStrong} from './remark-cjk-strong';
 import type { Answer } from './api';
 
 interface MarkdownNode { type:string; value?:string; url?:string; children?:MarkdownNode[] }
@@ -58,5 +59,5 @@ export function AnswerMarkdown({answer,onOpen,numericCitations=false}:{answer:An
         : <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>;
     },
   }),[verified,onOpen]);
-  return <ReactMarkdown skipHtml remarkPlugins={[remarkGfm,citationLinks(answer.citations,numericCitations)]} components={components}>{answer.answer}</ReactMarkdown>;
+  return <ReactMarkdown skipHtml remarkPlugins={[remarkGfm,remarkCjkStrong,citationLinks(answer.citations,numericCitations)]} components={components}>{answer.answer}</ReactMarkdown>;
 }

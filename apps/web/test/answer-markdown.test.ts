@@ -51,3 +51,13 @@ test('table citations open the verified original and retain focus across answer 
   assert.equal(dom.window.document.querySelector('td .inline-citation'),button);
   assert.equal(dom.window.document.activeElement,button);
 });
+
+test('the persisted H04 Chinese bold labels render strong without changing answer or citation bytes',()=>{
+ const text=`**会议开始时间：**明天九点\n\n**要带的东西：**蓝色笔记本 [${id}]`,value={...answer,answer:text},before=structuredClone(value),html=renderToStaticMarkup(React.createElement(AnswerMarkdown,{answer:value,onOpen:()=>{}})),dom=new JSDOM(html);try{assert.deepEqual([...dom.window.document.querySelectorAll('strong')].map(e=>e.textContent),['会议开始时间：','要带的东西：']);assert.equal(dom.window.document.querySelectorAll('.inline-citation').length,1);assert.deepEqual(value,before);assert.doesNotMatch(dom.window.document.body.textContent!,/\*\*/);}finally{dom.window.close();}
+});
+test('CJK attention remains Markdown syntax inside prose and tables, preserving nested emphasis and authored links',()=>{
+ const dom=new JSDOM(render(`前**“重要标签”**后\n\n| 要点 | 内容 |\n| --- | --- |\n| **开会时间：**明天 | [**地点：**办公室](https://example.com/path) |\n\n**正常粗体与 *已有斜体*：**后`));try{const d=dom.window.document;assert.deepEqual([...d.querySelectorAll('strong')].map(e=>e.textContent),['“重要标签”','开会时间：','地点：','正常粗体与 已有斜体：']);assert.equal(d.querySelector('em')?.textContent,'已有斜体');assert.equal(d.querySelector('a')?.getAttribute('href'),'https://example.com/path');}finally{dom.window.close();}
+});
+test('CJK bold extension preserves code, escapes, URL bytes, unmatched markers, identifiers and HTML safety',()=>{
+ const url='https://example.com/**网址：**中文?value=**字：**后',text=String.raw`\*\*会议开始时间：\*\*明天九点`+'\n\n&#42;&#42;实体转义：&#42;&#42;中文\n\n`**会议开始时间：**明天九点`\n\n```text\n**要带的东西：**蓝色笔记本\n```\n\n[保留原网址]('+url+')\n\n**未配对中文：明天\n\n[not-a-verified-id]\n\n<script>**不可执行：**内容</script>\n\n<img src=x onerror="alert(1)">',dom=new JSDOM(render(text));try{const d=dom.window.document;assert.equal(d.querySelector('strong'),null);assert.equal(d.querySelector('code')?.textContent,'**会议开始时间：**明天九点');assert.match(d.querySelector('pre code')!.textContent!,/\*\*要带的东西：\*\*/);assert.equal(decodeURI(d.querySelector('a')!.getAttribute('href')!),url);assert.match(d.body.textContent!,/\*\*未配对中文：明天/);assert.match(d.body.textContent!,/\[not-a-verified-id\]/);assert.match(d.body.textContent!,/\*\*会议开始时间：\*\*明天九点/);assert.equal(d.querySelector('script,img'),null);assert.equal(d.querySelector('.inline-citation'),null);}finally{dom.window.close();}
+});
