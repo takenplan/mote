@@ -10074,5 +10074,13 @@ export const french: Readonly<Record<string, string>> = {
   "暂时无法确认当前目录": "Le dossier actuel ne peut pas être confirmé",
   "先结束当前输入。安装时停止本机采集与上传，保留已有资料。": "Terminez d’abord votre saisie. L’installation arrête la collecte et les envois locaux tout en conservant les données existantes.",
   "继续安装": "Continuer l’installation",
-  "已向浏览器提供下载文件，请在下载列表确认保存结果。": "Le fichier a été transmis à votre navigateur. Vérifiez les téléchargements pour confirmer son enregistrement."
+  "已向浏览器提供下载文件，请在下载列表确认保存结果。": "Le fichier a été transmis à votre navigateur. Vérifiez les téléchargements pour confirmer son enregistrement.",
+  "解析未说明置信度与歧义，请核对预览。": "L’analyse n’indique ni son niveau de confiance ni les éventuelles ambiguïtés. Vérifiez l’aperçu.",
+  "解析置信度不足或仍有歧义，请核对预览。": "L’analyse présente un faible niveau de confiance ou des ambiguïtés. Vérifiez l’aperçu.",
+  "解析未说明高置信度的依据，请核对预览。": "L’analyse ne justifie pas son niveau de confiance élevé. Vérifiez l’aperçu.",
+  "处理产生了提醒，请核对预览后再保存。": "Le traitement a signalé des avertissements. Vérifiez l’aperçu avant d’enregistrer.",
+  "尚未核对全部原件，请检查文件解析情况。": "Tous les originaux n’ont pas été pris en compte. Vérifiez les détails d’analyse des fichiers.",
+  "部分原件未作为证据解析，请核对原件与预览。": "Certains originaux n’ont pas été analysés comme éléments de preuve. Vérifiez les originaux et l’aperçu.",
+  "解析记录已通过校验，置信度高且无歧义。": "Les enregistrements analysés ont passé la validation avec un niveau de confiance élevé et sans ambiguïté.",
+  "缺少逐文件解析情况；未列出的原件不能视为已解析。": "Les détails d’analyse par fichier sont absents. Les originaux non répertoriés ne peuvent pas être considérés comme analysés."
 };

@@ -10074,5 +10074,13 @@ export const german: Readonly<Record<string, string>> = {
   "暂时无法确认当前目录": "Der aktuelle Ordner kann nicht bestätigt werden",
   "先结束当前输入。安装时停止本机采集与上传，保留已有资料。": "Beenden Sie zuerst Ihre aktuelle Eingabe. Die Installation stoppt die lokale Erfassung und Uploads; vorhandene Daten bleiben erhalten.",
   "继续安装": "Installation fortsetzen",
-  "已向浏览器提供下载文件，请在下载列表确认保存结果。": "Die Datei wurde Ihrem Browser bereitgestellt. Prüfen Sie in der Downloadliste, ob sie gespeichert wurde."
+  "已向浏览器提供下载文件，请在下载列表确认保存结果。": "Die Datei wurde Ihrem Browser bereitgestellt. Prüfen Sie in der Downloadliste, ob sie gespeichert wurde.",
+  "解析未说明置信度与歧义，请核对预览。": "Die Analyse enthält keine Angaben zur Konfidenz oder zu Unklarheiten. Prüfe die Vorschau.",
+  "解析置信度不足或仍有歧义，请核对预览。": "Die Analyse meldet geringe Konfidenz oder Unklarheiten. Prüfe die Vorschau.",
+  "解析未说明高置信度的依据，请核对预览。": "Die Analyse begründet ihre hohe Konfidenz nicht. Prüfe die Vorschau.",
+  "处理产生了提醒，请核对预览后再保存。": "Bei der Verarbeitung wurden Warnungen gemeldet. Prüfe die Vorschau vor dem Speichern.",
+  "尚未核对全部原件，请检查文件解析情况。": "Nicht alle Originale wurden berücksichtigt. Prüfe die Analysedetails der Dateien.",
+  "部分原件未作为证据解析，请核对原件与预览。": "Einige Originale wurden nicht als Belege analysiert. Prüfe die Originale und die Vorschau.",
+  "解析记录已通过校验，置信度高且无歧义。": "Die analysierten Aufzeichnungen haben die Validierung mit hoher Konfidenz und ohne Unklarheiten bestanden.",
+  "缺少逐文件解析情况；未列出的原件不能视为已解析。": "Die Analysedetails pro Datei fehlen. Nicht aufgeführte Originale dürfen nicht als analysiert gelten."
 };

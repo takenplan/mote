@@ -53,3 +53,5 @@
 .final-imports .selected-files>.file-row>button{font-size:16px;color:var(--mote-muted);padding:0;width:25px;min-width:25px}
 .final-imports .selected-files>.source-toolbar>.text-button{font-size:12px;min-height:0;border-radius:0;padding:0}
 .final-imports .selected-files>.file-row>button{min-height:25px}
+
+.final-imports .import-host-diagnostics pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font-size:11px}

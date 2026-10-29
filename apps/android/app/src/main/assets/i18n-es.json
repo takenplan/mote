@@ -10073,5 +10073,13 @@
   "暂时无法确认当前目录": "No se puede confirmar la carpeta actual",
   "先结束当前输入。安装时停止本机采集与上传，保留已有资料。": "Termina primero la entrada actual. La instalación detiene la captura y los envíos locales y conserva el material existente.",
   "继续安装": "Continuar la instalación",
-  "已向浏览器提供下载文件，请在下载列表确认保存结果。": "El archivo se ha enviado al navegador. Comprueba las descargas para confirmar que se guardó."
+  "已向浏览器提供下载文件，请在下载列表确认保存结果。": "El archivo se ha enviado al navegador. Comprueba las descargas para confirmar que se guardó.",
+  "解析未说明置信度与歧义，请核对预览。": "El análisis no indicó el nivel de confianza ni las ambigüedades. Revisa la vista previa.",
+  "解析置信度不足或仍有歧义，请核对预览。": "El análisis indicó poca confianza o ambigüedades. Revisa la vista previa.",
+  "解析未说明高置信度的依据，请核对预览。": "El análisis no explicó su evaluación de alta confianza. Revisa la vista previa.",
+  "处理产生了提醒，请核对预览后再保存。": "El procesamiento informó de advertencias. Revisa la vista previa antes de guardar.",
+  "尚未核对全部原件，请检查文件解析情况。": "No se han tenido en cuenta todos los originales. Consulta los detalles del análisis de archivos.",
+  "部分原件未作为证据解析，请核对原件与预览。": "Algunos originales no se analizaron como evidencia. Revisa los originales y la vista previa.",
+  "解析记录已通过校验，置信度高且无歧义。": "Los registros analizados superaron la validación con alta confianza y sin ambigüedades.",
+  "缺少逐文件解析情况；未列出的原件不能视为已解析。": "Faltan los detalles del análisis por archivo. Los originales no enumerados no se pueden considerar analizados."
 }

@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {configureLocale} from '@mote/shared/i18n';import {importMessage,isHostImportMessage} from '../src/import-messages';
+configureLocale(()=> 'zh-CN');
+test('all exact host import fallbacks have readable authored messages while arbitrary parser prose remains literal',()=>{
+ const fallbacks=['This import was requested for manual preview.','The parser did not provide a confidence and ambiguity assessment.','The parser reported low confidence or ambiguity.','The parser did not explain its high-confidence assessment.','Processing reported warnings; review the preview before publishing.','The parser did not account for every original file.','Some originals were not parsed as evidence.','The parsed records passed host validation with high confidence and no ambiguity.','The analysis did not provide a per-file disposition list. Unlisted files must not be assumed to have been parsed.'];
+ for(const value of fallbacks){assert.equal(isHostImportMessage(value),true);assert.match(importMessage(value),/\p{Script=Han}/u);assert.notEqual(importMessage(value),value);}
+ for(const value of ['  '+fallbacks[0],fallbacks[0]+' Quoted by the provider.','用户的原文：'+fallbacks[0],'<script>Captured original</script>','Unknown generated parser statement']){assert.equal(isHostImportMessage(value),false);assert.equal(importMessage(value),value);}
+});
