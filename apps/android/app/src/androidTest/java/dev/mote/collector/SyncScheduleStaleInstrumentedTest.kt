@@ -10,7 +10,9 @@ import androidx.work.WorkManager
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /** Requires the dedicated generated Dev emulator; never opens capture or makes a model call. */
 @RunWith(AndroidJUnit4::class)
@@ -58,6 +60,26 @@ class SyncScheduleStaleInstrumentedTest {
             }
             assertEquals("error", settings.syncState()); assertEquals("Generated retained error", settings.uploadStatus())
             assertEquals(WorkInfo.State.ENQUEUED, manager.getWorkInfoById(marker.id).get(10, TimeUnit.SECONDS)?.state)
+
+            // Delay the old exception handler until a newer explicit request has actually been enqueued.
+            settings.syncRequestRejected(false)
+            val rejected = CountDownLatch(1); val release = CountDownLatch(1); val failure = AtomicReference<Throwable?>()
+            val oldHandler = Thread {
+                try { SyncSchedule.schedule(context, old, explicit = true) }
+                catch (error: Throwable) {
+                    failure.set(error); rejected.countDown()
+                    if (release.await(15, TimeUnit.SECONDS)) SyncSchedule.handleDispatchFailure(context, error)
+                }
+            }
+            oldHandler.start()
+            try {
+                assertTrue(rejected.await(15, TimeUnit.SECONDS)); assertTrue(failure.get() is SettingsChangedFailure)
+                assertTrue(settings.syncRequestRejected())
+                SyncSchedule.schedule(context, current, explicit = true)
+                assertFalse("Accepted newer request must clear the older rejection", settings.syncRequestRejected())
+                release.countDown(); oldHandler.join(15_000); assertFalse(oldHandler.isAlive)
+                assertFalse("Delayed old handler must not resurrect the rejection", settings.syncRequestRejected())
+            } finally { release.countDown(); oldHandler.join(15_000) }
         } finally {
             cancel(); SyncSchedule.invalidate()
             val edit = prefs.edit().clear()
