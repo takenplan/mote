@@ -22,6 +22,19 @@ beforeEach(()=>{
 });
 afterEach(()=>{ui.clear();dom.window.close();vi.unstubAllGlobals();});
 
+it.each([undefined,'2026-10-30T23:59:59.000Z'])('does not present upload time %s as the time of a completed local scan',lastSyncAt=>{
+ ui.update([{...structuredClone(source),scanComplete:true,lastSyncAt}]);
+ const scan=Array.from(el('source-detail-body').querySelectorAll('dt')).find(node=>node.textContent==='上次清点')!.nextElementSibling!;
+ expect(scan.textContent).toContain('已完成');expect(scan.textContent).toContain('未知');
+ expect(scan.textContent).not.toContain('尚未开始');expect(scan.textContent).not.toMatch(/2026|23:59/);
+});
+
+it('keeps the first-scan state unstarted even when an unrelated upload timestamp exists',()=>{
+ ui.update([{...structuredClone(source),scanComplete:false,lastSyncAt:'2026-10-30T23:59:59.000Z'}]);
+ const scan=Array.from(el('source-detail-body').querySelectorAll('dt')).find(node=>node.textContent==='上次清点')!.nextElementSibling!;
+ expect(scan.textContent).toBe('尚未开始');
+});
+
 it.each(['load','refresh','save'] as const)('does not apply a late %s to the same source ID reopened on another node',async operation=>{
  let finish!:(value:SourceContextState)=>void;const deferred=new Promise<SourceContextState>(resolve=>{finish=resolve;});
  if(operation==='load')vi.mocked(api.sourceContext).mockReturnValueOnce(deferred);

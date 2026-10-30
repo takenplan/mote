@@ -146,7 +146,7 @@
           <div class="form-grid spaced"><label><span data-i18n>检查间隔（秒）</span><input id="source-interval" type="number" min="30" max="3600" value="300"></label><label><span data-i18n>文件来源扩展名（可补充）</span><input id="source-extensions" value=".md,.txt,.json,.csv,.ics,.pdf,.docx,.wav,.mp3,.m4a"><small data-i18n>文件快照和原件归档每份 ≤512 MiB，分块暂存后上传。解析和转写在中央进行。跳过隐藏项和符号链接。</small></label><label><span data-i18n>排除相对路径（每行一项）</span><textarea id="source-excludes" rows="2" placeholder="private&#10;notes/private.md"></textarea><small data-i18n>精确路径或目录前缀，适用于文件和编码对话来源。</small></label></div>
           <label class="spaced"><span data-i18n>上传前遮盖的确切文字（每行一项，可选）</span><textarea id="source-redacts" rows="2" placeholder="由你指定原文，不自动推断" data-i18n-placeholder=""></textarea><small data-i18n>确切文字遮盖适用于文本文件、日历和编码对话。其他文件格式配置遮盖后不会上传。配置遮盖后不发送文件位置 URI。</small></label>
           <label class="checkbox"><input id="source-deletions" type="checkbox"><span><span data-i18n>跟踪删除</span><small data-i18n>仅完整成功扫描后标记范围内消失项；中央历史版本仍保留。默认关闭。</small></span></label>
-          <p class="helper" data-i18n>完整文件会发送到所示中央节点进行处理；提取正文不代表只上传摘要。未连接时先保存本机任务，首次连接须确认发送范围。</p>
+          <p id="source-content-transfer-note" class="helper" data-i18n>完整文件会发送到所示中央节点进行处理；提取正文不代表只上传摘要。未连接时先保存本机任务，首次连接须确认发送范围。</p>
         </details>
         <div id="source-edit-footer" class="source-form-footer" hidden><span class="helper" data-i18n>按当前发送设置同步</span><div class="actions"><button id="source-cancel-edit" class="secondary" type="button" hidden data-i18n>取消</button><button id="source-save-edit" class="primary" type="button" hidden data-i18n>保存修改</button></div></div>
       </details>
