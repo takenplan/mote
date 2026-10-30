@@ -32,6 +32,21 @@ test('a configured model cannot process old data after first approval, duplicate
   await assert.rejects(f.control.run('unissued-http-boolean',async()=>{sends++;}));assert.equal(sends,1);
 });
 
+test('unapproved source work waits without repeatedly occupying the executor or gaining model access after restart',async t=>{
+  const f=fixture(t);f.command('authorize');f.receive('outside-scope','other-source');
+  let now=10000,executions=0,sends=0,engine=new ExecutionEngine(f.store,()=>now);
+  const register=()=>engine.register({kind:'generated-authorization-wait',pool:'generated',concurrency:()=>1,validate:()=>true,
+    execute:async()=>{executions++;const id=f.control.automatic('outside-job',['outside-scope']);await f.control.run(id,async()=>{f.control.assertCurrent(f.connection);sends++;});},commit:()=>{}});
+  t.after(()=>engine.close());register();const id=engine.enqueue('generated:outside','generated-authorization-wait',{});
+  await engine.drain([id]);let step=engine.get(id)!;
+  assert.equal(step.state,'waiting');assert.equal(step.error,'background_model_authorization_required');assert.equal(step.attempts,0);
+  assert.equal(step.availableAt,now+60000);assert.equal(executions,1);assert.equal(sends,0);
+  for(let n=0;n<59;n++){now+=1000;await engine.drain([id]);}assert.equal(executions,1,'unauthorized work must not occupy a worker every second');
+  await engine.close();f.restart();engine=new ExecutionEngine(f.store,()=>now);register();await engine.drain([id]);assert.equal(executions,1);
+  now+=1000;await engine.drain([id]);step=engine.get(id)!;assert.equal(executions,2);assert.equal(sends,0);assert.equal(step.attempts,0);assert.equal(step.availableAt,now+60000);
+  f.receive('approved','fixture');const approved=f.control.automatic('approved-job',['approved']);await f.control.run(approved,async()=>{f.control.assertCurrent(f.connection);sends++;});assert.equal(sends,1,'eligible new evidence remains usable');
+});
+
 test('pause drains admitted work, never fills the pause gap, and source/data restrictions apply to historical references',async t=>{
   const f=fixture(t);f.command('authorize');f.receive('accepted');f.control.automatic('admitted',['accepted']);
   f.command('pause');f.receive('gap');

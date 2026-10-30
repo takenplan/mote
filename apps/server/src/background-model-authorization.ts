@@ -20,7 +20,10 @@ type Work={id:string;kind:'manual'|'automatic'|'probe';purpose?:AutomaticModelPu
 type Authority={work:Work;controller:AbortController};
 const command=z.object({revision:z.number().int().nonnegative(),operationId:z.string().uuid(),action:z.enum(['authorize','pause','stop']),connections:z.array(z.object({id:z.string().min(1).max(256),fingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).max(100).optional(),scope:scopeSchema.optional()}).strict();
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
-const pending=()=>new ProviderFailure({category:'blocked',code:'background_model_authorization_required',executionStarted:false,admissionWaiting:true},'Background model processing needs owner authorization');
+// An owner decision is not a short-lived provider capacity event. Keep the
+// durable wait inexpensive while preserving the existing prospective consent
+// checks and without spending an execution attempt.
+const pending=()=>new ProviderFailure({category:'blocked',code:'background_model_authorization_required',executionStarted:false,admissionWaiting:true,retryAfterMs:60000},'Background model processing needs owner authorization');
 
 /** One durable owner decision and immutable original-receipt permissions.
  * A lane, model login, source timestamp, retry or derived publication cannot
