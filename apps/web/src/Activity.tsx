@@ -27,7 +27,14 @@ function WorkDetail({api,id,onBack,onNavigate,onOpen}:{api:Api;id:string;onBack:
  const paging={cursor:ui.cursors.at(-1),page:ui.cursors.length,reset:()=>{ui.scroll=window.scrollY;ui.cursors=[undefined];redraw(value=>value+1);},previous:()=>{ui.scroll=window.scrollY;if(ui.cursors.length>1)ui.cursors=ui.cursors.slice(0,-1);redraw(value=>value+1);},next:(cursor:number)=>{ui.scroll=window.scrollY;ui.cursors=[...ui.cursors,cursor];redraw(value=>value+1);}};
  const {data:work,error,loading,refresh}=useResource<WorkActivity>(api,'/api/work-activity/'+encodeURIComponent(id)+'?'+new URLSearchParams({limit:'20',...paging.cursor?{cursor:String(paging.cursor)}:{}}),3000);
  const remember=()=>{ui.scroll=window.scrollY;};
- useEffect(()=>()=>{if(!showingRelated.current)ui.scroll=window.scrollY;},[ui]);
+ useEffect(()=>{
+  const rememberCurrentScroll=()=>{
+   const [route,search]=window.location.hash.split('?');
+   if(!showingRelated.current&&route==='#/activity'&&new URLSearchParams(search??'').get('work')===id)ui.scroll=window.scrollY;
+  };
+  window.addEventListener('scroll',rememberCurrentScroll,{passive:true});
+  return()=>{rememberCurrentScroll();window.removeEventListener('scroll',rememberCurrentScroll);};
+ },[ui,id]);
  useLayoutEffect(()=>{if(work&&!relatedOpen){document.querySelector<HTMLHeadingElement>('.activity-detail h1')?.focus({preventScroll:true});window.scrollTo?.(0,ui.scroll);}},[ui,Boolean(work),relatedOpen]);
  const toggle=(key:Section,open:boolean)=>{if(ui.sections[key]!==open){ui.sections[key]=open;redraw(value=>value+1);}};
  const go=(page:Page)=>{remember();onNavigate(page);};

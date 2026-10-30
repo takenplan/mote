@@ -1,6 +1,6 @@
 import {SaveConversationRecord} from './SaveConversationRecord';
 import {queryRecovery,type OwnedQuery} from './query-recovery';
-import {unsentDrafts,type ChatAttachment} from './chat-drafts';
+import {unsentDrafts,unsentImages,type ChatAttachment,type ChatImageUpload} from './chat-drafts';
 import {useOriginalReference} from './ask-original-reference';
 import {containDialogFocus} from './dialog-focus';
 import {conversationFailure,ConversationDialog,ConversationTurnDetails} from './ConversationTurnDetails';
@@ -18,10 +18,9 @@ import {ApiError,dateTime, type Answer, type Api, type Device, type Range} from 
 import {ConversationHeading,ConversationComposer} from './ConversationShell';
 import {FeaturePanels} from './features/runtime';
 import {readOwnerQuestion} from './owner-question-route';
+import {readOriginTurn} from './conversation-origin';
 
-type ChatImageUpload={key:string;file:File;status:'uploading'|'failed'};
 // File objects remain private to this Api session; routes and storage contain no file bytes.
-const unsentImages=new WeakMap<Api,ChatImageUpload[]>();
 const localImageFiles=new WeakMap<Api,Map<string,File>>();
 function ChatDraftThumbnail({file}:{file?:File}){
  const [image,setImage]=useState<{file:File;url:string}>();
@@ -93,18 +92,34 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   // A newer revision can withdraw prior evidence. Never merge copied pages from
   // an older revision while their replacement is still being fetched.
   const conversation=detail.data&&!pageRevoked?{...detail.data,turns:[...(currentOlder?.turns??[]).filter(turn=>!detail.data!.turns.some(next=>next.id===turn.id)),...detail.data.turns],...(currentOlder?{nextCursor:currentOlder.nextCursor}:{})}:null;
-  const openHistoryReference=(ref:string)=>{
+  const historyReferenceRequest=useRef<AbortController|null>(null);
+  const latestDetail=useRef({api,selectedId,data:detail.data,error:detail.error,conversation});
+  latestDetail.current={api,selectedId,data:detail.data,error:detail.error,conversation};
+  const cancelHistoryReference=()=>{historyReferenceRequest.current?.abort();historyReferenceRequest.current=null;};
+  useEffect(()=>{cancelHistoryReference();return cancelHistoryReference;},[api,selectedId]);
+  const openHistoryReference=(ref:string,turnId?:string)=>{
     if(!conversation||!ref.startsWith('capture:')){onOpen(ref);return;}
     const id=ref.slice('capture:'.length),opener=document.activeElement instanceof HTMLElement?document.activeElement:null,owner=api,conversationId=conversation.id;
-    void api.request<{id:string;available:boolean}>(`/api/conversations/${encodeURIComponent(conversationId)}/references/${encodeURIComponent(id)}`).then(value=>{
-      if(latestDetail.current.api!==owner||latestDetail.current.selectedId!==conversationId)return;
-      if(value.available===true&&value.id===id)onOpen(ref);else setUnavailableReference({opener});
-    }).catch(error=>{if(latestDetail.current.api===owner&&latestDetail.current.selectedId===conversationId)setError(conversationFailure(error));});
+    const expected=turnId?conversation.turns.find(turn=>turn.id===turnId):undefined;
+    const matches=(turn:Pick<ConversationTurn,'evidenceDeleted'|'result'|'question'>|undefined)=>Boolean(turn&&!turn.evidenceDeleted&&turn.result&&expected?.result&&turn.question===expected.question&&turn.result.answer===expected.result.answer&&turn.result.citations.some(citation=>citation.id===id));
+    if(turnId&&!matches(expected)){setUnavailableReference({opener});return;}
+    historyReferenceRequest.current?.abort();const controller=new AbortController();historyReferenceRequest.current=controller;
+    const current=()=>{const latest=latestDetail.current;return !controller.signal.aborted&&historyReferenceRequest.current===controller&&latest.api===owner&&latest.selectedId===conversationId&&Boolean(latest.conversation)&&(!turnId||matches(latest.conversation?.turns.find(turn=>turn.id===turnId)));};
+    void (async()=>{
+      try{
+        const value=await api.request<{id:string;available:boolean}>(`/api/conversations/${encodeURIComponent(conversationId)}/references/${encodeURIComponent(id)}`,{signal:controller.signal});
+        if(!current())return;
+        if(value.available!==true||value.id!==id){setUnavailableReference({opener});return;}
+        // The conversation-level reference endpoint may be authorized by a
+        // different turn. A turn citation also needs its own fresh exact read.
+        if(turnId){const checked=await readOriginTurn(api,conversationId,turnId,controller.signal);if(!current())return;if(!matches(checked)){setUnavailableReference({opener});return;}}
+        onOpen(ref);
+      }catch(error){if(current())setError(conversationFailure(error));}
+      finally{if(historyReferenceRequest.current===controller)historyReferenceRequest.current=null;}
+    })();
   };
   const scopeCleared=clearedScope?.owner===api&&clearedScope.id===conversation?.id;
   useEffect(()=>{setClearedScope(null);setUnavailableReference(null);setMoreOpen(false);setMoreTurn(null);setConfirmDelete(false);setPendingSwitch(null);setDialogOwner(api);},[api,selectedId]);
-  const latestDetail=useRef({api,selectedId,data:detail.data,error:detail.error});
-  latestDetail.current={api,selectedId,data:detail.data,error:detail.error};
   const draftOwner=useRef(api);
   const [draft]=useState(()=>createQuestionDraft(question=>{const owner=draftOwner.current;unsentDrafts.set(owner,{question,attachments:unsentDrafts.get(owner)?.attachments??[]});})),setQuestion=draft.set;
   const [attachments,updateAttachments]=useState<ChatAttachment[]>([]);
@@ -145,7 +160,24 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   }
   useEffect(()=>{if(draftOwner.current!==api){const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);query.delete('conversation');query.delete('turn');window.history.replaceState(null,'',route+(query.size?'?'+query:''));reference.clear();}draftOwner.current=api;settledReceipts.current.clear();const saved=unsentDrafts.get(api);selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);const retained=queryRecovery.get(api);selectionMade.current=Boolean(retained);setRun(retained?.run??null);setBusy(false);setQuestion(saved?.question??'');setAttachments(saved?.attachments??[]);setImageUploadState({owner:api,items:unsentImages.get(api)??[]});setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
     return()=>{operation.current?.abort();cancelRequest.current?.abort();cancelRequest.current=null;const retained=queryRecovery.get(api);if(retained)queryRecovery.set(api,{...retained,unknown:true});attachmentRequest.current?.abort();unsentImages.set(api,(unsentImages.get(api)??[]).map(item=>({...item,status:'failed'})));historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
-  useEffect(()=>{const changed=()=>{const draftQuery=new URLSearchParams(window.location.hash.split('?')[1]??'');if(draftQuery.get('history')==='1'){setHistoryOpen(true);draftQuery.delete('history');window.history.replaceState(null,'',window.location.hash.split('?')[0]+(draftQuery.size?'?'+draftQuery:''));}const incoming=draftQuery.get('questionDraft');if(incoming!==null){queryRecovery.draftEdited(api);selectionMade.current=true;setQuestion(incoming.slice(0,100000));draftQuery.delete('questionDraft');const route=window.location.hash.split('?')[0];window.history.replaceState(null,'',route+(draftQuery.size?'?'+draftQuery:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){const retained=queryRecovery.get(api);if(retained&&next!==retained.conversationId&&next!==retained.run?.conversationId)queryRecovery.contextChanged(api);selectionMade.current=true;setTargetTurn(draftQuery.get('turn'));setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
+  useEffect(()=>{const changed=()=>{const draftQuery=new URLSearchParams(window.location.hash.split('?')[1]??'');if(draftQuery.get('history')==='1'){setHistoryOpen(true);draftQuery.delete('history');window.history.replaceState(null,'',window.location.hash.split('?')[0]+(draftQuery.size?'?'+draftQuery:''));}const incoming=draftQuery.get('questionDraft');if(incoming!==null){
+    // The navigation has explicitly replaced the draft. A late upload from the
+    // discarded draft must not attach itself to the newly prepared question.
+    const nextQuestion=incoming.slice(0,100000);
+    attachmentRequest.current?.abort();attachmentRequest.current=null;
+    // Publish the replacement before React replays the owner-restoration effect
+    // (including in StrictMode); queued state updaters alone are too late.
+    unsentDrafts.set(api,{question:nextQuestion,attachments:[]});unsentImages.delete(api);localImageFiles.delete(api);
+    setUploading(false);setAttachments([]);storeImages(()=>[]);
+    queryRecovery.contextChanged(api);selectionMade.current=true;
+    // A search handoff without an explicit conversation starts a fresh context,
+    // even when Ask was already mounted with a historical conversation.
+    if(!draftQuery.get('conversation')){
+      cancelHistoryReference();olderRequest.current?.abort();olderRequest.current=null;setLoadingOlder(false);
+      setSelectedId(null);setOlder(null);setTargetTurn(null);setClearedScope(null);setHistoryOpen(false);
+      if(!queryRecovery.get(api)){operation.current?.abort();operation.current=null;setRun(null);setBusy(false);setPendingQuestion('');setPollError('');setPollReceiptMissing(false);}
+    }
+    setQuestion(nextQuestion);draftQuery.delete('questionDraft');const route=window.location.hash.split('?')[0];window.history.replaceState(null,'',route+(draftQuery.size?'?'+draftQuery:''));window.dispatchEvent(new window.Event('mote:workspace-state'));}const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){if(next!==latestDetail.current.selectedId)cancelHistoryReference();const retained=queryRecovery.get(api);if(retained&&next!==retained.conversationId&&next!==retained.run?.conversationId)queryRecovery.contextChanged(api);selectionMade.current=true;setTargetTurn(draftQuery.get('turn'));setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
   const detailRevoked=detail.error instanceof ApiError&&[401,403,404,410].includes(detail.error.status);
   useLayoutEffect(()=>{
     olderRequest.current?.abort();olderRequest.current=null;setLoadingOlder(false);setOlder(null);setPageRevoked(false);
@@ -244,7 +276,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     if (busy) return;
     if(id===selectedId){setHistoryOpen(false);return;}
     if(!force&&id!==selectedId&&(draft.getSnapshot().trim()||attachments.length||imageUploads.length||queryRecovery.get(api))){setPendingSwitch({owner:api,id});return;}
-    queryRecovery.contextChanged(api);attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);
+    cancelHistoryReference();queryRecovery.contextChanged(api);attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);
     setHistoryOpen(false);
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
@@ -266,7 +298,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   function startNew(force=false) {
     if (busy) return;
     if(!force&&(draft.getSnapshot().trim()||attachments.length||imageUploads.length||queryRecovery.get(api))){setPendingSwitch({owner:api,id:null});return;}
-    queryRecovery.contextChanged(api);attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);setHistoryOpen(false);
+    cancelHistoryReference();queryRecovery.contextChanged(api);attachmentRequest.current?.abort();attachmentRequest.current=null;setUploading(false);setHistoryOpen(false);
     setTargetTurn(null);setClearedScope(null);
     selectionMade.current=true;operation.current?.abort();operation.current=null;olderRequest.current?.abort();setLoadingOlder(false);
     setRun(null);setPollError('');setPollReceiptMissing(false);setSelectedId(null);setOlder(null);setQuestion('');setAttachments([]);storeImages(()=>[]);setPendingQuestion('');setError('');setConfirmDelete(false);setSelectedOwnerQuestion(null);
@@ -360,7 +392,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       {conversation?.nextCursor&&<button className="text-button" disabled={opening} onClick={()=>void loadOlderTurns()}>{moteText("加载更早的对话")}</button>}
       {conversation?.turns.map((turn,index) => <article className={`answer-panel conversation-turn ${turn.status === 'failed' ? 'failed' : ''}${index===0&&!conversation.nextCursor&&turn.question===conversation.title?' first-question-duplicate':''}`} key={turn.id} id={'conversation-turn-'+turn.id} tabIndex={-1} data-source-turn={targetTurn===turn.id?'true':undefined}>
         <div className="asked-question"><MessageSquare size={16}/><span>{turn.question}</span></div>{Boolean(turn.attachments?.length)&&<div className="chat-attached-images">{turn.attachments?.map(attachment=><span key={attachment.id}><ImagePlus size={13}/>{attachment.name}</span>)}</div>}
-        {turn.status === 'failed' || !turn.result ? <div className="failed-answer" role="alert"><div className="failed-answer-icon"><AlertCircle size={18}/></div><div><strong>{moteText("这次回答没有完成")}</strong><p>{failureMessage(turn.error)}</p><button className="button primary" disabled={busy || opening} onClick={() => retry(turn.question)}><RotateCcw size={14}/>{moteText("再次提问")}</button></div></div> : <>{turn.evidenceDeleted ? <p className="notice">{moteText("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。")}</p> : <>{turn.evidenceUnavailable?<p className="notice">{moteText('引用原文已删除，历史问答仍保留。')}</p>:turn.evidenceStale&&<p className="notice">{moteText("这是历史版本，当前资料已更新。")}</p>}{renderAnswer(turn.result,openHistoryReference)}<div className="conversation-turn-actions"><SaveConversationRecord inDialog formatError={conversationFailure} api={api} conversationId={conversation.id} messageId={turn.id} question={turn.question} answer={turn.result.answer} onOpen={onOpen}/><button className="text-button" aria-label={moteText('本轮详情')+' '+turn.question} onClick={()=>setMoreTurn({owner:api,conversationId:conversation.id,turnId:turn.id})}>{moteText('更多')}</button></div><ConversationTurnDetails api={api} conversationId={conversation.id} id={turn.id} question={turn.question} answer={turn.result} open={moreTurn?.owner===api&&moreTurn.conversationId===conversation.id&&moreTurn.turnId===turn.id} onClose={()=>setMoreTurn(null)} onOpen={ref=>{setMoreTurn(null);openHistoryReference(ref);}} run={run?.turnId===turn.id?run:undefined} pollError={pollError}/></>}</>}
+        {turn.status === 'failed' || !turn.result ? <div className="failed-answer" role="alert"><div className="failed-answer-icon"><AlertCircle size={18}/></div><div><strong>{moteText("这次回答没有完成")}</strong><p>{failureMessage(turn.error)}</p><button className="button primary" disabled={busy || opening} onClick={() => retry(turn.question)}><RotateCcw size={14}/>{moteText("再次提问")}</button></div></div> : <>{turn.evidenceDeleted ? <p className="notice">{moteText("相关证据已删除，这条历史回答已清除。可以继续提问查阅现有记录。")}</p> : <>{turn.evidenceUnavailable?<p className="notice">{moteText('引用原文已删除，历史问答仍保留。')}</p>:turn.evidenceStale&&<p className="notice">{moteText("这是历史版本，当前资料已更新。")}</p>}{renderAnswer(turn.result,ref=>openHistoryReference(ref,turn.id))}<div className="conversation-turn-actions"><SaveConversationRecord inDialog formatError={conversationFailure} api={api} conversationId={conversation.id} messageId={turn.id} question={turn.question} answer={turn.result.answer} answerDetails={turn.result} onOpen={onOpen}/><button className="text-button" aria-label={moteText('本轮详情')+' '+turn.question} onClick={()=>setMoreTurn({owner:api,conversationId:conversation.id,turnId:turn.id})}>{moteText('更多')}</button></div><ConversationTurnDetails api={api} conversationId={conversation.id} id={turn.id} question={turn.question} answer={turn.result} open={moreTurn?.owner===api&&moreTurn.conversationId===conversation.id&&moreTurn.turnId===turn.id} onClose={()=>setMoreTurn(null)} onOpen={ref=>{setMoreTurn(null);openHistoryReference(ref,turn.id);}} run={run?.turnId===turn.id?run:undefined} pollError={pollError}/></>}</>}
       </article>)}
       {busy&&!run&&pendingQuestion&&<p className="query-admission-status" role="status">{moteText('正在提交问题…')}</p>}
       {pendingQuestion && <div className="asked-question"><MessageSquare size={16}/><span>{pendingQuestion}</span></div>}

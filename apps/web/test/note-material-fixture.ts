@@ -18,9 +18,16 @@ export async function noteMaterialFixture(directory:string,webRoot?:string,prepa
  const short=await note(literal,{ownerDescription:'Generated separate description; never part of the original body.'},true);
  const quoted='Generated saved question?\n\nGenerated saved answer with exact attribution.';
  const shared=await note('Generated personal addition, preserved independently.',{ownerDescription:'Generated saved-Q&A description.',noteOrigin:{kind:'conversation',conversationId:randomUUID(),messageIds:[randomUUID()],text:quoted}});
+ const citedAnswer='## Generated heading\n\n**Generated answer** ['+short.id+']';
+ const result={runId:randomUUID(),answer:citedAnswer,citations:[{id:short.id,appName:'Generated source',capturedAt:at,excerpt:literal}],trace:[],evidenceDependencies:{version:1 as const,complete:true,ids:[short.id]}};
+ const exactTurn=node.featureServices.conversations.append(undefined,{question:'Generated saved question?'},result),exactSnapshot='Generated saved question?\n\n'+citedAnswer;
+ const exact=await note('Generated exact Android addition.',{ownerDescription:'Generated exact separate description.',noteOrigin:{kind:'conversation',conversationId:exactTurn.conversationId,messageIds:[exactTurn.turnId],text:exactSnapshot}});
+ const longQuestion='Generated long question?',longPrefix='## Generated long answer\n\n'+('x'.repeat(3910))+'\n\n```\n**Literal code** ['+short.id+']\n```\n\nVerified citation ['+short.id+']\n\n',unicodePad=11999-longQuestion.length-2-longPrefix.length,longAnswer=longPrefix+('x'.repeat(unicodePad))+'😀'+('x'.repeat(100000-longQuestion.length-2-longPrefix.length-unicodePad-2)),longSnapshot=longQuestion+'\n\n'+longAnswer;
+ const longTurn=node.featureServices.conversations.append(undefined,{question:longQuestion},{runId:randomUUID(),answer:longAnswer,citations:[{id:short.id,appName:'Generated source',capturedAt:at,excerpt:literal}],trace:[],evidenceDependencies:{version:1,complete:true,ids:[short.id]}});
+ const longQuote=await note('Generated long quote addition.',{noteOrigin:{kind:'conversation',conversationId:longTurn.conversationId,messageIds:[longTurn.turnId],text:longSnapshot}});
  const long=await note('Generated long original: '+('完整正文😀\n'.repeat(1200))+' END OF GENERATED ORIGINAL.');
  // Controlled host publication tests bounded /read, not an authored-organizer block-order claim.
  const paged=node.materials.publish({id:materialId(short.material.origin.sourceId,'generated-metadata-first'),kind:'mote.note',schemaVersion:2,title:'Generated metadata-first page',origin:{...short.material.origin,externalId:'generated-metadata-first'},members:[{id:short.id,kind:'capture',ref:'capture:'+short.id}],blocks:[{id:'record-metadata',kind:'text',format:'json',text:JSON.stringify({generatedDiagnostic:'x'.repeat(4200)}),memberIds:[short.id]},{id:'record',kind:'text',format:'plain',text:'Generated body on the following page.',memberIds:[short.id]}],coverage:{state:'complete'},fidelity:{state:'derived'},retention:{original:'retained',policy:'keep'}});
- return{...node,token,headers,short,shared,long,paged,literal,quoted,modelCalls:()=>modelCalls};
+ return{...node,token,headers,short,shared,exact,exactTurn,exactSnapshot,citedAnswer,longQuote,longSnapshot,long,paged,literal,quoted,modelCalls:()=>modelCalls};
  }catch(error){await node.app.close();throw error;}
 }

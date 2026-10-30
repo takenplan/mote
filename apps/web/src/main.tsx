@@ -114,6 +114,7 @@ function App() {
   const collectionIds = () => webFeatures.collections().map(entry=>entry.id);
   const initialRoute = useRef(readWorkspaceRoute(location.hash,readPage,collectionIds()));
   const [page, setPage] = useState<Page>(initialRoute.current.page);
+  const [routeHash,setRouteHash]=useState(()=>location.hash);
   const settingsContext = isSettingsContext(page);
   const [archiveTab, updateArchiveTab] = useState<ArchiveTab>(initialRoute.current.collection);
   const archiveTabRef=useRef(archiveTab); archiveTabRef.current=archiveTab;
@@ -126,11 +127,12 @@ function App() {
         history.replaceState(null, '', currentHash.current); return;
       }
       currentHash.current=location.hash;
+      setRouteHash(location.hash);
       setClientLogin(loginRequestId());
       setPage(next.page); updateArchiveTab(next.collection);
       updateEvidenceId(readEvidenceRoute(location.hash));
     };
-    const remember=()=>{currentHash.current=location.hash;};
+    const remember=()=>{currentHash.current=location.hash;setRouteHash(location.hash);};
     window.addEventListener('hashchange', navigate);window.addEventListener('mote:workspace-state',remember);
     return () => {window.removeEventListener('hashchange', navigate);window.removeEventListener('mote:workspace-state',remember);};
   }, []);
@@ -152,6 +154,12 @@ function App() {
   const setEvidenceId = useCallback((id:string|null) => {
     updateEvidenceId(changeEvidenceRoute(window,id));
     currentHash.current=location.hash;
+    setRouteHash(location.hash);
+  }, []);
+  const openNestedEvidence = useCallback((id:string) => {
+    updateEvidenceId(changeEvidenceRoute(window,id,{returnToCurrent:true}));
+    currentHash.current=location.hash;
+    setRouteHash(location.hash);
   }, []);
   const [notice, setNotice] = useState("");
   const [timelineRevision, setTimelineRevision] = useState(0);
@@ -291,6 +299,7 @@ function App() {
     if(target.page==='featureGuide'&&page!=='featureGuide'&&api)enterGuide(api,location.hash);
     history.pushState(null, '', workspaceHash(routes[target.page],target.page==='archive'?target.collection:undefined));
     currentHash.current=location.hash;
+    setRouteHash(location.hash);
     archiveTabRef.current=target.collection; updateArchiveTab(target.collection);
     updateEvidenceId(null);
     setPage(target.page);
@@ -302,6 +311,7 @@ function App() {
     if(pageRef.current==='archive') {
       history.pushState(null,'',workspaceHash(routes.archive,next,location.hash));
       currentHash.current=location.hash;
+      setRouteHash(location.hash);
     }
   }
   function connected(value: Connection, lifetime: SessionLifetime = sessionLifetime) {
@@ -325,6 +335,7 @@ function App() {
     if (connection) setConnection(persistSession(connection, lifetime));
   }
   const notesAvailable=Boolean(webFeatures.page('notes'));
+  const pageLabel=page==='ask'&&new URLSearchParams(routeHash.split('?')[1]??'').has('question')?moteText('需要你补充'):pageLabels[page];
   useEffect(()=>{if(!notesAvailable)setQuickNoteApi(null);},[notesAvailable]);
   const openQuickNote=useCallback(()=>{if(!webFeatures.page('notes')){setNotice(moteText('当前服务未提供此入口'));return;}if(api&&verified)setQuickNoteApi(api);else setShowConnect(true);},[api,verified]);
   return (
@@ -335,13 +346,13 @@ function App() {
       toolbar={
         <header className="topbar">
           {api&&verified&&page!=='featureGuide'&&guideVisit(api).returnAvailable&&webFeatures.page('featureGuide')&&<button className="guide-return" onClick={()=>{window.location.hash='#/guide';}}><span aria-hidden="true">← </span>{moteText('全部功能')}</button>}
-            <details className="shell-menu shell-mobile-menu"><summary aria-label={moteText('全部功能')}>{pageLabels[page]??moteText("更多")}</summary><div>{Object.entries({overview:moteText("首页"),archive:moteText("资料库"),sources:moteText("来源"),connections:moteText("AI 接入"),ask:moteText("问一问"),activity:moteText("后台活动")}).map(([target,label])=><button key={target} onClick={event=>{event.currentTarget.closest("details")!.open=false;onPage(target);}}>{label}</button>)}
+            <details className="shell-menu shell-mobile-menu"><summary aria-label={moteText('全部功能')}>{pageLabel??moteText("更多")}</summary><div>{Object.entries({overview:moteText("首页"),archive:moteText("资料库"),sources:moteText("来源"),connections:moteText("AI 接入"),ask:moteText("问一问"),activity:moteText("后台活动")}).map(([target,label])=><button key={target} onClick={event=>{event.currentTarget.closest("details")!.open=false;onPage(target);}}>{label}</button>)}
               <button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('featureGuide');}}>{moteText('全部功能')}</button>
               <button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('about');}}>{moteText('设置')}</button>
               <button onClick={event=>{event.currentTarget.closest('details')!.open=false;setShowConnect(true);}}>{moteText('登录 Mote')}</button>
               {connection&&<button onClick={refresh} disabled={loading}>{moteText('刷新资料')}</button>}
             </div></details>
-          <span className="breadcrumb"><strong>{pageLabels[page]??moteText("当前服务未提供此入口")}</strong></span>
+          <span className="breadcrumb"><strong>{pageLabel??moteText("当前服务未提供此入口")}</strong></span>
           <div className="topbar-actions"><GlobalRetrieval key={connection?.viewScope??'disconnected'} onPage={onPage}/><button className="button quick-note" disabled={!notesAvailable} title={notesAvailable?undefined:moteText('当前服务未提供此入口')} onClick={openQuickNote} aria-haspopup="dialog"><Plus size={16}/>{moteText("随手记")}</button>
 
           </div>
@@ -460,6 +471,7 @@ function App() {
           id={evidenceId}
           api={api}
           onOpen={setEvidenceId}
+          onOpenNested={openNestedEvidence}
           onClose={() => setEvidenceId(null)}
           onDeleted={refresh}
         />

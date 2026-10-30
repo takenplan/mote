@@ -45,7 +45,7 @@ export function citationLinks(citations:Answer['citations'],numeric=false) {
   };
 }
 
-export function AnswerMarkdown({answer,onOpen,numericCitations=false}:{answer:Answer;onOpen:(id:string)=>void;numericCitations?:boolean}) {
+export function AnswerMarkdown({answer,onOpen,numericCitations=false,readOnly=false}:{answer:Answer;onOpen:(id:string)=>void;numericCitations?:boolean;readOnly?:boolean}) {
   const citationIds=JSON.stringify(answer.citations.map(citation=>citation.id));
   const verified=useMemo(()=>new Map((JSON.parse(citationIds) as string[]).map(id=>[citationHref(id),id])),[citationIds]);
   // Stable renderer types keep the focused citation mounted when the shared
@@ -55,9 +55,10 @@ export function AnswerMarkdown({answer,onOpen,numericCitations=false}:{answer:An
     table:({children})=><div className="answer-table-scroll" role="region" aria-label={moteText("回答中的表格")} tabIndex={0}><table>{children}</table></div>,
     a:({href,children})=>{
       const id=href?verified.get(href):undefined;
+      if(readOnly)return id?<sup className="quoted-citation">{children}</sup>:<span>{children}</span>;
       return id ? <button type="button" className="inline-citation" onClick={()=>onOpen(formatEvidenceRef('capture',id))} aria-label={moteText("查看证据：{0}", children)}>{children}</button>
         : <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>;
     },
-  }),[verified,onOpen]);
+  }),[verified,onOpen,readOnly]);
   return <ReactMarkdown skipHtml remarkPlugins={[remarkGfm,remarkCjkStrong,citationLinks(answer.citations,numericCitations)]} components={components}>{answer.answer}</ReactMarkdown>;
 }

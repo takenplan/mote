@@ -1,6 +1,9 @@
 import type {Api} from './api';
 export type ChatAttachment={id:string;name:string;mimeType:string};
+export type ChatImageUpload={key:string;file:File;status:'uploading'|'failed'};
 export const unsentDrafts=new WeakMap<Api,{question:string;attachments:ChatAttachment[]}>();
+// Pending files remain in memory only, scoped to the authenticated API.
+export const unsentImages=new WeakMap<Api,ChatImageUpload[]>();
 const scopes=new WeakMap<Api,string>(),reloadKey='mote.chat-language-reload.v1';
 /** One-shot bridge only for the owner's explicit language reload. It contains
  * no credential and restores only into the same persisted browser view scope. */

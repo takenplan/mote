@@ -46,3 +46,15 @@ test('related activity uses exact identities and describes incomplete coverage e
  assert.ok(reads.filter(path=>path.includes('materialId=')).every(path=>!path.includes('cursor=')),'a cursor from another relation is never sent to the new scope');assert.match(d.querySelector('.list-pagination')!.textContent!,/第 1 页/);
  assert.equal(d.querySelector<HTMLAnchorElement>('.related-activity-context a')!.getAttribute('href'),'#/activity');
 });
+
+test('an Activity result preserves the original scroll across page navigation without leaking it to another activity or owner',async t=>{
+ const{root,d}=await fixture(t),w=d.defaultView!;let y=0;Object.defineProperty(w,'scrollY',{configurable:true,get:()=>y});w.scrollTo=((first:ScrollToOptions|number,second?:number)=>{y=typeof first==='number'?second??0:first.top??0;}) as typeof w.scrollTo;
+ const value=(id:string):WorkActivity=>({...generated,id,goal:'Generated activity '+id});
+ const makeApi=()=>({request:async(path:string)=>path.startsWith('/api/operations/changes')?new Promise(()=>{}):path.startsWith('/api/work-activity/')?value(decodeURIComponent(path.split('/').at(-1)!.split('?')[0])):{items:[],nextCursor:null},setAgentTimeout:()=>{}} as Api),owner=makeApi(),anotherOwner=makeApi();
+ const render=(api:Api)=>act(async()=>root.render(React.createElement(Activity,{api,onOpen:()=>{},onNavigate:()=>{w.location.hash='#/library?view=memories';y=0;}})));
+ w.location.hash='#/activity?work=memory%3Aone';await render(owner);assert.match(d.querySelector('.activity-detail h1')!.textContent!,/memory:one/);
+ y=267;await act(async()=>w.dispatchEvent(new w.Event('scroll')));await act(async()=>button(d,'已保存 1 条记忆').click());await act(async()=>root.render(null));
+ w.location.hash='#/activity?work=memory%3Aone';await render(owner);assert.equal(y,267,'return to the same activity restores its last actual scroll');
+ await act(async()=>root.render(null));y=0;w.location.hash='#/activity?work=memory%3Atwo';await render(owner);assert.equal(y,0,'a different activity starts at its own position');
+ await act(async()=>root.render(null));y=0;w.location.hash='#/activity?work=memory%3Aone';await render(anotherOwner);assert.equal(y,0,'another owner never inherits the previous owner position');
+});
