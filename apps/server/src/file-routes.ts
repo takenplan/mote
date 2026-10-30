@@ -14,7 +14,7 @@ import {StoreError} from './store.js';
 import {FileAttachments} from './file-attachments.js';
 import type {IngressService} from './ingress.js';
 
-export function registerFileRoutes(app:FastifyInstance,files:FileStore,processing:FileProcessing,ingress:IngressService,authorize:(req:FastifyRequest,sourceId:string)=>void,device:(req:FastifyRequest)=>string|undefined,reader:Pick<CaptureRead,'evidence'>,diagnostics?:ServerDiagnostics,withOwnerIntent:<T>(id:string,task:()=>T|Promise<T>)=>Promise<T>=async(_id,task)=>task()){
+export function registerFileRoutes(app:FastifyInstance,files:FileStore,processing:FileProcessing,ingress:IngressService,authorize:(req:FastifyRequest,sourceId:string)=>void,device:(req:FastifyRequest)=>string|undefined,reader:Pick<CaptureRead,'evidence'>,diagnostics?:ServerDiagnostics,withOwnerIntent:<T>(id:string,task:()=>T|Promise<T>)=>Promise<T>=async(_id,task)=>task(),withOwnerBatch:<T>(ids:readonly string[],task:()=>T)=>Promise<T>=async(_ids,task)=>task()){
   const measure=<T>(operation:Operation,task:()=>T|Promise<T>)=>diagnostics?diagnostics.measure('file',operation,task):Promise.resolve().then(task);
   const reviews=new FileReviews(files,processing);
   const attachments=new FileAttachments(files);
@@ -77,7 +77,7 @@ export function registerFileRoutes(app:FastifyInstance,files:FileStore,processin
   app.get('/api/file-processing',async()=>processing.view());
   app.post('/api/file-processing/match',async req=>processing.match(req.body));
   app.post('/api/file-processing/preview',async req=>processing.preview(req.body));
-  app.post('/api/file-processing/reprocess',async req=>processing.reprocess(req.body));
+  app.post('/api/file-processing/reprocess',async req=>{const targets=processing.reprocessTargets(req.body);return targets.length?withOwnerBatch(targets,()=>processing.reprocess(req.body)):processing.reprocess(req.body);});
   app.put('/api/file-processing',{bodyLimit:262144},async req=>processing.save(req.body));
   return (req:FastifyRequest)=>{
     if(req.routeOptions.url!=='/api/files/:id/content'||!['GET','HEAD'].includes(req.method))return false;

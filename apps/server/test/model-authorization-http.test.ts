@@ -70,6 +70,33 @@ test('assembled media host admits approved new audio and explicit owner retry of
  await f.restart();await f.node.processing.tick();assert.equal(bodies.length,2);assert.deepEqual(bodies[1],old.bytes);assert.equal(f.node.files.chunks(old.id)[0].ocrText,'Generated assembled transcript');
 });
 
+test('historical audio batch confirmation authorizes only previewed originals across restart',async t=>{
+ const bodies:Buffer[]=[];
+ const service=createServer(async(req,res)=>{const chunks:Buffer[]=[];for await(const part of req)chunks.push(Buffer.from(part));bodies.push(Buffer.concat(chunks));res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text:'Generated batch transcript'}]}));});
+ await new Promise<void>(resolve=>service.listen(0,'127.0.0.1',resolve));const address=service.address();assert.ok(address&&typeof address!=='string');
+ t.after(async()=>{service.closeAllConnections();await new Promise<void>(resolve=>service.close(()=>resolve()));});
+ const f=await fixture(t,async()=>({configured:true,close:async()=>{},query:async()=>{throw Error('No language model call expected');}}));
+ const settings={...f.node.processing.currentSettings(),enabled:true,audioProcessor:'audio.http',endpoint:'http://127.0.0.1:'+address.port+'/transcribe',summarize:false};
+ await f.node.processing.save({revision:f.node.processing.view().revision,settings,policy:fixtureFilePolicy(settings,f.node.processing.runtime.registry)});
+ f.node.sources.register({id:'generated-audio',name:'Generated audio',kind:'local-files',deviceId:'generated-device',platform:'android',retention:'archive'});
+ const upload=async()=>{const bytes=Buffer.from('Generated audio '+randomUUID()),begun=f.node.files.begin({sourceId:'generated-audio',item:{externalId:randomUUID(),revision:'1',observedAt:new Date().toISOString(),title:'Generated audio',kind:'file',layer:'original',text:'',mimeType:'audio/wav',deleted:false},sha256:sha256(bytes),sizeBytes:bytes.length},()=>{});f.node.files.part(begun.uploadId,0,bytes,()=>{});return {id:(await f.node.files.commit(begun.uploadId,()=>{})).id,bytes};};
+ const first=await upload(),second=await upload();await f.node.processing.tick();assert.equal(bodies.length,0);
+ const preview=await f.node.app.inject({method:'POST',url:'/api/file-processing/preview',headers:f.headers,payload:{revision:f.node.processing.view().revision,sourceId:'generated-audio',type:'audio/*'}});assert.equal(preview.statusCode,200,preview.body);assert.equal(preview.json().count,2);
+ const later=await upload();
+ // Neither preview nor a partial scope may authorize a mixed batch; the
+ // rejected attempt must leave the preview usable and roll back all intents.
+ assert.throws(()=>f.node.processing.reprocess({token:preview.json().token}),{statusCode:409});
+ await assert.rejects(f.node.featureServices.withMediaOwnerBatch([first.id],()=>f.node.processing.reprocess({token:preview.json().token})),{statusCode:409});
+ for(const file of [first,second,later])assert.equal(f.node.processing.modelIntent(file.id,'pipeline'),undefined);
+ assert.equal(bodies.length,0);
+ const confirmed=await f.node.app.inject({method:'POST',url:'/api/file-processing/reprocess',headers:f.headers,payload:{token:preview.json().token}});assert.equal(confirmed.statusCode,200,confirmed.body);assert.equal(confirmed.json().queued,2);
+ const duplicate=await f.node.app.inject({method:'POST',url:'/api/file-processing/reprocess',headers:f.headers,payload:{token:preview.json().token}});assert.equal(duplicate.statusCode,409);
+ await f.restart();await f.node.processing.tick();
+ assert.equal(bodies.length,2);assert.deepEqual(new Set(bodies.map(body=>body.toString())),new Set([first.bytes.toString(),second.bytes.toString()]));
+ for(const file of [first,second])assert.equal(f.node.files.chunks(file.id)[0].ocrText,'Generated batch transcript');
+ assert.equal(f.node.files.chunks(later.id).length,0);assert.equal(f.node.modelAuthorization.view().state,'unapproved');
+});
+
 
 test('assembled embedding transport requires approval and stop fences its late vector publication',async t=>{
  const inputs:string[]=[];let hold=false,enter!:()=>void,release!:()=>void;const started=new Promise<void>(r=>enter=r),held=new Promise<void>(r=>release=r);
