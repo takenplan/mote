@@ -82,6 +82,7 @@ class MainActivity : MoteActivity() {
     private var homeConversations: HomeConversationView? = null
     private var homeDiscovery: HomeDiscoveryView? = null
     private var homeFindingVisible = false
+    private var captureRangeState: TextView? = null
     private lateinit var homeAttention: TextView
     private lateinit var homeGreeting: TextView
     private lateinit var homeWelcome: TextView
@@ -953,7 +954,7 @@ class MainActivity : MoteActivity() {
         val appConfigurationContent = content
         val appOverview = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(appOverview); content = appOverview
-        text(MoteI18n.text(if (settings.enabled) "正在本机采集" else "采集已暂停"),NativeFontRole.TITLE_MOBILE).apply { tag = "capture-range-state" }
+        captureRangeState = text(MoteI18n.text(if (settings.enabled) "正在本机采集" else "采集已暂停"),NativeFontRole.TITLE_MOBILE).apply { tag = "capture-range-state" }
         text(MoteI18n.text("应用时长、截图与结构化内容分别选择。"), NativeFontRole.SUPPORT, NativeColorRole.MUTED)
         val appRules = AppCollectionRules.parse(config.appCollectionRules)
         val appDefaults = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
@@ -1507,6 +1508,7 @@ class MainActivity : MoteActivity() {
         refreshStatus()
     }
     private fun refreshStatus() {
+        captureRangeState?.text = MoteI18n.text(if (settings.enabled) "正在本机采集" else "采集已暂停")
         if (!::status.isInitialized) return
         // Capture controls reflect cheap live state before optional statistics/diagnostics.
         // A slow inventory must not make a successful Start look unresponsive.
