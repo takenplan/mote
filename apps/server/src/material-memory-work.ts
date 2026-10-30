@@ -15,7 +15,7 @@ export type MaterialMemoryRunner={
   get:(id:string)=>{status:string;errorCode?:string};configurationStillChanged?:(id:string)=>boolean;run:(id:string)=>Promise<unknown>;cancel:(id:string,options?:{cause:'authority'})=>unknown;
 };
 const isConfigurationWait=(job:{status:string;errorCode?:string})=>job.status==='waiting_for_model'&&job.errorCode==='configuration_changed';
-const configurationStillChanged=(runner:MaterialMemoryRunner,id:string)=>{try{return runner.configurationStillChanged?.(id)??true;}catch{return false;}};
+const configurationStillChanged=(runner:MaterialMemoryRunner,id:string)=>{try{return runner.configurationStillChanged?.(id)??true;}catch{return true;}};
 export type MemoryWorkCandidate={key:string;materialId:string;ref:string;title:string;sourceId:string;inputKey:string;scope:string;contextTime:string;fingerprint:string;characters:number;evidenceCount:number;evidenceIds:string[];recipe?:MemoryStrategyRef};
 export type MemoryWorkProposal={id?:string;members:string[];goal:string;instruction:string};
 export type MaterialMemoryPlanner=(catalog:MemoryWorkCandidate[])=>Promise<MemoryWorkProposal[]>;

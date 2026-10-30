@@ -318,7 +318,7 @@ export class MemoryPipeline {
     const row=this.store.db.prepare("SELECT json_extract(json,'$.status') AS status,json_extract(json,'$.errorCode') AS error,json_extract(json,'$.configuration.fingerprint') AS fingerprint,json_extract(json,'$.modelProfileId') AS profile,json_extract(json,'$.modelOverride') AS model FROM memory_jobs WHERE id=?").get(id);
     if(!row)throw new StoreError('Memory job not found',404);
     if(row.status!=='waiting_for_model'||row.error!=='configuration_changed'||typeof row.fingerprint!=='string'||!this.options.models.configuration)return false;
-    try{return this.options.models.configuration(typeof row.profile==='string'?row.profile:undefined,typeof row.model==='string'?row.model:undefined).fingerprint!==row.fingerprint;}catch{return false;}
+    try{return this.options.models.configuration(typeof row.profile==='string'?row.profile:undefined,typeof row.model==='string'?row.model:undefined).fingerprint!==row.fingerprint;}catch{return true;}
   }
   private batches(id:string):StoredBatch[]{return (this.store.db.prepare('SELECT json FROM memory_batches WHERE job_id=? ORDER BY idx').all(id) as {json:string}[]).map(row=>decodeMemoryBatch<StoredBatch>(this.store,row.json));}
   private batch(id:string):StoredBatch {const row=this.store.db.prepare('SELECT json FROM memory_batches WHERE id=?').get(id);if(!row)throw new StoreError('Memory batch not found',404);return decodeMemoryBatch<StoredBatch>(this.store,String(row.json));}

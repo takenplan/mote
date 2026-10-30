@@ -39,12 +39,12 @@ function fakeRunner(){
 for(const planned of [false,true])test(`a changed model configuration parks ${planned?'planned':'legacy'} Memory work until an explicit retry`,async t=>{
   const {store,materials,work,draft,receive,advance}=fixture(t),fake=fakeRunner(),material=materials.publish(draft());receive('raw');work.observe(material.id,['source-body'],{inputKey:'raw',change:'source'});
   const planner=async(catalog:import('../src/material-memory-work.js').MemoryWorkCandidate[])=>[{members:catalog.map(item=>item.key),goal:'Inspect generated original',instruction:'Preserve identity'}];
-  let fullReads=0;const runner={...fake.runner,get:(id:string)=>{fullReads++;return fake.runner.get(id);},configurationStillChanged:(id:string)=>fake.jobs.get(id)?.status==='waiting_for_model'&&fake.jobs.get(id)?.errorCode==='configuration_changed'};
+  let fullReads=0,unavailable=false;const runner={...fake.runner,get:(id:string)=>{fullReads++;return fake.runner.get(id);},configurationStillChanged:(id:string)=>{if(unavailable)throw Error('Generated unavailable configuration');return fake.jobs.get(id)?.status==='waiting_for_model'&&fake.jobs.get(id)?.errorCode==='configuration_changed';}};
   const drain=(queue:MaterialMemoryWork)=>planned?queue.drainPlanned(runner,true,planner):queue.drain(runner,true);
   await drain(work);await new Promise(resolve=>setImmediate(resolve));const job=fake.jobs.get('memory-1')!;job.status='waiting_for_model';job.errorCode='configuration_changed';fake.ran.length=0;advance(6000);
   await drain(work);await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(fake.ran,[],'a configuration mismatch must not restart automatically');
   const row=store.db.prepare('SELECT ready_at,error,job_id FROM material_memory_requests').get()!;assert.equal(row.ready_at,Number.MAX_SAFE_INTEGER);assert.equal(row.error,'memory_job_configuration_changed');
-  const afterPark=fullReads,recovered=new MaterialMemoryWork(store,materials,()=>20000);for(let i=0;i<3;i++)await drain(recovered);await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(fake.ran,[]);assert.equal(fullReads,afterPark,'parked work must not repeatedly load the full Memory job');
+  const afterPark=fullReads,recovered=new MaterialMemoryWork(store,materials,()=>20000);for(let i=0;i<3;i++)await drain(recovered);unavailable=true;await drain(recovered);unavailable=false;await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(fake.ran,[]);assert.equal(fullReads,afterPark,'parked or unavailable work must not repeatedly load the full Memory job');
   job.status='queued';delete job.errorCode;await drain(recovered);await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(fake.ran,['memory-1']);assert.equal(fake.created.length,1);assert.equal(store.db.prepare('SELECT job_id FROM memory_input_authorizations').get()!.job_id,'memory-1');
 });
 
