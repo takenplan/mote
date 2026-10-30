@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useSyncExternalStore} from 'react';
 import type {Api} from './api';
-import {resources} from './resource-cache';
+import {Resource,resources} from './resource-cache';
 const emptySnapshot={loading:false};
 const disabled={subscribe:(_listener:()=>void)=>()=>{},getSnapshot:()=>emptySnapshot,refresh:()=>{},invalidate:()=>{},observed:false,poll:(_interval:number)=>()=>{}};
 const pendingRevisions=new WeakSet<object>();
@@ -9,8 +9,8 @@ function invalidateRevision(resource:{invalidate:()=>void}){
  pendingRevisions.add(resource);
  queueMicrotask(()=>{pendingRevisions.delete(resource);resource.invalidate();});
 }
-export function useResource<T>(api:Api,path:string|null,pollMs?:number,revision?:unknown,continuityKey?:string){
- const resource=useMemo(()=>path?resources(api).get<T>(path):disabled,[api,path]);
+export function useResource<T>(api:Api,path:string|null,pollMs?:number,revision?:unknown,continuityKey?:string,isolated=false){
+ const resource=useMemo(()=>path?(isolated?new Resource<T>(path,api):resources(api).get<T>(path)):disabled,[api,path,isolated]);
  useEffect(()=>pollMs?resource.poll(pollMs):undefined,[resource,pollMs]);
  const previous=useRef({resource,revision});
  const alreadyObserved=resource.observed;

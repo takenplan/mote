@@ -5,7 +5,7 @@ import {createRoot} from 'react-dom/client';
 import {JSDOM} from 'jsdom';
 import {configureLocale,getLocale} from '@mote/shared/i18n';
 import {MemoryDetailPage} from '../src/Memories';
-import type {Api} from '../src/api';
+import {ApiError,type Api} from '../src/api';
 import {modelView} from './fixtures/model-settings';
 const at='2026-10-29T00:00:00.000Z',a='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',b='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const memory=(id:string)=>({id,title:'Generated Memory '+id[0],statement:'Complete generated original statement '+id[0],uncertainty:'Generated evidence only',status:'published',version:1,fingerprint:id[0].repeat(64),createdAt:at,evidence:[],evidenceIds:[],admission:{layer:'memory'}});
@@ -17,6 +17,23 @@ async function fixture(t:import('node:test').TestContext){
 }
 function api(overrides:(path:string,init?:RequestInit)=>unknown=()=>undefined,seen:{path:string;method:string}[]=[]):Api{return{request:async(path:string,init?:RequestInit)=>{seen.push({path,method:init?.method??'GET'});const value=overrides(path,init);if(value!==undefined)return value;if(path==='/api/model-settings')return modelView();if(path==='/api/memory-settings')return{settings:{consolidation:{enabled:false,maxItems:5}},extensions:[]};if(/^\/api\/memories\/[^/?]+\?/.test(path))return memory(path.split('/')[3].split('?')[0]);return{items:[],nextCursor:null};}} as Api;}
 const click=async(d:Document,label:string)=>act(async()=>{const button=[...d.querySelectorAll('button')].find(button=>button.textContent===label);assert.ok(button,label);button.click();});
+test('isolated activity detail refuses a different Memory ID even after an earlier successful selection',async t=>{
+ const {root,d}=await fixture(t),owner=api(path=>path.startsWith('/api/memories/'+a+'?')?memory(b):undefined),opened:string[]=[];
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,isolatedSelection:true,onOpen:ref=>opened.push(ref),onBack:()=>{}})));
+ assert.equal(d.querySelector('.memory-detail-heading'),null);assert.doesNotMatch(d.body.textContent!,/Generated Memory b/);assert.match(d.body.textContent!,/响应格式无效/);assert.deepEqual(opened,[]);
+});
+test('isolated activity detail freshly checks Memory permission and exact evidence before opening the original',async t=>{
+ const {root,d}=await fixture(t),evidenceId='00000000-0000-4000-8000-000000000123',withEvidence={...memory(a),evidenceIds:[evidenceId],evidence:[{id:evidenceId,capturedAt:at,receivedAt:at,contentHash:'a'.repeat(64)}]},opened:string[]=[];let denied=false;
+ const owner=api(path=>{if(path.startsWith('/api/memories/'+a+'?')){if(denied)throw new ApiError('Generated forbidden',403);return withEvidence;}return undefined;});
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,isolatedSelection:true,onOpen:ref=>opened.push(ref),onBack:()=>{}})));
+ assert.ok(d.querySelector('.memory-evidence .evidence-card'));denied=true;await act(async()=>d.querySelector<HTMLButtonElement>('.memory-evidence .evidence-card')!.click());assert.deepEqual(opened,[]);assert.equal(d.querySelector('.memory-detail-heading'),null);assert.match(d.body.textContent!,/Generated forbidden/);
+});
+test('a transient failed detail read cannot revive its old body while a later revalidation is pending',async t=>{
+ const {root,d}=await fixture(t),evidenceId='00000000-0000-4000-8000-000000000123',withEvidence={...memory(a),evidenceIds:[evidenceId],evidence:[{id:evidenceId,capturedAt:at,receivedAt:at,contentHash:'a'.repeat(64)}]};let reads=0,release!:(value:unknown)=>void;
+ const owner=api(path=>{if(path.startsWith('/api/memories/'+a+'?')){reads++;if(reads===1)return withEvidence;if(reads<=3)throw new ApiError('Generated unavailable',503);return new Promise(done=>release=done);}return undefined;});
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,isolatedSelection:true,onOpen:()=>assert.fail('must not open'),onBack:()=>{}})));await act(async()=>d.querySelector<HTMLButtonElement>('.memory-evidence .evidence-card')!.click());assert.equal(d.querySelector('.memory-detail-heading'),null);
+ await act(async()=>new Promise(resolve=>setTimeout(resolve,3200)));assert.ok(release,'later authorized read is actually pending');assert.equal(d.querySelector('.memory-detail-heading'),null,'a retained old cache is not shown while revalidating');await act(async()=>release(withEvidence));assert.equal(d.querySelector('.memory-detail-heading h2')?.textContent,'Generated Memory a');
+});
 test('an exact external Memory selection reuses its real detail, More and evidence without admitting a task',async t=>{
  const{root,d}=await fixture(t),seen:{path:string;method:string}[]=[],owner=api(undefined,seen);let returned=0;
  await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,scope:{deviceId:'generated-device',after:at},onOpen:()=>{},onBack:()=>returned++})));
