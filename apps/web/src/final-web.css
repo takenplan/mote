@@ -358,3 +358,5 @@
 .reference-detail .material-detail .source-material-blocks>.source-item{padding:0;border:0;border-radius:0;background:transparent;margin:25px 0 28px}
 .reference-detail .material-detail .source-material-blocks>.source-item>.file-text{font-size:14px;line-height:2.05;color:var(--mote-ink);margin:0;overflow-wrap:anywhere}
 .reference-detail .material-detail .source-material-tools-target{margin:16px 0}
+
+.insight-automatic-settings{padding:0}.insight-automatic-settings fieldset{border:0;padding:0;margin:0;min-width:0}.insight-automatic-settings label{display:block;font-size:12px;line-height:1.8;margin:20px 0}.insight-automatic-settings label>input:not([type=checkbox]){display:block;width:100%;margin-top:8px}.insight-automatic-settings .insight-automatic-toggle{display:flex;gap:10px;align-items:center}.insight-automatic-settings p{font-size:12px;line-height:1.9}.insight-automatic-settings details{margin:18px 0}.insight-automatic-settings summary{font-size:11px;color:var(--mote-muted)}
