@@ -22,6 +22,8 @@ class CalendarActionPresentationTest {
             assertEquals("等待保存回执",CalendarActionPresentation.stateKey(kind,"executing"))
             assertEquals("保存结果待核实",CalendarActionPresentation.stateKey(kind,"uncertain"))
         }
+        assertEquals("等待已授权设备",CalendarActionPresentation.stateKey("calendar.create","approved",managedState="waiting_device"))
+        assertEquals("已写入日历",CalendarActionPresentation.stateKey("calendar.create","succeeded",managedState="waiting_device"))
         assertNull(CalendarActionPresentation.stateKey("calendar.create","unrecognized"))
     }
 }

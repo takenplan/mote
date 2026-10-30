@@ -144,12 +144,6 @@ class CalendarActionsActivity : MoteActivity() {
             val kind = a.getString("kind")
             text(card, when (kind) { "calendar.update" -> MoteI18n.text("更新日程"); "calendar.cancel" -> MoteI18n.text("取消日程"); "calendar.complete" -> MoteI18n.text("标记安排完成"); else -> MoteI18n.text("添加日程") })
             a.optJSONObject("related")?.getJSONObject("event")?.let { text(card, MoteI18n.text("原安排") + ": " + it.getString("title") + " · " + it.optString("start") + " → " + it.optString("end")) }
-            if (managed != null) text(card, when (managed.optString("state")) {
-                "waiting_device" -> MoteI18n.text("等待已授权设备")
-                "cancel_requested" -> MoteI18n.text("已请求取消，写入结果仍待核实")
-                "cancelled" -> MoteI18n.text("已取消等待执行")
-                else -> MoteI18n.text("范围授权行动")
-            })
             if (managed?.has("cancelRequestedAt") == true && state == "succeeded") text(card, MoteI18n.text("取消请求后收到成功回执；未删除系统日历事件。"))
             val label = CalendarActionPresentation.stateKey(kind,state,a.optString("resolution"),managed?.optString("state").orEmpty())?.let { MoteI18n.text(it) } ?: state
             text(card, label).apply { tag="calendar-action-status:"+a.getString("id") }

@@ -14,6 +14,7 @@ internal object CalendarActionPresentation {
             "calendar.complete" -> "已标记完成"
             else -> "已完成"
         }
+        if (managedState == "waiting_device" && status == "approved") return "等待已授权设备"
         return when (status) {
             "proposed" -> "待确认"
             "approved" -> "等待客户端写入"
