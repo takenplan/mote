@@ -15,7 +15,7 @@ type Task={entry:ImportQueueEntry;draft:ImportDraft;uploadIds:WeakMap<File,strin
 type Snapshot={entries:readonly ImportQueueEntry[];completedVersion:number};
 
 export function validateImportFiles(files:readonly File[]):string|undefined{
-  if(files.length>2000)return moteText('一次最多选择 2,000 个文件。较多文件可以打包为 ZIP 或分批导入。');
+  if(files.length>4000)return moteText('一次最多选择 4,000 个文件。较多文件可以打包为 ZIP 或分批导入。');
   if(files.some(file=>file.size>64*1024*1024))return moteText('单个上传文件不能超过 64 MB，请拆分文件后导入。');
   if(files.reduce((sum,file)=>sum+file.size,0)>256*1024*1024)return moteText('一次上传的文件总量不能超过 256 MB，请分批导入。');
   if(new Set(files.map(file=>file.webkitRelativePath||file.name)).size!==files.length)return moteText('同一次导入中的文件路径不能重复，请移除重复文件或分开提交。');

@@ -10088,5 +10088,6 @@ export const spanish: Readonly<Record<string, string>> = {
   "最少新增变化": "Mínimo de cambios nuevos",
   "每次最多处理": "Máximo de elementos por ejecución",
   "使用 {0}。有足够新增资料且达到周期时生成。": "Usa {0}. Se genera cuando hay suficientes datos nuevos y ha transcurrido el intervalo.",
-  "当前显示本机副本；中央接收仍待确认。正文最多预览 100000 个字符。": "Se muestra la copia local; la recepción en Central aún no está confirmada. La vista previa muestra hasta 100000 caracteres."
+  "当前显示本机副本；中央接收仍待确认。正文最多预览 100000 个字符。": "Se muestra la copia local; la recepción en Central aún no está confirmada. La vista previa muestra hasta 100000 caracteres.",
+  "一次最多选择 4,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Selecciona hasta 4.000 archivos a la vez. Para colecciones más grandes, usa un archivo ZIP o importa por lotes."
 };
