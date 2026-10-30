@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.view.View
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -78,6 +79,33 @@ class SettingsSummaryInstrumentedTest {
                     assertEquals("Settings scroll is retained", initialScroll, scroll.scrollY)
                     assertTrue("Settings focus is retained", card.isFocused)
                 }
+                // Hold the real status executor while the retained Activity returns from the background.
+                val readBlocked = CountDownLatch(1); val releaseRead = CountDownLatch(1)
+                val afterReturn = "https://after-return.generated.invalid"
+                scenario.onActivity { activity ->
+                    val field = MainActivity::class.java.getDeclaredField("statusExecutor").apply { isAccessible = true }
+                    (field.get(activity) as ExecutorService).execute {
+                        readBlocked.countDown()
+                        check(releaseRead.await(20, TimeUnit.SECONDS)) { "The returning status read was never released" }
+                    }
+                }
+                try {
+                    assertTrue("The returning status read must be held", readBlocked.await(15, TimeUnit.SECONDS))
+                    scenario.moveToState(Lifecycle.State.STARTED)
+                    settings.save(settings.read().copy(server = afterReturn), confirmCentralEndpoint = true)
+                    scenario.moveToState(Lifecycle.State.RESUMED)
+                    scenario.onActivity { activity ->
+                        val connection = row(activity, "连接与设备")
+                        val send = row(activity, "同步与上传")
+                        assertSame("Returning retains the original Activity", originalActivity, activity)
+                        assertEquals("正在读取本机设置…", detail(connection))
+                        assertEquals("连接与设备，正在读取本机设置…", connection.contentDescription.toString())
+                        assertFalse(connection.contentDescription.toString().contains(paired))
+                        assertEquals("正在读取本机设置…", detail(send))
+                        assertEquals("同步与上传，正在读取本机设置…", send.contentDescription.toString())
+                    }
+                } finally { releaseRead.countDown() }
+                waitFor(scenario, "连接与设备", afterReturn)
                 SendPauseControl.set(context, true)
                 waitFor(scenario, "同步与上传", "发送已暂停")
                 scenario.onActivity { activity -> assertEquals("同步与上传，发送已暂停", row(activity, "同步与上传").contentDescription.toString()) }
