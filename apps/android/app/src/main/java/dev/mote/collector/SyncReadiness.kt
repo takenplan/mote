@@ -6,11 +6,11 @@ internal sealed interface VisibleSyncStatus {
     data class Message(val text: String) : VisibleSyncStatus
     data object Loading : VisibleSyncStatus
     data object Unavailable : VisibleSyncStatus
-    data class Disconnected(val detail: VisibleSyncStatus? = null) : VisibleSyncStatus
+    data object Disconnected : VisibleSyncStatus
     data object SendAsConfigured : VisibleSyncStatus
     data class NeedsAttention(val blocked: Int, val pending: Int) : VisibleSyncStatus
     data class NeedsSourceAttention(val sources: Int, val pending: Int) : VisibleSyncStatus
-    data class Messages(val first: String, val second: String) : VisibleSyncStatus
+    data class Many(val items: List<VisibleSyncStatus>) : VisibleSyncStatus
 }
 
 /** Projects known stale configuration labels; never changes stored state or receipts. */
@@ -31,43 +31,46 @@ internal object SyncReadiness {
         inventory: QueueInventory?, sourceIssues: Int?, inventoryUnavailable: Boolean = false,
         labelsReady: Boolean = true, labelsFailed: Boolean = false, matches: (String, String) -> Boolean): VisibleSyncStatus {
         val connected = config.hasSyncConnection()
-        fun withConnection(value: VisibleSyncStatus) = if (connected) value else VisibleSyncStatus.Disconnected(value)
-        if (waitingReason != null) {
-            val value = if (status.state == "error" && status.message != waitingReason) VisibleSyncStatus.Messages(waitingReason, status.message) else VisibleSyncStatus.Message(waitingReason)
-            return withConnection(value)
+        val parts = mutableListOf<VisibleSyncStatus>()
+        if (!connected) parts += VisibleSyncStatus.Disconnected
+        if (waitingReason != null) parts += VisibleSyncStatus.Message(waitingReason)
+        if (inventoryUnavailable) parts += VisibleSyncStatus.Unavailable
+        else {
+            if (inventory != null && inventory.blocked > 0) parts += VisibleSyncStatus.NeedsAttention(inventory.blocked, inventory.pending)
+            if (inventory != null && sourceIssues != null && sourceIssues > 0) parts += VisibleSyncStatus.NeedsSourceAttention(sourceIssues, inventory.pending)
+            if (inventory == null && sourceIssues != null && sourceIssues > 0) parts += VisibleSyncStatus.Message(MoteI18n.text("来源需要处理"))
+            if (inventory == null || sourceIssues == null) parts += VisibleSyncStatus.Loading
         }
-        if (status.state in setOf("unconfigured", "paused") && !labelsReady) return withConnection(if (labelsFailed) VisibleSyncStatus.Messages(MoteI18n.text("本机状态暂不可读取"), status.message) else VisibleSyncStatus.Loading)
-        if (config.syncPaused || !obsolete(status, matches)) {
-            if (!config.syncPaused && inventory != null && sourceIssues != null && sourceIssues > 0) {
-                val source = text(VisibleSyncStatus.NeedsSourceAttention(sourceIssues, inventory.pending))
-                return withConnection(VisibleSyncStatus.Messages(status.message, source))
-            }
-            return withConnection(VisibleSyncStatus.Message(status.message))
-        }
-        if (inventoryUnavailable) return withConnection(VisibleSyncStatus.Unavailable)
-        if (inventory == null || sourceIssues == null) return withConnection(VisibleSyncStatus.Loading)
-        if (inventory.blocked > 0) return withConnection(VisibleSyncStatus.NeedsAttention(inventory.blocked, inventory.pending))
-        if (sourceIssues > 0) return withConnection(VisibleSyncStatus.NeedsSourceAttention(sourceIssues, inventory.pending))
-        return if (connected) VisibleSyncStatus.SendAsConfigured else VisibleSyncStatus.Disconnected()
+        val ambiguous = status.state in setOf("unconfigured", "paused") && !labelsReady
+        if (ambiguous) {
+            if (labelsFailed) { parts += VisibleSyncStatus.Unavailable; parts += VisibleSyncStatus.Message(status.message) }
+            else parts += VisibleSyncStatus.Loading
+        } else if (!obsolete(status, matches)) {
+            if (status.message != waitingReason) parts += VisibleSyncStatus.Message(status.message)
+        } else if (config.syncPaused) {
+            if (waitingReason == null) parts += VisibleSyncStatus.Message(MoteI18n.text(PAUSED))
+        } else if (parts.isEmpty()) parts += VisibleSyncStatus.SendAsConfigured
+        val distinct = parts.distinct()
+        return if (distinct.size == 1) distinct.single() else VisibleSyncStatus.Many(distinct)
     }
 
     fun heartbeatState(config: CollectorConfig, status: StoredSyncStatus, blocked: Int, pending: PendingSync, sourceIssues: Int?,
         matches: (String, String) -> Boolean): String {
+        if (blocked > 0 || sourceIssues == null || sourceIssues > 0 || status.state == "error") return "error"
         if (config.syncPaused) return status.state
-        if (config.hasSyncConnection() && (blocked > 0 || sourceIssues == null || sourceIssues > 0)) return "error"
         if (!obsolete(status, matches)) return status.state
         if (!config.hasSyncConnection()) return "unconfigured"
-        return when { blocked > 0 || sourceIssues == null || sourceIssues > 0 -> "error"; pending.hasWork -> "waiting"; else -> "idle" }
+        return if (pending.hasWork) "waiting" else "idle"
     }
 
     fun text(status: VisibleSyncStatus): String = when (status) {
         is VisibleSyncStatus.Message -> status.text
         VisibleSyncStatus.Loading -> MoteI18n.text("正在读取本机同步状态…")
         VisibleSyncStatus.Unavailable -> MoteI18n.text("本机状态暂不可读取")
-        is VisibleSyncStatus.Disconnected -> MoteI18n.text("未连接中央节点") + (status.detail?.let { "\n" + text(it) } ?: "")
+        VisibleSyncStatus.Disconnected -> MoteI18n.text("未连接中央节点")
         VisibleSyncStatus.SendAsConfigured -> MoteI18n.text("按设置发送")
         is VisibleSyncStatus.NeedsAttention -> MoteI18n.text("{0} 条记录需要处理（冲突或中央不可用） · 待发 {1} 条；请打开同步与恢复", status.blocked, status.pending)
         is VisibleSyncStatus.NeedsSourceAttention -> MoteI18n.text("{0} 个来源同步需要处理 · 待发 {1} 条；请在来源页面检查上传授权、权限或连接", status.sources, status.pending)
-        is VisibleSyncStatus.Messages -> status.first + "\n" + status.second
+        is VisibleSyncStatus.Many -> status.items.joinToString("\n") { text(it) }
     }
 }

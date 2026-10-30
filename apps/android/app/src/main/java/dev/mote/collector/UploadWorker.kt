@@ -298,13 +298,13 @@ internal object SyncHeartbeat {
         val inventory = queue.syncInventory()
         val current = settings.read(); val syncStatus = settings.storedSyncStatus(); val pending = SyncSchedule.pending(context)
         if (current != config || !current.hasSyncConnection()) return false
-        val syncState = if (syncStatus.state in setOf("unconfigured", "paused")) runCatching {
-            val translations = MoteI18n.translations(SyncReadiness.obsoleteMessages)
+        val syncState = runCatching {
+            val translations = if (syncStatus.state in setOf("unconfigured", "paused")) MoteI18n.translations(SyncReadiness.obsoleteMessages) else emptyMap()
             val sourceIssues = SyncHealth.sourceAttentionCount(context)
             SyncReadiness.heartbeatState(current, syncStatus, inventory.getInt("blocked"), pending, sourceIssues) { source, value ->
                 source == value || translations[source]?.contains(value) == true
             }
-        }.getOrDefault("error") else syncStatus.state
+        }.getOrDefault("error")
         val body = JSONObject().put("deviceId", settings.deviceId).put("deviceName", config.deviceName).put("platform", "android")
             .put("status", status).put("queueDepth", queue.depth()).put("lastCaptureAt", settings.lastCapture())
             .put("sync", JSONObject().put("mode", config.syncMode).put("state", syncState)

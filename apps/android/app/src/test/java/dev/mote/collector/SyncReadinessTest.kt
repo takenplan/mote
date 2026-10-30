@@ -24,7 +24,7 @@ class SyncReadinessTest {
         SyncReadiness.heartbeatState(config, status, blocked, pending, sourceIssues, ::matches)
 
     @Test fun pairingWithEmptyQueueProjectsANeutralStatusWithoutChangingTheStoredValue() {
-        assertEquals(VisibleSyncStatus.Disconnected(), visible(disconnected, old))
+        assertEquals(VisibleSyncStatus.Disconnected, visible(disconnected, old))
         assertNull(connected.syncPolicy().delayMillis(1000, 0, null, 0))
         assertEquals(VisibleSyncStatus.SendAsConfigured, visible(connected, old))
         assertEquals("idle", heartbeat(connected, old))
@@ -36,7 +36,7 @@ class SyncReadinessTest {
 
     @Test fun logoutAndExpiredCredentialsDoNotLookLikeAConfiguredConnection() {
         for (config in listOf(disconnected, connected.copy(authSignedOut = true), connected.copy(authExpiresAt = 1))) {
-            assertEquals(VisibleSyncStatus.Disconnected(), visible(config, old))
+            assertEquals(VisibleSyncStatus.Disconnected, visible(config, old))
             assertEquals("unconfigured", heartbeat(config, old))
         }
     }
@@ -44,11 +44,11 @@ class SyncReadinessTest {
     @Test fun logoutShowsCurrentDisconnectionWithoutDiscardingPriorErrorsOrReceipts() {
         for (state in listOf("idle", "uploading", "manual", "error")) {
             val oldResult = StoredSyncStatus(state, "Generated previous $state receipt or error")
-            assertEquals(VisibleSyncStatus.Disconnected(VisibleSyncStatus.Message(oldResult.message)), visible(connected.copy(authSignedOut = true), oldResult))
+            assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Disconnected, VisibleSyncStatus.Message(oldResult.message))), visible(connected.copy(authSignedOut = true), oldResult))
             assertEquals(oldResult.state, heartbeat(connected.copy(authSignedOut = true), oldResult))
         }
         val error = StoredSyncStatus("error", "Generated retained transport error")
-        assertEquals(VisibleSyncStatus.Messages("等待非计费 Wi-Fi", error.message), visible(connected, error, waiting = "等待非计费 Wi-Fi"))
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Message("等待非计费 Wi-Fi"), VisibleSyncStatus.Message(error.message))), visible(connected, error, waiting = "等待非计费 Wi-Fi"))
     }
 
     @Test fun actualErrorsUnknownMessagesAndPauseOrWifiRestrictionsArePreserved() {
@@ -74,7 +74,7 @@ class SyncReadinessTest {
         assertEquals("idle", heartbeat(connected, paused))
         assertEquals(VisibleSyncStatus.NeedsAttention(1, 0), visible(connected, paused, empty.copy(blocked = 1)))
         assertEquals("error", heartbeat(connected, paused, blocked = 1))
-        assertEquals(VisibleSyncStatus.Disconnected(), visible(connected.copy(authSignedOut = true), paused))
+        assertEquals(VisibleSyncStatus.Disconnected, visible(connected.copy(authSignedOut = true), paused))
         assertEquals("unconfigured", heartbeat(connected.copy(authSignedOut = true), paused))
         assertEquals("paused", paused.state)
     }
@@ -102,13 +102,18 @@ class SyncReadinessTest {
         assertEquals(VisibleSyncStatus.NeedsSourceAttention(1, 0), visible(connected, paused, sourceIssues = count))
         assertEquals("error", heartbeat(connected, paused, sourceIssues = count))
         val custom = StoredSyncStatus("unconfigured", "Generated retained scheduling error")
-        val sourceDetail = SyncReadiness.text(VisibleSyncStatus.NeedsSourceAttention(1, 0))
-        assertEquals(VisibleSyncStatus.Messages(custom.message, sourceDetail), visible(connected, custom, sourceIssues = count))
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.NeedsSourceAttention(1, 0), VisibleSyncStatus.Message(custom.message))), visible(connected, custom, sourceIssues = count))
         assertEquals("error", heartbeat(connected, custom, sourceIssues = count))
         store.save(source.copy(centralProcessingConsent = true))
         for (failure in listOf("permission", "offline", "ack")) {
             store.status(source.id, failure)
             assertEquals(failure, 1, SyncHealth.sourceAttentionCount(store) { 0 })
+            // The scheduler may have replaced paused with waiting after resume.
+            val waiting = StoredSyncStatus("waiting", "等待约定同步时间")
+            val pending = empty.copy(pending = 1)
+            assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Message(waiting.message), VisibleSyncStatus.NeedsSourceAttention(1, 1))),
+                visible(connected, waiting, pending, waiting = waiting.message, sourceIssues = SyncHealth.sourceAttentionCount(store) { 1 }))
+            assertEquals("error", heartbeat(connected, waiting, pending = PendingSync(1, 100), sourceIssues = SyncHealth.sourceAttentionCount(store) { 1 }))
         }
         store.status(source.id, "synced")
         assertEquals(0, SyncHealth.sourceAttentionCount(store) { 0 })
@@ -117,9 +122,17 @@ class SyncReadinessTest {
         assertEquals(VisibleSyncStatus.Unavailable, SyncReadiness.visible(connected, paused, null, empty, null, inventoryUnavailable = true, matches = ::matches))
     }
 
+    @Test fun waitingAndKnownProblemsRemainVisibleTogether() {
+        val waiting = StoredSyncStatus("waiting", "等待充电")
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Message("等待充电"), VisibleSyncStatus.NeedsAttention(2, 3), VisibleSyncStatus.NeedsSourceAttention(1, 3))),
+            visible(connected, waiting, empty.copy(blocked = 2, pending = 3), waiting = "等待充电", sourceIssues = 1))
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Message("等待充电"), VisibleSyncStatus.Unavailable)),
+            SyncReadiness.visible(connected, waiting, "等待充电", empty, null, inventoryUnavailable = true, matches = ::matches))
+    }
+
     @Test fun languageCatalogLoadingAndFailureDoNotShowAnUnverifiedOldStatus() {
         assertEquals(VisibleSyncStatus.Loading, SyncReadiness.visible(connected, old, null, empty, 0, labelsReady = false, matches = ::matches))
-        assertEquals(VisibleSyncStatus.Messages("本机状态暂不可读取", old.message), SyncReadiness.visible(connected, old, null, empty, 0, labelsReady = false, labelsFailed = true, matches = ::matches))
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Unavailable, VisibleSyncStatus.Message(old.message))), SyncReadiness.visible(connected, old, null, empty, 0, labelsReady = false, labelsFailed = true, matches = ::matches))
     }
 
     @Test fun persistedLabelsFromAnySupportedLanguageAreProjectedWithoutRewritingThem() {

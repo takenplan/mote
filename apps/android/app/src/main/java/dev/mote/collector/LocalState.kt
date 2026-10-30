@@ -84,8 +84,7 @@ class LocalStateRepository private constructor(context: Context) {
                         else Triple(version, activeQueue.inventory(), quarantineQueue.inventory())
                     }
                     val settings = Settings(app)
-                    val config = settings.read(); val savedStatus = settings.storedSyncStatus()
-                    val sourceIssues = if (!config.syncPaused && savedStatus.state in setOf("unconfigured", "paused")) SyncHealth.sourceAttentionCount(app) else null
+                    val sourceIssues = SyncHealth.sourceAttentionCount(app)
                     LocalStateSnapshot(revision, active, pending, app.localSources().pendingSync().count,
                         settings.state(), settings.message(), settings.uploadStatus(), checkedAt = System.currentTimeMillis(), sourceIssues = sourceIssues)
                 } catch (error: Exception) {
