@@ -463,7 +463,7 @@ export function EvidenceDialog({
         aria-modal={embedded?undefined:true}
         aria-label={moteText("上下文证据详情")}
       >
-        <div className="reader-top-actions"><button className="text-button evidence-back" onClick={onClose}>{moteText("返回资料列表")}</button>{capture&&<button className="text-button reader-more-button" onClick={()=>setReaderTools(true)}>{moteText('更多')}</button>}{capture&&capture.revisionState!=='historical'&&<a className="button capture-reader-ask" href={originalReferenceRoute('capture',capture.id)} onClick={event=>{if(!confirmNavigation()){event.preventDefault();return;}rememberOriginalReturn(api,'capture',capture.id);}}>{moteText('问问 AI')} ↗</a>}</div>
+        <div className="reader-top-actions"><button className="text-button evidence-back" onClick={onClose}>{moteText("返回")}</button>{capture&&<button className="text-button reader-more-button" onClick={()=>setReaderTools(true)}>{moteText('更多')}</button>}{capture&&capture.revisionState!=='historical'&&<a className="button capture-reader-ask" href={originalReferenceRoute('capture',capture.id)} onClick={event=>{if(!confirmNavigation()){event.preventDefault();return;}rememberOriginalReturn(api,'capture',capture.id);}}>{moteText('问问 AI')} ↗</a>}</div>
         {captureRef&&<div className="evidence-heading">
           <div>
             <h2>{readerTitle}</h2>

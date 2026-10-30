@@ -20,6 +20,7 @@ async function fixture(t:any,capture:Capture,readMedia?:(path:string,signal?:Abo
 }
 test('note reader leads with the exact original, keeps real source facts and returns focus after Close',async t=>{
  const before=structuredClone(generated),{document:d,origin,writes}=await fixture(t,generated),body=d.querySelector('.evidence-text pre')!;
+ assert.equal(d.querySelector('.evidence-back')!.textContent,'返回');
  await act(async()=>d.querySelector<HTMLButtonElement>('.reader-more-button')!.click());const help=d.querySelector<HTMLDetailsElement>('.evidence-processing-help')!;
  assert.equal(d.querySelector('.evidence-heading h2')!.textContent,generated.windowTitle);assert.equal(d.querySelector('.evidence-body-heading')!.textContent,'用户原文');
  assert.equal(body.textContent,generated.ocrText);assert.equal(body.querySelector('script'),null,'untrusted original remains literal');
