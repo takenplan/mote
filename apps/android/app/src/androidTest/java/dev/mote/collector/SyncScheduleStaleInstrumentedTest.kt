@@ -63,22 +63,35 @@ class SyncScheduleStaleInstrumentedTest {
 
             // Delay the old exception handler until a newer explicit request has actually been enqueued.
             settings.syncRequestRejected(false)
-            val rejected = CountDownLatch(1); val release = CountDownLatch(1); val failure = AtomicReference<Throwable?>()
+            val rejected = CountDownLatch(1); val release = CountDownLatch(1); val handled = CountDownLatch(1)
+            val failure = AtomicReference<Throwable?>(); val handlerFailure = AtomicReference<Throwable?>()
             val oldHandler = Thread {
                 try { SyncSchedule.schedule(context, old, explicit = true) }
                 catch (error: Throwable) {
                     failure.set(error); rejected.countDown()
-                    if (release.await(15, TimeUnit.SECONDS)) SyncSchedule.handleDispatchFailure(context, error)
+                    try {
+                        check(release.await(15, TimeUnit.SECONDS)) { "Old handler was never released" }
+                        SyncSchedule.handleDispatchFailure(context, error); handled.countDown()
+                    } catch (handlerError: Throwable) { handlerFailure.set(handlerError) }
                 }
             }
             oldHandler.start()
             try {
                 assertTrue(rejected.await(15, TimeUnit.SECONDS)); assertTrue(failure.get() is SettingsChangedFailure)
                 assertTrue(settings.syncRequestRejected())
-                SyncSchedule.schedule(context, current, explicit = true)
-                assertFalse("Accepted newer request must clear the older rejection", settings.syncRequestRejected())
-                release.countDown(); oldHandler.join(15_000); assertFalse(oldHandler.isAlive)
-                assertFalse("Delayed old handler must not resurrect the rejection", settings.syncRequestRejected())
+                // The newly enqueued worker must not race the deliberate newer error below.
+                assertTrue(ConnectionGuard.beginReconfiguration())
+                try {
+                    SyncSchedule.schedule(context, current, explicit = true)
+                    assertFalse("Accepted newer request must clear the older rejection", settings.syncRequestRejected())
+                    settings.syncStatus("error", "Generated newer transport error")
+                    release.countDown()
+                    assertTrue("The delayed old handler must actually execute", handled.await(15, TimeUnit.SECONDS))
+                    assertNull(handlerFailure.get()); oldHandler.join(15_000); assertFalse(oldHandler.isAlive)
+                    assertFalse("Delayed old handler must not resurrect the rejection", settings.syncRequestRejected())
+                    assertEquals("error", settings.syncState())
+                    assertEquals("Generated newer transport error", settings.uploadStatus())
+                } finally { ConnectionGuard.endReconfiguration() }
             } finally { release.countDown(); oldHandler.join(15_000) }
         } finally {
             cancel(); SyncSchedule.invalidate()
