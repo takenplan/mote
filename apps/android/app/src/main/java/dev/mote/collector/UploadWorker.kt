@@ -297,10 +297,14 @@ internal object SyncHeartbeat {
         val status = if (!settings.enabled) "paused" else if (!runtimeAlive) "permission_required" else settings.state()
         val inventory = queue.syncInventory()
         val current = settings.read(); val syncStatus = settings.storedSyncStatus(); val pending = SyncSchedule.pending(context)
-        val translations = if (current == config && syncStatus.state in setOf("unconfigured", "paused")) MoteI18n.translations(SyncReadiness.obsoleteMessages) else emptyMap()
-        val syncState = if (current == config) SyncReadiness.heartbeatState(current, syncStatus, inventory.getInt("blocked"), pending) { source, value ->
-            source == value || translations[source]?.contains(value) == true
-        } else syncStatus.state
+        if (current != config || !current.hasSyncConnection()) return false
+        val syncState = if (syncStatus.state in setOf("unconfigured", "paused")) runCatching {
+            val translations = MoteI18n.translations(SyncReadiness.obsoleteMessages)
+            val sourceIssues = SyncHealth.sourceAttentionCount(context)
+            SyncReadiness.heartbeatState(current, syncStatus, inventory.getInt("blocked"), pending, sourceIssues) { source, value ->
+                source == value || translations[source]?.contains(value) == true
+            }
+        }.getOrDefault("error") else syncStatus.state
         val body = JSONObject().put("deviceId", settings.deviceId).put("deviceName", config.deviceName).put("platform", "android")
             .put("status", status).put("queueDepth", queue.depth()).put("lastCaptureAt", settings.lastCapture())
             .put("sync", JSONObject().put("mode", config.syncMode).put("state", syncState)
@@ -314,6 +318,8 @@ internal object SyncHeartbeat {
             MoteI18n.text("采集服务未连接，请打开手机应用恢复权限") else settings.message())
         else if (status == "error") body.put("error", settings.message())
         SyncSchedule.requireConditions(context, config)
+        val beforeSend = settings.read()
+        if (beforeSend != config || !beforeSend.hasSyncConnection()) return false
         Diagnostics(context).add("heartbeatRequests")
         val (code, response) = CollectorHttp(context).post("${config.server}/api/devices/heartbeat", body, config.connectionToken())
         if (code !in 200..299 || response?.optBoolean("ok") != true) SupportEvents.record(context, EventStage.HEARTBEAT, EventJournal.httpFailure(code), httpStatus = code)

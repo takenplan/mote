@@ -61,7 +61,7 @@ class SyncRecoveryActivity : MoteActivity() {
                 val settings = Settings(this); val local = LocalStateRepository.get(this).state.value; val c = local.active ?: error(MoteI18n.text("正在读取存储状态")); val sources = localSources().pendingSync()
                 val config = settings.read(); val status = settings.storedSyncStatus()
                 val translations = if (status.state in setOf("unconfigured", "paused")) MoteI18n.translations(SyncReadiness.obsoleteMessages) else emptyMap()
-                val visible = SyncReadiness.visible(config, status, SyncSchedule.waitingReason(this, config), c, inventoryUnavailable = local.error != null) { source, value -> source == value || translations[source]?.contains(value) == true }
+                val visible = SyncReadiness.visible(config, status, SyncSchedule.waitingReason(this, config), c, local.sourceIssues, inventoryUnavailable = local.error != null) { source, value -> source == value || translations[source]?.contains(value) == true }
                 MoteI18n.text("本机保留 {0} 条 · 待发 {1} 条", c.records, c.pending) to MoteI18n.text("{0}\n本机保留 {1} 条 · 待发 {2} 条\n需处理 {3} 条\n来源待发 {4} 个版本 / {5} 项设置\n\n{6}\n最后收到上传确认：{7}", local.imageLabel(), c.records, c.pending, c.blocked, sources.count, sources.pendingUpdates, SyncReadiness.text(visible), settings.lastUploadAt() ?: MoteI18n.text("尚无"))
             }.getOrElse { MoteI18n.text("本机状态暂不可读：{0}", it.message ?: MoteI18n.text("请检查存储")) to "" }
             val failures = runCatching { queue().syncIssues() }.getOrDefault(emptyList())

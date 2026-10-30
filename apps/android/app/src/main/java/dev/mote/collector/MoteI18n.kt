@@ -30,6 +30,7 @@ object MoteI18n {
     /** Match an authored status persisted before a language change without treating other messages as status codes. */
     internal fun translations(sources: Collection<String>): Map<String, Set<String>> {
         val catalogs = supported.filter { it != "zh-CN" }.map(::catalog)
+        check(catalogs.all { catalog -> sources.all(catalog::containsKey) }) { "Sync status translations are unavailable" }
         return sources.associateWith { source -> setOf(source) + catalogs.mapNotNull { it[source] } }
     }
     fun preference() = selected

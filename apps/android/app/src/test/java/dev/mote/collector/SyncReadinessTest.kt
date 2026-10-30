@@ -2,10 +2,13 @@ package dev.mote.collector
 
 import org.json.JSONObject
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.File
 
 class SyncReadinessTest {
+    @get:Rule val folder = TemporaryFolder()
     private val connected = CollectorConfig(deviceName = "Generated fixture", server = "http://127.0.0.1:47843",
         token = "generated-android-node-token-1234567890", debugHttp = true, wifiOnly = false, syncMode = "batch")
     private val disconnected = connected.copy(server = "", token = "")
@@ -15,13 +18,13 @@ class SyncReadinessTest {
         JSONObject(File("src/main/assets/i18n-$language.json").readText())
     }
     private fun matches(source: String, text: String) = source == text || translations.any { it.optString(source) == text }
-    private fun visible(config: CollectorConfig, status: StoredSyncStatus, inventory: QueueInventory? = empty, waiting: String? = null) =
-        SyncReadiness.visible(config, status, waiting, inventory, matches = ::matches)
-    private fun heartbeat(config: CollectorConfig, status: StoredSyncStatus, blocked: Int = 0, pending: PendingSync = PendingSync(0, null)) =
-        SyncReadiness.heartbeatState(config, status, blocked, pending, ::matches)
+    private fun visible(config: CollectorConfig, status: StoredSyncStatus, inventory: QueueInventory? = empty, waiting: String? = null, sourceIssues: Int? = 0) =
+        SyncReadiness.visible(config, status, waiting, inventory, sourceIssues, matches = ::matches)
+    private fun heartbeat(config: CollectorConfig, status: StoredSyncStatus, blocked: Int = 0, pending: PendingSync = PendingSync(0, null), sourceIssues: Int? = 0) =
+        SyncReadiness.heartbeatState(config, status, blocked, pending, sourceIssues, ::matches)
 
     @Test fun pairingWithEmptyQueueProjectsANeutralStatusWithoutChangingTheStoredValue() {
-        assertEquals(VisibleSyncStatus.Disconnected, visible(disconnected, old))
+        assertEquals(VisibleSyncStatus.Disconnected(), visible(disconnected, old))
         assertNull(connected.syncPolicy().delayMillis(1000, 0, null, 0))
         assertEquals(VisibleSyncStatus.SendAsConfigured, visible(connected, old))
         assertEquals("idle", heartbeat(connected, old))
@@ -33,9 +36,19 @@ class SyncReadinessTest {
 
     @Test fun logoutAndExpiredCredentialsDoNotLookLikeAConfiguredConnection() {
         for (config in listOf(disconnected, connected.copy(authSignedOut = true), connected.copy(authExpiresAt = 1))) {
-            assertEquals(VisibleSyncStatus.Disconnected, visible(config, old))
+            assertEquals(VisibleSyncStatus.Disconnected(), visible(config, old))
             assertEquals("unconfigured", heartbeat(config, old))
         }
+    }
+
+    @Test fun logoutShowsCurrentDisconnectionWithoutDiscardingPriorErrorsOrReceipts() {
+        for (state in listOf("idle", "uploading", "manual", "error")) {
+            val oldResult = StoredSyncStatus(state, "Generated previous $state receipt or error")
+            assertEquals(VisibleSyncStatus.Disconnected(VisibleSyncStatus.Message(oldResult.message)), visible(connected.copy(authSignedOut = true), oldResult))
+            assertEquals(oldResult.state, heartbeat(connected.copy(authSignedOut = true), oldResult))
+        }
+        val error = StoredSyncStatus("error", "Generated retained transport error")
+        assertEquals(VisibleSyncStatus.Messages("等待非计费 Wi-Fi", error.message), visible(connected, error, waiting = "等待非计费 Wi-Fi"))
     }
 
     @Test fun actualErrorsUnknownMessagesAndPauseOrWifiRestrictionsArePreserved() {
@@ -61,18 +74,52 @@ class SyncReadinessTest {
         assertEquals("idle", heartbeat(connected, paused))
         assertEquals(VisibleSyncStatus.NeedsAttention(1, 0), visible(connected, paused, empty.copy(blocked = 1)))
         assertEquals("error", heartbeat(connected, paused, blocked = 1))
-        assertEquals(VisibleSyncStatus.Disconnected, visible(connected.copy(authSignedOut = true), paused))
+        assertEquals(VisibleSyncStatus.Disconnected(), visible(connected.copy(authSignedOut = true), paused))
         assertEquals("unconfigured", heartbeat(connected.copy(authSignedOut = true), paused))
         assertEquals("paused", paused.state)
     }
 
     @Test fun blockedRecordsAndPendingWorkAreNotPresentedAsCompleted() {
         assertEquals(VisibleSyncStatus.Loading, visible(connected, old, inventory = null))
-        assertEquals(VisibleSyncStatus.Unavailable, SyncReadiness.visible(connected, old, null, empty, inventoryUnavailable = true, matches = ::matches))
+        assertEquals(VisibleSyncStatus.Unavailable, SyncReadiness.visible(connected, old, null, empty, 0, inventoryUnavailable = true, matches = ::matches))
         assertEquals(VisibleSyncStatus.NeedsAttention(2, 3), visible(connected, old, empty.copy(blocked = 2, pending = 3)))
         assertEquals("error", heartbeat(connected, old, blocked = 2))
         assertEquals("waiting", heartbeat(connected, old, pending = PendingSync(1, 100)))
         assertEquals("waiting", heartbeat(connected, old, pending = PendingSync(0, 100, pendingUpdates = 1)))
+    }
+
+    @Test fun sourceErrorsAndUnreadableSourceStateCannotBecomeIdle() {
+        val cipher = object : ByteCipher {
+            override fun seal(bytes: ByteArray) = bytes.map { (it.toInt() xor 91).toByte() }.toByteArray()
+            override fun open(bytes: ByteArray) = seal(bytes)
+        }
+        val store = LocalSourceStore(folder.newFolder(), cipher)
+        val source = LocalSource(name = "Generated source", kind = "local-files", uri = "content://fixture/document/root", retention = "snapshot")
+        store.save(source)
+        val paused = StoredSyncStatus("paused", SyncReadiness.PAUSED)
+        val count = SyncHealth.sourceAttentionCount(store) { 0 }
+        assertEquals(1, count) // No central processing consent, even with no pending versions.
+        assertEquals(VisibleSyncStatus.NeedsSourceAttention(1, 0), visible(connected, paused, sourceIssues = count))
+        assertEquals("error", heartbeat(connected, paused, sourceIssues = count))
+        val custom = StoredSyncStatus("unconfigured", "Generated retained scheduling error")
+        val sourceDetail = SyncReadiness.text(VisibleSyncStatus.NeedsSourceAttention(1, 0))
+        assertEquals(VisibleSyncStatus.Messages(custom.message, sourceDetail), visible(connected, custom, sourceIssues = count))
+        assertEquals("error", heartbeat(connected, custom, sourceIssues = count))
+        store.save(source.copy(centralProcessingConsent = true))
+        for (failure in listOf("permission", "offline", "ack")) {
+            store.status(source.id, failure)
+            assertEquals(failure, 1, SyncHealth.sourceAttentionCount(store) { 0 })
+        }
+        store.status(source.id, "synced")
+        assertEquals(0, SyncHealth.sourceAttentionCount(store) { 0 })
+        assertTrue(runCatching { SyncHealth.sourceAttentionCount(store) { throw IllegalStateException("generated unreadable source") } }.isFailure)
+        assertEquals("error", heartbeat(connected, paused, sourceIssues = null))
+        assertEquals(VisibleSyncStatus.Unavailable, SyncReadiness.visible(connected, paused, null, empty, null, inventoryUnavailable = true, matches = ::matches))
+    }
+
+    @Test fun languageCatalogLoadingAndFailureDoNotShowAnUnverifiedOldStatus() {
+        assertEquals(VisibleSyncStatus.Loading, SyncReadiness.visible(connected, old, null, empty, 0, labelsReady = false, matches = ::matches))
+        assertEquals(VisibleSyncStatus.Messages("本机状态暂不可读取", old.message), SyncReadiness.visible(connected, old, null, empty, 0, labelsReady = false, labelsFailed = true, matches = ::matches))
     }
 
     @Test fun persistedLabelsFromAnySupportedLanguageAreProjectedWithoutRewritingThem() {

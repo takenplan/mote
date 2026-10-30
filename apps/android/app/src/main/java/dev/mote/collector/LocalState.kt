@@ -33,7 +33,8 @@ data class LocalStateSnapshot(
     val captureMessage: String = MoteI18n.text("尚未开始采集"),
     val syncMessage: String = MoteI18n.text("尚未上传"),
     val error: String? = null,
-    val checkedAt: Long = 0
+    val checkedAt: Long = 0,
+    val sourceIssues: Int? = null
 ) {
     val captureLabel: String get() = if (captureState == "capturing") MoteI18n.text("正在采集") else captureMessage
     val totalImages: Int? get() = active?.let { a -> quarantine?.let { a.images + it.images } }
@@ -83,8 +84,10 @@ class LocalStateRepository private constructor(context: Context) {
                         else Triple(version, activeQueue.inventory(), quarantineQueue.inventory())
                     }
                     val settings = Settings(app)
+                    val config = settings.read(); val savedStatus = settings.storedSyncStatus()
+                    val sourceIssues = if (!config.syncPaused && savedStatus.state in setOf("unconfigured", "paused")) SyncHealth.sourceAttentionCount(app) else null
                     LocalStateSnapshot(revision, active, pending, app.localSources().pendingSync().count,
-                        settings.state(), settings.message(), settings.uploadStatus(), checkedAt = System.currentTimeMillis())
+                        settings.state(), settings.message(), settings.uploadStatus(), checkedAt = System.currentTimeMillis(), sourceIssues = sourceIssues)
                 } catch (error: Exception) {
                     previous.copy(revision = LocalStateChanges.revisions.value, error = error.message ?: MoteI18n.text("本机状态暂不可读取"))
                 }
