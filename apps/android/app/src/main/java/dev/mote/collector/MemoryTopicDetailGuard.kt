@@ -20,4 +20,4 @@ internal class MemoryTopicDetailGuard {
     }
 }
 
-internal data class MemoryTopicEdit(val label: String, val initial: String)
+internal data class MemoryTopicEdit(val label: String, val initial: String, val key: String = label, val forceDirty: Boolean = false)

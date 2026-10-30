@@ -59,6 +59,12 @@ class FinalSelectedRiskInstrumentedTest {
     }
     private fun picture(name:String){instrumentation.waitForIdleSync();until("Focused native window before $name"){main{WindowInspector.getGlobalWindowViews().any{it.isShown&&it.hasWindowFocus()&&it.width>0&&it.height>0}}};val frames=java.util.concurrent.CountDownLatch(1);main{WindowInspector.getGlobalWindowViews().last{it.isShown&&it.hasWindowFocus()}.postOnAnimation{frames.countDown()}};assertTrue(frames.await(5,java.util.concurrent.TimeUnit.SECONDS));main{val root=WindowInspector.getGlobalWindowViews().last{it.isShown&&it.hasWindowFocus()};val image=Bitmap.createBitmap(root.width,root.height,Bitmap.Config.ARGB_8888);try{root.draw(android.graphics.Canvas(image));File(context.filesDir,"final-selected-risk").apply{mkdirs()}.resolve("$name.png").outputStream().use{image.compress(Bitmap.CompressFormat.PNG,100,it)}}finally{image.recycle()}}}
     private fun png():ByteArray {val b=Bitmap.createBitmap(80,60,Bitmap.Config.ARGB_8888).apply{eraseColor(Color.LTGRAY)};return try{ByteArrayOutputStream().also{b.compress(Bitmap.CompressFormat.PNG,100,it)}.toByteArray()}finally{b.recycle()}}
+    private fun connectGenerated(settings:Settings,http:HttpFixture,name:String) {
+        until("Generated connection waits for background reads") {
+            try { ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,name,true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)};true }
+            catch(error:ConnectionFailure) { if(error.category=="busy")false else throw error }
+        }
+    }
     private fun fixture(block:()->Unit){
         assumeTrue(InstrumentationRegistry.getArguments().getString("nativeFinalSelectedRisk")=="true")
         require(context.packageName=="dev.mote.collector.dev"&&Build.FINGERPRINT.contains("emu64a"))
@@ -365,7 +371,7 @@ class FinalSelectedRiskInstrumentedTest {
     @Test fun olderConversationFileCitationReturnsToSamePagePositionAndDraft()=fixture{
         HttpFixture().use{http->
             http.pagedHistory=true;http.pagedFileReference=true
-            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated paged citation",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val settings=Settings(context);connectGenerated(settings,http,"Generated paged citation")
             val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());val draft="Generated older page unsent draft"
             store.write(JSONObject().put("conversationId",http.conversation).put("question",draft))
             try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{scenario->
@@ -384,7 +390,7 @@ class FinalSelectedRiskInstrumentedTest {
     @Test fun inlineUnavailableAndEarlierFileReturnPreservePhysicalTapPosition()=fixture{
         HttpFixture().use{http->
             http.pagedHistory=true;http.pagedFileReference=true
-            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated inline position",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val settings=Settings(context);connectGenerated(settings,http,"Generated inline position")
             val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());val draft="Generated inline position draft"
             store.write(JSONObject().put("conversationId",http.conversation).put("question",draft))
             try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{
@@ -443,7 +449,7 @@ class FinalSelectedRiskInstrumentedTest {
     }
     @Test fun unreadableLocalDraftJournalDoesNotBlockAuthorizedRemoteNote()=fixture{
         HttpFixture().use{http->
-            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated remote note",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val settings=Settings(context);connectGenerated(settings,http,"Generated remote note")
             val journal=File(context.noBackupFilesDir,"record-draft/record.enc");val before=if(journal.exists())journal.readBytes()else null
             try{
                 journal.parentFile!!.mkdirs();journal.writeText("generated-invalid-encrypted-journal")
@@ -458,7 +464,7 @@ class FinalSelectedRiskInstrumentedTest {
     @Test fun staleInlineCitationCannotOpenAfterNavigationOrSessionChange()=fixture{
         HttpFixture().use{http->
             http.pagedHistory=true;http.pagedFileReference=true
-            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated stale citation",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val settings=Settings(context);connectGenerated(settings,http,"Generated stale citation")
             val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());store.write(JSONObject().put("conversationId",http.conversation).put("question","Generated retained citation draft"))
             try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{scenario->
                 fun olderInline():Pair<TextView,android.text.style.ClickableSpan>{
@@ -480,7 +486,7 @@ class FinalSelectedRiskInstrumentedTest {
     @Test fun erasedTurnCannotOpenEvidenceStillReferencedByAnotherTurn()=fixture{
         HttpFixture().use{http->
             http.pagedHistory=true;http.pagedFileReference=true;http.twoCitations=true
-            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated erased turn",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val settings=Settings(context);connectGenerated(settings,http,"Generated erased turn")
             val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());store.write(JSONObject().put("conversationId",http.conversation).put("question","Generated retained erasure draft"))
             try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{
                 until("Latest page loaded"){has("Generated history answer 29")&&has("加载更早的对话")};click("加载更早的对话")

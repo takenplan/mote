@@ -22,10 +22,14 @@ internal class CentralContent(
     private val embeddedActions: Boolean = false,
     private val openCalendar: (() -> Unit)? = null,
 ) : ContextWrapper(activity) {
-    fun openCaptureReader(origin: String, row: org.json.JSONObject, conversationId: String?, returnScroll: Int? = null) {
+    fun openCaptureReader(origin: String, row: org.json.JSONObject, conversationId: String?, returnScroll: Int? = null, workMemory: WorkMemoryReference? = null) {
         val restore = if (conversationId != null && returnScroll != null) ReaderReturn(origin, accessGeneration, revision, conversationId, returnScroll) else null
         pendingReaderReturn = restore
-        try { CentralCaptureReader.open(activity,origin,row,conversationId) }
+        val workRestore = if(workMemory!=null) ReaderReturn(origin,accessGeneration,revision,workMemory.work,contentScroll()) else null
+        try {
+            CentralCaptureReader.open(activity,origin,row,conversationId,workMemory,accessGeneration)
+            if(workRestore!=null) { pendingWorkReaderReturn=workRestore;body.visibility=View.INVISIBLE }
+        }
         catch (error: Exception) { pendingReaderReturn = null; throw error }
     }
     fun requestedFileId(): String? = activity.intent.getStringExtra("fileId")
@@ -92,6 +96,7 @@ internal class CentralContent(
     internal var server = ""; private set
     internal val isWorking get() = task.busy || pending.isNotEmpty()
     internal val navigationRevision get() = revision
+    internal val currentAccessGeneration get() = accessGeneration
     internal fun readVisit(): () -> Boolean {
         val version=revision;val foreground=foregroundRevision
         return { version==revision && foreground==foregroundRevision && resumed && !isDestroyed && !isFinishing }
@@ -105,6 +110,7 @@ internal class CentralContent(
     private var accessReady = false
     private data class ReaderReturn(val origin: String, val generation: Long, val revision: Long, val conversationId: String, val scroll: Int)
     private var pendingReaderReturn: ReaderReturn? = null
+    private var pendingWorkReaderReturn: ReaderReturn? = null
     private var pendingResult: Triple<Int, Int, Intent?>? = null
     private val pending = java.util.ArrayDeque<Pair<Long, () -> Unit>>()
     private var browserLoginId: String? = null
@@ -116,6 +122,8 @@ internal class CentralContent(
     private val restoredTopicsOrigin = state?.getString("memoryTopicsOrigin")
     private var restoredWorkState = state?.getBundle("workActivity")
     private val restoredWorkOrigin = state?.getString("workActivityOrigin")
+    private val restoredWorkGeneration = state?.getLong("workActivityGeneration",-1) ?: -1
+    private val restoredWorkProcess = state?.getString("workActivityProcess")
     private var restoredInsightState = state?.getBundle("insightState")
     private val restoredInsightOrigin = state?.getString("insightOrigin")
     private var pendingInsightId = state?.getString("insightId")
@@ -230,6 +238,12 @@ internal class CentralContent(
                     restoreContentScroll(previous.scroll)
                 }
             }
+            pendingWorkReaderReturn?.let { previous ->
+                pendingWorkReaderReturn=null
+                if(resumed && page=="activity" && client!=null && server==previous.origin && accessGeneration==previous.generation && revision==previous.revision)
+                    screens?.restoreWorkMemoryAfterReader(previous.conversationId,previous.scroll)
+                else body.visibility=View.VISIBLE
+            }
         }
     }
     private fun applyAccess(selected: CentralAccess.Selection) {
@@ -238,17 +252,19 @@ internal class CentralContent(
         val sessionChanged = accessGeneration != selected.generation
         accessGeneration = selected.generation
         if (endpoint.isBlank()) {
-            server = ""; client = null; revision++; pending.clear(); screens?.close(); screens?.clearPrivateState(); body.removeAllViews(); collectionBar.visibility = View.GONE
+            server = ""; client = null; revision++; pending.clear();pendingWorkReaderReturn=null;screens?.close(); screens?.clearPrivateState(); body.removeAllViews();body.visibility=View.VISIBLE; collectionBar.visibility = View.GONE
             disconnected()
             return
         }
         val changed = server != endpoint
         val authenticated = client == null && selected.client != null
-        if (sessionChanged) { screens?.close(); screens?.clearPrivateState() }
+        if (sessionChanged) { pendingWorkReaderReturn=null;screens?.close(); screens?.clearPrivateState();body.visibility=View.VISIBLE }
         server = endpoint; client = selected.client
         if (changed || screens == null) {
             screens = CentralScreens(this, body, File(noBackupFilesDir, "central-native/" + SourceRules.hash(endpoint)))
-            if (endpoint == restoredWorkOrigin) restoredWorkState?.let { screens?.restoreWorkState(it) }
+            val sameWorkSession=endpoint==restoredWorkOrigin && restoredWorkGeneration==selected.generation && restoredWorkProcess==WorkMemoryProcess.nonce
+            if(restoredWorkState!=null && !sameWorkSession)WorkMemoryDrafts.clear()
+            if (endpoint == restoredWorkOrigin) restoredWorkState?.let { screens?.restoreWorkState(it,sameWorkSession) }
             restoredWorkState = null
             if (endpoint == restoredTopicsOrigin) restoredTopicsState?.let { screens?.restoreMemoryTopics(it) }
             restoredTopicsState = null
@@ -278,6 +294,7 @@ internal class CentralContent(
         state.putString("memoryTopicsOrigin", server)
         state.putBundle("memoryTopics", Bundle().also { screens?.saveMemoryTopics(it) })
         state.putString("workActivityOrigin", server)
+        state.putLong("workActivityGeneration",accessGeneration);state.putString("workActivityProcess",WorkMemoryProcess.nonce)
         state.putBundle("workActivity", Bundle().also { screens?.saveWorkState(it) })
         state.putString("insightId", pendingInsightId); state.putString("insightOrigin", server)
         state.putBundle("insightState", Bundle().also { screens?.saveInsightState(it) ?: restoredInsightState?.let(it::putAll) })
@@ -316,7 +333,7 @@ internal class CentralContent(
     internal fun navigate(next: String, remember: Boolean = true) {
         if (remember && next != page) pageHistory.add(page)
         insightMoreAction = null
-        page = next; revision++; pending.clear(); handler.removeCallbacks(refreshRun); screens?.close(); body.removeAllViews(); composer.removeAllViews(); composer.visibility = View.GONE
+        page = next; revision++; pending.clear(); handler.removeCallbacks(refreshRun); screens?.close(); body.removeAllViews();body.visibility=View.VISIBLE; composer.removeAllViews(); composer.visibility = View.GONE
         updateCollectionBar(); updateBackButton()
         title.text = CentralScreens.pages.firstOrNull { it.first == if (next == "extensions") "plugins" else next }?.second?.let { MoteI18n.text(it) } ?: MoteI18n.text("中央资料库")
         if (client == null) { if (server.isBlank()) disconnected() else login(); return }

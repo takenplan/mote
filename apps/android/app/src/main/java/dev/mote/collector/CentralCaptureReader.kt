@@ -10,7 +10,7 @@ import java.util.UUID
 /** Every native capture entry pins the actual record read before opening the shared reader. */
 internal object CentralCaptureReader {
     fun supports(source: String) = source in setOf("screen","note","activity","ui_page","notification","media","device_event","message")
-    fun open(activity: Activity, origin: String, row: JSONObject, conversationId: String? = null) {
+    fun open(activity: Activity, origin: String, row: JSONObject, conversationId: String? = null, workMemory: WorkMemoryReference? = null, accessGeneration: Long? = null) {
         val id=row.getString("id"); UUID.fromString(id)
         val version=row.getString("libraryVersion"); require(version.isNotBlank())
         val device=row.getString("deviceId"); require(device.isNotBlank())
@@ -20,6 +20,9 @@ internal object CentralCaptureReader {
             .putExtra("recordId",id).putExtra("recordRemote",true).putExtra("recordOrigin",origin)
             .putExtra("recordVersion",version).putExtra("recordDeviceId",device).putExtra("recordObservationCount",LibraryCaptureProjection.observations(row))
             .putExtra("recordSource",source).putExtra("recordDate",date).putExtra("directReader",true).putExtra("centralReaderActions",true)
-            .apply { conversationId?.let { putExtra("conversationReference",it) } })
+            .apply {
+                conversationId?.let { putExtra("conversationReference",it) }
+                workMemory?.let { it.put(this);putExtra("workMemoryGeneration",requireNotNull(accessGeneration));putExtra("workMemoryProcess",WorkMemoryProcess.nonce) }
+            })
     }
 }

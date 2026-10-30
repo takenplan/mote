@@ -453,10 +453,15 @@ class CaptureRecordsActivity : MoteActivity() {
         detailExecutor.execute {
             try {
                 val selection = if (remote) CentralAccess.resolve(this) else null
+                val workMemory=WorkMemoryReference.from(intent)
+                if(workMemory!=null) {
+                    check(selection!=null && intent.getStringExtra("workMemoryProcess")==WorkMemoryProcess.nonce && intent.hasExtra("workMemoryGeneration") && selection.generation==intent.getLongExtra("workMemoryGeneration",-1)) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
+                }
                 if (selection != null) {
                     val expected = intent.getStringExtra("recordOrigin").orEmpty()
-                    check(expected.isBlank() || expected == selection.server) { MoteI18n.text("访问凭据已失效，请重新连接。") }
+                    check((workMemory==null && expected.isBlank()) || expected == selection.server) { MoteI18n.text("访问凭据已失效，请重新连接。") }
                     intent.getStringExtra("conversationReference")?.let { conversation -> check(CentralConversationReference.available(requireNotNull(selection.client),conversation,id)) { MoteI18n.text("引用原文已删除，历史问答仍保留。") } }
+                    workMemory?.verify(requireNotNull(selection.client),id)
                 }
                 val readerClient = if (remote && client == null) {
                     val settings = Settings(this)
@@ -485,6 +490,7 @@ class CaptureRecordsActivity : MoteActivity() {
                     val current = CentralAccess.resolve(this)
                     check(current.server == selection.server && current.generation == selection.generation) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
                     intent.getStringExtra("conversationReference")?.let { conversation -> check(CentralConversationReference.available(requireNotNull(current.client),conversation,id)) { MoteI18n.text("引用原文已删除，历史问答仍保留。") } }
+                    workMemory?.verify(requireNotNull(current.client),id)
                 }
                 val bitmap = bytes?.let { CapturePreview.decode(it, 1600) }
                 val localNote = if (record.optString("source") == "note") {

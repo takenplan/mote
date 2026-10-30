@@ -91,14 +91,20 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun saveInsightState(out: android.os.Bundle) = insights.save(out)
     fun restoreInsightState(value: android.os.Bundle) = insights.restore(value)
     fun pollWorkActivity() { if (currentPage == "activity") activity.poll() }
+    internal val isWorkActivityPage get() = currentPage == "activity"
     fun saveWorkState(out: android.os.Bundle) = activity.saveState(out)
-    fun restoreWorkState(value: android.os.Bundle) = activity.restoreState(value)
+    fun restoreWorkState(value: android.os.Bundle, allowMemoryResult: Boolean) = activity.restoreState(value,allowMemoryResult)
     fun openWorkEvidence(ref: String, conversationId: String? = null) {
         val normalized=CentralEvidenceReference.normalize(ref)
         val captureId=CentralEvidenceReference.captureId(normalized)
         if (captureId != null && conversationId != null) library.captureEvidence(captureId,conversationId) else library.evidence(normalized)
     }
+    fun openWorkMemory(id: String, returnTo: () -> Unit, accept: (JSONObject) -> Boolean, verify: (CentralClient) -> Boolean, reference: () -> WorkMemoryReference?, onOpened: () -> Unit, onFailure: (Throwable) -> Unit) = library.openWorkMemory(id,returnTo,accept,verify,reference,onOpened,onFailure)
+    fun restoreWorkMemoryAfterReader(work: String, scroll: Int) = activity.restoreMemoryAfterReader(work,scroll)
+    fun retainWorkMemoryForRecreation(work: String) = activity.retainMemoryForRecreation(work)
     fun clearPrivateState() {
+        detailBack=null
+        WorkMemoryDrafts.clear()
         askFailureDialog?.dismiss(); askFailureDialog = null; askFailureAction = null
         CentralDraftWrites.executor.execute { runCatching { askStore.read().also(NativeAskImages::clearReferences).also(askStore::write) } }
         askImagesView?.removeAllViews();askImagesView=null;addAskImage=null

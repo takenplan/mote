@@ -21,25 +21,32 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
     private var section = "overview"
     private var branchCursor = 0
     private val branchPrevious = mutableListOf<Int>()
+    private val memoryResults by lazy { CentralWorkMemoryResults(screens, { id->screens.isWorkActivityPage && selected==id && section=="results" }, { id->detail(id) }) }
     private fun enc(value: String) = CentralScreens.encode(value)
     private fun text(value: String, size: NativeFontRole = NativeFontRole.BODY, parent: LinearLayout = body) = ui.text(value, size, parent)
     private fun button(label: String, primary: Boolean = false, parent: LinearLayout = body, action: () -> Unit) = ui.button(label, primary, parent, action)
-    fun show() { selected?.let { detail(it) } ?: list() }
-    fun clearPrivateState() { detailBody = null; rendered = ""; selected = null; section = "overview"; state = "active"; cursor = 0; previous.clear(); branchCursor = 0; branchPrevious.clear() }
-    fun saveState(out: Bundle) { out.putString("state", state); out.putString("selected", selected); out.putString("section", section); out.putInt("cursor", cursor); out.putInt("branchCursor", branchCursor); out.putIntegerArrayList("previous", ArrayList(previous)); out.putIntegerArrayList("branchPrevious", ArrayList(branchPrevious)) }
-    fun restoreState(value: Bundle) {
+    fun show() { selected?.let { if(section=="results"&&memoryResults.hasSelection(it))memoryResults.showSelected(it) else detail(it) } ?: list() }
+    fun clearPrivateState() { detailBody = null; rendered = ""; selected = null; section = "overview"; state = "active"; cursor = 0; previous.clear(); branchCursor = 0; branchPrevious.clear();memoryResults.clear() }
+    fun saveState(out: Bundle) { out.putString("state", state); out.putString("selected", selected); out.putString("section", section); out.putInt("cursor", cursor); out.putInt("branchCursor", branchCursor); out.putIntegerArrayList("previous", ArrayList(previous)); out.putIntegerArrayList("branchPrevious", ArrayList(branchPrevious));out.putBundle("memoryResults",Bundle().also(memoryResults::save)) }
+    fun restoreState(value: Bundle, allowMemoryResult: Boolean) {
         state = value.getString("state").takeIf { it in setOf("active", "attention", "completed") } ?: "active"
         section = value.getString("section").takeIf { it in setOf("overview", "work", "results", "evidence", "technical") } ?: "overview"
         selected = value.getString("selected"); cursor = value.getInt("cursor").coerceAtLeast(0); branchCursor = value.getInt("branchCursor").coerceAtLeast(0)
         previous.clear(); previous.addAll(value.getIntegerArrayList("previous").orEmpty().filter { it >= 0 }); branchPrevious.clear(); branchPrevious.addAll(value.getIntegerArrayList("branchPrevious").orEmpty().filter { it >= 0 })
+        val memoryState=value.getBundle("memoryResults")
+        if(allowMemoryResult)memoryState?.let(memoryResults::restore)
+        else if(memoryState?.getString("memoryResultWork")!=null) { selected=null;section="overview" }
     }
-    fun poll() { show() }
+    fun poll() { selected?.takeIf{section=="results"&&memoryResults.hasSelection(it)}?.let(memoryResults::poll) ?: show() }
+    fun restoreMemoryAfterReader(work: String, scroll: Int) { if(selected==work && section=="results")memoryResults.restoreAfterReader(work,scroll) }
+    fun retainMemoryForRecreation(work: String) { if(selected==work && section=="results")memoryResults.rememberDrafts() }
     private var rendered = ""
-    private fun clear(key: String) {
+    private fun clear(key: String): Int {
         val scroll = screens.body.parent as? android.widget.ScrollView
         val position = if (rendered == key) scroll?.scrollY ?: 0 else 0
         rendered = key; detailBody = null; screens.body.removeAllViews()
         screens.body.post { scroll?.scrollTo(0, position) }
+        return position
     }
     private fun list() {
         if (screens.body.childCount == 0) button(MoteI18n.text("重试")) { list() }
@@ -66,7 +73,7 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
                 val work = items.getJSONObject(index)
                 val row = ui.card()
                 ui.selectRow(work.getString("goal"), MoteI18n.text(CentralWorkPresentation.state(work.getString("state"))), row) {
-                    selected = work.getString("id"); section = "overview"; branchCursor = 0; branchPrevious.clear(); detail(selected!!)
+                    selected = work.getString("id"); section = "overview"; branchCursor = 0; branchPrevious.clear();memoryResults.clear(); detail(selected!!)
                 }
                 progress(work.getJSONObject("progress"), row, compact = true)
                 text(work.optString("updatedAt"), NativeFontRole.META, row)
@@ -84,8 +91,8 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
         if (screens.body.childCount == 0) button(MoteI18n.text("重试")) { detail(id) }
         val api = screens.client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/work-activity/" + enc(id) + "?limit=20&cursor=$branchCursor") }) { work ->
-            clear("detail:$id:$section:$branchCursor"); screens.setBack { selected = null; section = "overview"; list() }
-            button(MoteI18n.text("返回活动")) { selected = null; section = "overview"; screens.clearBack(); list() }
+            val previousScroll=clear("detail:$id:$section:$branchCursor"); screens.setBack { selected = null; section = "overview";memoryResults.clear(); list() }
+            button(MoteI18n.text("返回活动")) { selected = null; section = "overview";memoryResults.clear(); screens.clearBack(); list() }
             button(MoteI18n.text("刷新")) { detail(id) }
             text(work.getString("goal"), NativeFontRole.TITLE_MOBILE)
             text(MoteI18n.text(CentralWorkPresentation.state(work.getString("state"))))
@@ -116,7 +123,7 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
             when (section) {
                 "overview" -> overview(work)
                 "work" -> branches(work)
-                "results" -> results(work)
+                "results" -> results(work,previousScroll)
                 "evidence" -> evidence(work)
                 "technical" -> technical(work)
             }
@@ -126,7 +133,10 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
     private fun overview(work: JSONObject) {
         val counts = work.optJSONObject("branchCounts") ?: JSONObject()
         ui.selectRow(MoteI18n.text("工作分支"), MoteI18n.text("{0} 个分支正在进行", counts.optInt("running")), body) { section = "work"; detail(work.getString("id")) }
-        ui.selectRow(MoteI18n.text("成果"), MoteI18n.text("{0} 项已保存成果", work.getJSONArray("artifacts").length()), body) { section = "results"; detail(work.getString("id")) }
+        val artifacts=work.getJSONArray("artifacts")
+        val resultCount=if(work.optString("kind")=="memory" && artifacts.length()==1 && artifacts.optJSONObject(0)?.optString("ref")=="memories")
+            artifacts.getJSONObject(0).optInt("count",0).coerceAtLeast(0) else artifacts.length()
+        ui.selectRow(MoteI18n.text("成果"), MoteI18n.text("{0} 项已保存成果", resultCount), body) { section = "results"; detail(work.getString("id")) }
         ui.selectRow(MoteI18n.text("证据"), MoteI18n.text("{0} 条来源资料", work.getJSONObject("evidence").optInt("count")), body) { section = "evidence"; detail(work.getString("id")) }
         text(MoteI18n.text("最近进展"), NativeFontRole.SECTION)
         val events = work.optJSONArray("events") ?: JSONArray()
@@ -149,7 +159,13 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
         if (branchPrevious.isNotEmpty()) button(MoteI18n.text("上一页")) { branchCursor = branchPrevious.removeAt(branchPrevious.lastIndex); detail(work.getString("id")) }
         if (!work.isNull("branchesNextCursor")) button(MoteI18n.text("下一页")) { branchPrevious.add(branchCursor); branchCursor = work.getInt("branchesNextCursor"); detail(work.getString("id")) }
     }
-    private fun results(work: JSONObject) {
+    private fun results(work: JSONObject, previousScroll: Int) {
+        if(work.optString("kind")=="memory") {
+            val results = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL }
+            body.addView(results)
+            memoryResults.render(work.getString("id"),results,previousScroll)
+            return
+        }
         val artifacts = work.optJSONArray("artifacts") ?: JSONArray()
         if (artifacts.length() == 0) text(MoteI18n.text("成果确认保存后会出现在这里。"))
         for (index in 0 until artifacts.length()) artifacts.getJSONObject(index).let { artifact ->
