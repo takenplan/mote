@@ -22,7 +22,7 @@ import java.time.Instant
 import java.util.UUID
 
 /** One explicit Save boundary for all manual and shared records. */
-class RecordEditorActivity : MoteActivity() {
+open class RecordEditorActivity : MoteActivity() {
     private lateinit var field: EditText
     private lateinit var description: EditText
     private lateinit var status: TextView
@@ -35,6 +35,7 @@ class RecordEditorActivity : MoteActivity() {
     private lateinit var recordingNote: TextView
     private var attachments = JSONArray()
     private var origin = JSONObject().put("kind", "manual")
+    private var originPresentation: JSONObject? = null
     private var ready = false
     private var originExpanded = true
     private val io = QuickNotes.io
@@ -112,7 +113,7 @@ class RecordEditorActivity : MoteActivity() {
         })
         enabled(false)
         task.start("", {}, { store.draft() }) { outcome -> outcome.onSuccess { draft ->
-            attachments = draft.getJSONArray("attachments"); origin = draft.getJSONObject("origin"); field.setText(draft.getString("text")); description.setText(draft.optString("description")); ready = true; enabled(!attachmentTask.busy); renderAttachments()
+            attachments = draft.getJSONArray("attachments"); origin = draft.getJSONObject("origin"); originPresentation = draft.optJSONObject("originPresentation"); field.setText(draft.getString("text")); description.setText(draft.optString("description")); ready = true; enabled(!attachmentTask.busy); renderAttachments()
             if (state == null) importIntent(intent)
             if (cameraResultReady) stageCamera() else if (state == null) recoverPendingMedia()
         }.onFailure { status.text = it.message; enabled(false) } }
@@ -125,10 +126,10 @@ class RecordEditorActivity : MoteActivity() {
     }
     private fun canSubmit() = recorder == null && (field.text.isNotBlank() || attachments.length() > 0 || origin.optString("text").isNotBlank())
     private fun persist() {
-        val text = field.text.toString(); val files = JSONArray(attachments.toString()); val source = JSONObject(origin.toString()); val noteDescription = description.text.toString()
+        val text = field.text.toString(); val files = JSONArray(attachments.toString()); val source = JSONObject(origin.toString()); val noteDescription = description.text.toString(); val presentation = originPresentation?.let { JSONObject(it.toString()) }
         save.isEnabled = canSubmit() && !task.busy && !attachmentTask.busy
         renderDraftState()
-        io.execute { runCatching { store.edit(text, files, source, noteDescription) }.onFailure { error -> runOnUiThread { status.text = error.message } } }
+        io.execute { runCatching { store.edit(text, files, source, noteDescription, presentation) }.onFailure { error -> runOnUiThread { status.text = error.message } } }
     }
     private fun pick(mime: String, request: Int) {
         @Suppress("DEPRECATION") startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true), request)
@@ -188,7 +189,7 @@ class RecordEditorActivity : MoteActivity() {
                 val bytes = contentResolver.openInputStream(uri)!!.use { input -> readBounded(input) }
                 store.stage(bytes, name, contentResolver.getType(uri) ?: "application/octet-stream")
             }
-            val draft = store.draft(); val files = draft.getJSONArray("attachments"); require(files.length() + added.size <= 10); added.forEach { files.put(it) }; store.edit(draft.getString("text"), files, draft.getJSONObject("origin"), draft.optString("description")); files
+            val draft = store.draft(); val files = draft.getJSONArray("attachments"); require(files.length() + added.size <= 10); added.forEach { files.put(it) }; store.edit(draft.getString("text"), files, draft.getJSONObject("origin"), draft.optString("description"), draft.optJSONObject("originPresentation")); files
         }) { result -> enabled(true); result.onSuccess { items -> attachments = items; renderAttachments() }.onFailure { status.text = it.message } }
     }
     private fun readBounded(input: java.io.InputStream): ByteArray {
@@ -196,7 +197,7 @@ class RecordEditorActivity : MoteActivity() {
         while (true) { val n = input.read(buffer); if (n < 0) break; require(out.size() + n <= CentralAttachments.MAX_BYTES); out.write(buffer, 0, n) }; return out.toByteArray()
     }
     private fun stage(bytes: () -> ByteArray, name: String, mime: String, attachmentId: String? = null, onStored: () -> Unit = {}): Boolean {
-        enabled(false); return attachmentTask.start("", {}, { val added = store.stage(bytes(), name, mime, attachmentId); val draft = store.draft(); val files = draft.getJSONArray("attachments"); if ((0 until files.length()).none { files.getJSONObject(it).getString("id") == added.getString("id") }) { require(files.length() < 10); files.put(added) }; store.edit(draft.getString("text"), files, draft.getJSONObject("origin"), draft.optString("description")); onStored(); files }) { result -> enabled(true); result.onSuccess { attachments = it; renderAttachments(); recoverPendingMedia() }.onFailure { status.text = it.message; renderAttachments() } }
+        enabled(false); return attachmentTask.start("", {}, { val added = store.stage(bytes(), name, mime, attachmentId); val draft = store.draft(); val files = draft.getJSONArray("attachments"); if ((0 until files.length()).none { files.getJSONObject(it).getString("id") == added.getString("id") }) { require(files.length() < 10); files.put(added) }; store.edit(draft.getString("text"), files, draft.getJSONObject("origin"), draft.optString("description"), draft.optJSONObject("originPresentation")); onStored(); files }) { result -> enabled(true); result.onSuccess { attachments = it; renderAttachments(); recoverPendingMedia() }.onFailure { status.text = it.message; renderAttachments() } }
     }
     private fun renderAttachments() {
         save.isEnabled = ready && canSubmit() && !task.busy && !attachmentTask.busy
@@ -208,7 +209,7 @@ class RecordEditorActivity : MoteActivity() {
         (window.decorView.findViewWithTag<android.view.View>("detail-title") as? TextView)?.text = MoteI18n.text(if(hasOrigin) if(origin.optString("kind")=="conversation") "保存为记录" else "保存分享" else "随手记")
         if (origin.optString("text").isNotBlank()) {
             val title = MoteI18n.text(if (origin.optString("kind") == "conversation") "对话摘录" else "引用原文")
-            val quote = TextView(this).apply { tag = "record-origin-fulltext"; text = origin.getString("text"); MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this,NativeColorRole.INK); setTextIsSelectable(true); visibility = if(originExpanded) android.view.View.VISIBLE else android.view.View.GONE }
+            val quote = TextView(this).apply { tag = "record-origin-fulltext"; text = NativeConversationQuote.display(origin, originPresentation); MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this,NativeColorRole.INK); setTextIsSelectable(true); visibility = if(originExpanded) android.view.View.VISIBLE else android.view.View.GONE }
             val separation = TextView(this).apply { text = MoteI18n.text("引用与我的补充分开保存"); MoteUi.type(this,NativeFontRole.META); MoteUi.textColor(this,NativeColorRole.MUTED); visibility = quote.visibility }
             originView.addView(TextView(this).apply {
                 tag = "record-origin-toggle"; text = title + if(originExpanded) " ▾" else " ▸"; contentDescription = title
@@ -256,7 +257,17 @@ class RecordEditorActivity : MoteActivity() {
         if (stopped.isSuccess && file.length() > 0) stagePending(mediaDescriptor(file, "audio/mp4")) else { file.delete(); io.execute { store.finishMedia(mediaDescriptor(file, "audio/mp4").getString("id")) } }
     }
     private fun importIntent(value: Intent, replaceExisting: Boolean = false) {
-        if (value.action !in setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE) && !value.hasExtra("recordText")) return
+        val conversation = this is ConversationRecordEditorActivity && value.hasExtra("recordText")
+        if (!conversation && value.action !in setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)) return
+        if (conversation && value.getStringExtra("recordText").orEmpty().length > 100000) {
+            status.text = MoteI18n.text("文字目前最多 100000 字符。"); return
+        }
+        if (conversation && listOf(value.getStringExtra("conversationId"), value.getStringExtra("turnId")).any { it.isNullOrBlank() || it.length > 200 }) {
+            status.text = MoteI18n.text("请求的资源不存在或已删除。"); return
+        }
+        if (conversation && (value.getStringExtra("quoteOrigin").isNullOrBlank() || value.getStringExtra("quoteQuestion") == null || value.getStringArrayListExtra("quoteCitations") == null || !value.getStringExtra("recordText").orEmpty().startsWith(value.getStringExtra("quoteQuestion").orEmpty() + "\n\n"))) {
+            status.text = MoteI18n.text("请求的资源不存在或已删除。"); return
+        }
         val existing = field.text.isNotBlank() || description.text.isNotBlank() || attachments.length() > 0 || origin.optString("text").isNotBlank()
         if (existing && !replaceExisting) {
             MoteDialogBuilder(this).setTitle(MoteI18n.text("已有未保存草稿"))
@@ -264,10 +275,14 @@ class RecordEditorActivity : MoteActivity() {
                 .setPositiveButton(MoteI18n.text("替换草稿")) { _, _ -> importIntent(value, true) }.show()
             return
         }
-        ready = false; attachments = JSONArray(); originExpanded = true; field.setText(""); description.setText(""); ready = true
-        val text = value.getStringExtra("recordText") ?: value.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
-        if (value.hasExtra("recordText")) {
-            origin = JSONObject().put("kind", "conversation").put("text", text.take(100000)); value.getStringExtra("conversationId")?.let { origin.put("conversationId", it.take(200)) }
+        ready = false; attachments = JSONArray(); originPresentation = null; originExpanded = true; field.setText(""); description.setText(""); ready = true
+        val text = if (conversation) value.getStringExtra("recordText").orEmpty() else value.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
+        if (conversation) {
+            origin = JSONObject().put("kind", "conversation").put("text", text).put("conversationId", value.getStringExtra("conversationId"))
+            origin.put("messageIds", JSONArray().put(value.getStringExtra("turnId")))
+            val question = value.getStringExtra("quoteQuestion")
+            val citations = value.getStringArrayListExtra("quoteCitations")
+            if (question != null && citations != null && text.startsWith(question + "\n\n")) originPresentation = NativeConversationQuote.snapshot(text, question, citations, origin.getString("conversationId"), origin.getJSONArray("messageIds").getString(0), requireNotNull(value.getStringExtra("quoteOrigin")))
             field.setText("")
         } else {
             origin = JSONObject().put("kind", "share").put("text", text.take(100000))
@@ -281,11 +296,12 @@ class RecordEditorActivity : MoteActivity() {
     private fun submit() {
         if (!ready || task.busy || attachmentTask.busy || recorder != null) return
         if (store.pendingMedia().length() > 0) { status.text = MoteI18n.text("请先处理未保存的附件"); return }
-        val text = field.text.toString(); val files = JSONArray(attachments.toString()); val source = JSONObject(origin.toString()); val noteDescription = description.text.toString(); enabled(false)
+        val text = field.text.toString(); val files = JSONArray(attachments.toString()); val source = JSONObject(origin.toString()); val noteDescription = description.text.toString(); val presentation = originPresentation?.let { JSONObject(it.toString()) }; enabled(false)
         task.start("", {}, {
             ConnectionGuard.sync {
-                store.edit(text, files, source, noteDescription)
+                store.edit(text, files, source, noteDescription, presentation)
                 val settings = Settings(applicationContext); val config = settings.read(); config.validate()
+                if (source.optString("kind") == "conversation") check(presentation?.optString("server") == settings.dataOrigin() && settings.dataOrigin().isNotBlank()) { MoteI18n.text("访问凭据已失效，请重新连接。") }
                 val event = store.prepare(settings.dataOrigin()) { draft ->
                     JSONObject().put("id", UUID.randomUUID().toString()).put("deviceId", settings.deviceId).put("deviceName", config.deviceName)
                         .put("platform", "android").put("capturedAt", Instant.now().toString()).put("durationMs", 0)
@@ -301,8 +317,11 @@ class RecordEditorActivity : MoteActivity() {
     }
     override fun onPause() { if (recorder != null) stopRecording(); player?.release(); player = null; super.onPause() }
 }
+/** Only the app can launch a conversation-origin editor; system sharing uses the exported base activity. */
+class ConversationRecordEditorActivity : RecordEditorActivity()
 /** This session's receipt points to a real local row; it never claims a Central acknowledgement. */
 internal object NativeRecordReceipt { @Volatile var recordId: String? = null; @Volatile var fromFirstUse: Boolean = false }
-internal fun android.app.Activity.openRecordEditor(text: String? = null, conversationId: String? = null) {
-    startActivity(Intent(this, RecordEditorActivity::class.java).apply { putExtra("firstUse",(this@openRecordEditor as? MainActivity)?.isFirstUseRecordEntry() ?: this@openRecordEditor.intent.getBooleanExtra("firstUse",false)); text?.let { putExtra("recordText", it) }; conversationId?.let { putExtra("conversationId", it) } })
+internal fun android.app.Activity.openRecordEditor(text: String? = null, conversationId: String? = null, turnId: String? = null, question: String? = null, citations: List<String>? = null, quoteOrigin: String? = null) {
+    val editor = if (text == null) RecordEditorActivity::class.java else ConversationRecordEditorActivity::class.java
+    startActivity(Intent(this, editor).apply { putExtra("firstUse",(this@openRecordEditor as? MainActivity)?.isFirstUseRecordEntry() ?: this@openRecordEditor.intent.getBooleanExtra("firstUse",false)); text?.let { putExtra("recordText", it) }; conversationId?.let { putExtra("conversationId", it) }; turnId?.let { putExtra("turnId", it) }; question?.let { putExtra("quoteQuestion", it) }; citations?.let { putStringArrayListExtra("quoteCitations", ArrayList(it)) }; quoteOrigin?.let { putExtra("quoteOrigin",it) } })
 }

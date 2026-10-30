@@ -65,4 +65,27 @@ class FirstUseNavigationInstrumentedTest {
             assertEquals(row.getString("id"),context.queue().peek()!!.getString("id")); assertEquals(1,context.queue().depth()); assertFalse(settings.enabled); assertFalse(ProjectionService.running)
         }
     }
+    @Test fun installHelpCopiesItsPromptAndKeepsAnExistingLocalDraft() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("uiFinalFixture")=="true")
+        require(context.packageName=="dev.mote.collector.dev"&&Build.FINGERPRINT.contains("emu64a")&&!Settings(context).enabled)
+        val store=context.recordDraftStore();require(!store.hasPrepared());val old=store.draft();val before=context.queue().dedupeIds().toSet()
+        val text="Generated installation-help draft";val description="Generated independent local description"
+        val clipboard=context.getSystemService(ClipboardManager::class.java);var previous:android.content.ClipData?=null;var clipboardRead=false
+        try {
+            store.edit(text,org.json.JSONArray(),org.json.JSONObject().put("kind","manual"),description)
+            ActivityScenario.launch(StartUsingActivity::class.java).use {
+                until("Install help is active"){activity() is StartUsingActivity&&shown().any{it.contentDescription=="查看安装提示词"}}
+                previous=main { clipboard.primaryClip?.let { android.content.ClipData(it) } };clipboardRead=true
+                click("复制给安装助手");assertEquals(StartUsingActivity.INSTALL_PROMPT,main{clipboard.primaryClip!!.getItemAt(0).text.toString()})
+                click("查看安装提示词");until("The full copied prompt is explicitly visible"){shown().filterIsInstance<TextView>().any{it.isShown&&it.text.toString()==StartUsingActivity.INSTALL_PROMPT}}
+                screenshot("install-help-copied-prompt");click("现在先记下来")
+                until("The existing draft opens without a connection"){activity() is RecordEditorActivity&&shown().filterIsInstance<EditText>().any{it.isEnabled&&it.text.toString()==text}}
+                assertEquals(description,store.draft().getString("description"));assertEquals(before,context.queue().dedupeIds().toSet());screenshot("install-help-existing-draft")
+            }
+        } finally {
+            main { ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).filterIsInstance<RecordEditorActivity>().forEach{it.finish()};if(clipboardRead){if(previous==null)clipboard.clearPrimaryClip()else clipboard.setPrimaryClip(previous!!)} }
+            store.edit(old.getString("text"),old.getJSONArray("attachments"),old.getJSONObject("origin"),old.optString("description"),old.optJSONObject("originPresentation"))
+            assertEquals(before,context.queue().dedupeIds().toSet())
+        }
+    }
 }

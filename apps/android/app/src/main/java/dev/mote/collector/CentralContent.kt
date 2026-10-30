@@ -22,7 +22,12 @@ internal class CentralContent(
     private val embeddedActions: Boolean = false,
     private val openCalendar: (() -> Unit)? = null,
 ) : ContextWrapper(activity) {
-    fun openCaptureReader(origin: String, row: org.json.JSONObject, conversationId: String?) = CentralCaptureReader.open(activity,origin,row,conversationId)
+    fun openCaptureReader(origin: String, row: org.json.JSONObject, conversationId: String?, returnScroll: Int? = null) {
+        val restore = if (conversationId != null && returnScroll != null) ReaderReturn(origin, accessGeneration, revision, conversationId, returnScroll) else null
+        pendingReaderReturn = restore
+        try { CentralCaptureReader.open(activity,origin,row,conversationId) }
+        catch (error: Exception) { pendingReaderReturn = null; throw error }
+    }
     fun requestedFileId(): String? = activity.intent.getStringExtra("fileId")
     fun requestedFileOriginMatches(): Boolean = activity.intent.getStringExtra("fileOrigin") == server
     fun recordNew() = activity.openRecordEditor()
@@ -34,7 +39,7 @@ internal class CentralContent(
     internal fun retainTodoDraft(): NativeTodoDraft? = body.findViewWithTag<EditText>("todo-title")?.let { NativeTodoDraft(server,accessGeneration,it.text.toString()) }
     internal fun takeTodoDraft(): String? = pendingTodoDraft?.let { value->pendingTodoDraft=null;if(value.origin==server&&value.generation==accessGeneration)value.text else null }
 
-    fun recordConversation(text: String, conversationId: String) = activity.openRecordEditor(text, conversationId)
+    fun recordConversation(text: String, conversationId: String, turnId: String, question: String, citations: List<String>) = activity.openRecordEditor(text, conversationId, turnId, question, citations, server)
     // The intent belongs to the owner/session that received it, including while another run is unresolved.
     fun captureAskConversationIntent() {
         if(activity.intent.hasExtra("conversationId") && !activity.intent.hasExtra("moteConversationGeneration")) {
@@ -98,6 +103,8 @@ internal class CentralContent(
     // This is a UI routing stamp. Authorization always reads the current session in background work.
     private var accessGeneration = -1L
     private var accessReady = false
+    private data class ReaderReturn(val origin: String, val generation: Long, val revision: Long, val conversationId: String, val scroll: Int)
+    private var pendingReaderReturn: ReaderReturn? = null
     private var pendingResult: Triple<Int, Int, Intent?>? = null
     private val pending = java.util.ArrayDeque<Pair<Long, () -> Unit>>()
     private var browserLoginId: String? = null
@@ -217,6 +224,12 @@ internal class CentralContent(
             if (client == null && browserLoginId != null && server.isNotBlank()) pollBrowserLogin()
             deliverPendingResult()
             if (client != null) screens?.resume()
+            pendingReaderReturn?.let { previous ->
+                pendingReaderReturn = null
+                if (resumed && page == "ask" && client != null && server == previous.origin && accessGeneration == previous.generation && revision == previous.revision && selectedAskConversationId == previous.conversationId) {
+                    restoreContentScroll(previous.scroll)
+                }
+            }
         }
     }
     private fun applyAccess(selected: CentralAccess.Selection) {

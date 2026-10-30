@@ -159,6 +159,7 @@ class RecordAskJourneyInstrumentedTest {
             val origin = saved.getJSONObject("metadata").getJSONObject("noteOrigin")
             assertEquals("conversation", origin.getString("kind"))
             assertEquals(conversationId, origin.getString("conversationId"))
+            assertEquals(turn.getString("id"), origin.getJSONArray("messageIds").getString(0))
             assertEquals(question + "\n\n" + answer, origin.getString("text"))
             File(context.filesDir, "ui-v1-evidence").resolve("record-ask-live-result.json").writeText(JSONObject().put("generatedOnly", true).put("liveModel", true).put("sourceRecordId", noteId).put("runId", completed.getString("id")).put("conversationId", conversationId).put("savedRecordId", savedId).put("citationCount", citations.size).put("scopeVerified", true).put("explicitSaveVerified", true).toString(2))
         }
@@ -186,6 +187,7 @@ class RecordAskJourneyInstrumentedTest {
         val conversation = api.get("/api/conversations/$conversationId?limit=50")
         val turn = items(conversation, "turns").last { it.optJSONObject("result") != null }
         val result = turn.getJSONObject("result"); val raw = result.getString("answer")
+        val display = turn.getString("question") + "\n\n" + NativeAnswerPresentation.format(raw,items(result,"citations").map { it.getString("id") }).text
         assertEquals("Conversation export remains the exact stored question and raw answer", turn.getString("question") + "\n\n" + raw, origin.getString("text"))
         val summary = items(api.get("/api/conversations?limit=30")).single { it.getString("id") == conversationId }
         ActivityScenario.launch(MainActivity::class.java).use {
@@ -219,12 +221,12 @@ class RecordAskJourneyInstrumentedTest {
             main {
                 val quote = views(activity().window.decorView).single { it.tag == "record-origin-fulltext" } as TextView
                 assertTrue("Original excerpt starts open above my supplement", quote.isShown)
-                assertEquals("Source remains complete and literal", turn.getString("question") + "\n\n" + raw, quote.text.toString())
+                assertEquals("Source preview is readable while the stored snapshot remains literal", display, quote.text.toString())
             }
             click("Collapse exact conversation excerpt") { it.tag == "record-origin-toggle" }
             until("Source excerpt collapsed") { main { views(activity().window.decorView).single { it.tag == "record-origin-fulltext" }.visibility == View.GONE } }
             click("Expand exact conversation excerpt") { it.tag == "record-origin-toggle" }
-            until("Expanded original is fully available") { main { visibleViews().any { it.tag == "record-origin-fulltext" && (it as TextView).text.toString() == turn.getString("question") + "\n\n" + raw } } }
+            until("Expanded original is fully available") { main { visibleViews().any { it.tag == "record-origin-fulltext" && (it as TextView).text.toString() == display } } }
             click("Collapse exact conversation excerpt") { it.tag == "record-origin-toggle" }
             until("Source excerpt collapsed again") { main { views(activity().window.decorView).single { it.tag == "record-origin-fulltext" }.visibility == View.GONE } }
             until("Formatted answer exports its exact original raw text into the explicit draft") { context.recordDraftStore().draft().getJSONObject("origin").optString("text") == turn.getString("question") + "\n\n" + raw }

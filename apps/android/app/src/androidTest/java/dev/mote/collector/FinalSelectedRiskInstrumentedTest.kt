@@ -146,12 +146,15 @@ class FinalSelectedRiskInstrumentedTest {
                 scenario.onActivity{it.startActivity(Intent(it,StartUsingActivity::class.java))};until("Install help"){has("查看安装文档")};picture("install-document-before-browser");click("查看安装文档")
                 until("Real browser loaded only generated loopback page"){
                     val nodes=systemNodes();nodes.firstOrNull{it.packageName?.toString()=="com.android.chrome"&&it.text?.toString()in setOf("Stay signed out","No thanks")}?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    if(nodes.any{it.packageName?.toString()=="com.android.chrome"&&it.text?.toString()=="Get the most out of Chrome"})nodes.firstOrNull{it.packageName?.toString()=="com.android.chrome"&&it.text?.toString()=="Close"}?.let { close ->
+                        var target=close;while(!target.isClickable)target=target.parent?:break;target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    }
                     seen.get()==originalUrl&&http.helpReads.get()>0&&nodes.any{it.packageName?.toString()=="com.android.chrome"&&it.text?.toString()?.contains("Generated Mote installation help boundary")==true}
                 }
                 assertEquals(originalUrl,seen.get());assertTrue(systemNodes().any{it.text?.toString()?.contains(http.origin.removePrefix("http://"))==true});systemPicture("install-document-actual-browser")
                 assertTrue(instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK));until("Returned to exact help screen"){has("查看安装文档")};click("返回上一页")
                 until("Same editor and full unsent draft returned"){main{shown().filterIsInstance<EditText>().any{it.contentDescription=="正在想什么"&&it.text.toString()==text}}};assertEquals(text,store.draft().getString("text"));assertEquals(description,store.draft().getString("description"));picture("install-document-back-same-editor-draft")
-            }}finally{instrumentation.removeMonitor(monitor);store.edit(previous.getString("text"),previous.getJSONArray("attachments"),previous.getJSONObject("origin"),previous.optString("description"))}
+            }}finally{instrumentation.removeMonitor(monitor);store.edit(previous.getString("text"),previous.getJSONArray("attachments"),previous.getJSONObject("origin"),previous.optString("description"),previous.optJSONObject("originPresentation"))}
         }
     }
     private fun systemNodes():List<AccessibilityNodeInfo>{fun children(node:AccessibilityNodeInfo?):List<AccessibilityNodeInfo> = if(node==null)emptyList()else listOf(node)+(0 until node.childCount).flatMap{children(node.getChild(it))}
@@ -164,7 +167,11 @@ class FinalSelectedRiskInstrumentedTest {
         val recovery=context.getSharedPreferences("sync-recovery",0);val oldRecovery=recovery.all.toMap();val manager=WorkManager.getInstance(context)
         require(manager.getWorkInfosForUniqueWork("mote-sync-recovery").get().all{it.state.isFinished})
         HttpFixture().use{http->
-            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated isolated missing-local recovery",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=false,wifiOnly=false,syncChargingOnly=false,syncBatteryNotLow=false),confirmCentralEndpoint=true)}
+            val settings=Settings(context)
+            until("Generated recovery connection waits for any existing background read to finish"){
+                try { ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated isolated missing-local recovery",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=false,wifiOnly=false,syncChargingOnly=false,syncBatteryNotLow=false),confirmCentralEndpoint=true)}; true }
+                catch (error: ConnectionFailure) { if(error.category=="busy") false else throw error }
+            }
             queue=context.queue()
             try{
                 val body=JSONObject().put("id",id).put("deviceId",settings.deviceId).put("source","note").put("capturedAt",Instant.now().toString()).put("durationMs",0).put("ocrText","Generated local original physically removed before recovery").put("privacy",JSONObject().put("excluded",false))
@@ -352,7 +359,137 @@ class FinalSelectedRiskInstrumentedTest {
                     until("Actual first controlled dark history page"){has("Generated history answer 29")&&has("加载更早的对话")};assertEquals(20,main{shown().filterIsInstance<TextView>().count{it.text.toString().startsWith("Generated history answer ")}});picture("final-dark-history-latest-page");click("加载更早的对话");until("All nine older controlled turns replace the first 20-turn page"){main{shown().filterIsInstance<TextView>().count{it.text.toString().startsWith("Generated history answer ")}==9}};assertTrue(has("Generated history answer 1"));assertTrue(has("这是历史版本，当前资料已更新。"));picture("final-dark-history-older-page")
                     scenario.recreate();until("Same controlled history and later draft after recreation"){has("Generated history answer 29")&&main{shown().filterIsInstance<EditText>().any{it.text.toString()=="Generated dark historical later draft"}}};picture("final-dark-history-recreated");assertEquals(0,http.queryPosts.get());assertEquals(0,http.capturePosts.get());assertTrue(http.olderReads.get()>0)
                 }}finally{CentralDraftWrites.barrier{};directory.deleteRecursively()}
-            }finally{draftStore.edit(old.getString("text"),old.getJSONArray("attachments"),old.getJSONObject("origin"),old.optString("description"))}
+            }finally{draftStore.edit(old.getString("text"),old.getJSONArray("attachments"),old.getJSONObject("origin"),old.optString("description"),old.optJSONObject("originPresentation"))}
+        }
+    }
+    @Test fun olderConversationFileCitationReturnsToSamePagePositionAndDraft()=fixture{
+        HttpFixture().use{http->
+            http.pagedHistory=true;http.pagedFileReference=true
+            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated paged citation",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());val draft="Generated older page unsent draft"
+            store.write(JSONObject().put("conversationId",http.conversation).put("question",draft))
+            try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{scenario->
+                until("Latest page loaded"){has("Generated history answer 29")&&has("加载更早的对话")};click("加载更早的对话")
+                until("Earlier page contains its exact file citation"){has("Generated history answer 1")&&main{shown().any{it.contentDescription?.toString()?.startsWith("查看引用 1 · ")==true}}}
+                val row=main{shown().single{it.contentDescription?.toString()?.startsWith("查看引用 1 · ")==true}.also{it.requestRectangleOnScreen(android.graphics.Rect(0,0,it.width,it.height),true)}};instrumentation.waitForIdleSync()
+                fun scroll()=main{shown().filterIsInstance<android.widget.ScrollView>().first().scrollY}
+                val before=scroll();http.fileAvailable=false;main{row.performClick()};until("Deleted citation remains unavailable"){has("引用不可用")};click("返回原对话")
+                until("Unavailable citation leaves the same earlier page and draft"){has("Generated history answer 1")&&main{shown().filterIsInstance<EditText>().any{it.text.toString()==draft}}};assertEquals(before,scroll());assertEquals(0,http.fileReads.get())
+                http.fileAvailable=true;main{row.performClick()};until("Exact generated file original opened"){has("Generated exact file original")};assertEquals(1,http.fileReads.get())
+                click("返回上级");until("Same earlier page, exact position and unsent draft return"){has("Generated history answer 1")&&!has("Generated history answer 29")&&main{shown().filterIsInstance<EditText>().any{it.text.toString()==draft}}&&scroll()==before}
+                assertEquals(0,http.queryPosts.get());assertEquals(0,http.capturePosts.get());picture("earlier-file-citation-return")
+            }}finally{CentralDraftWrites.barrier{};directory.deleteRecursively()}
+        }
+    }
+    @Test fun inlineUnavailableAndEarlierFileReturnPreservePhysicalTapPosition()=fixture{
+        HttpFixture().use{http->
+            http.pagedHistory=true;http.pagedFileReference=true
+            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated inline position",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());val draft="Generated inline position draft"
+            store.write(JSONObject().put("conversationId",http.conversation).put("question",draft))
+            try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{
+                until("Latest page loaded"){has("Generated history answer 29")&&has("加载更早的对话")};click("加载更早的对话")
+                val first=UUID.nameUUIDFromBytes((http.conversation+":1").toByteArray()).toString()
+                until("Earlier page has the inline file citation"){main{shown().any{it.tag=="ask-answer:$first"}}}
+                fun linkPoint(request: Boolean):FloatArray=main {
+                    val view=shown().filterIsInstance<TextView>().single{it.tag=="ask-answer:$first"};val text=view.text as android.text.Spanned
+                    val link=text.getSpans(0,text.length,android.text.style.ClickableSpan::class.java).single();val start=text.getSpanStart(link);val end=text.getSpanEnd(link);val layout=view.layout
+                    val line=layout.getLineForOffset(start);val x=(layout.getPrimaryHorizontal(start)+layout.getPrimaryHorizontal(end))/2+view.totalPaddingLeft;val y=(layout.getLineTop(line)+layout.getLineBottom(line))/2f+view.totalPaddingTop
+                    if(request)view.requestRectangleOnScreen(android.graphics.Rect(x.toInt(),y.toInt(),x.toInt()+1,y.toInt()+1),true)
+                    val where=IntArray(2);view.getLocationOnScreen(where);floatArrayOf(where[0]+x,where[1]+y)
+                }
+                fun position():Pair<Int,Int> = main {
+                    val question=shown().filterIsInstance<TextView>().single{it.text.toString()=="Generated history question 1"};val where=IntArray(2);question.getLocationOnScreen(where)
+                    shown().filterIsInstance<android.widget.ScrollView>().first().scrollY to where[1]
+                }
+                fun tapLink(){val point=linkPoint(false);val down=SystemClock.uptimeMillis();instrumentation.sendPointerSync(android.view.MotionEvent.obtain(down,down,android.view.MotionEvent.ACTION_DOWN,point[0],point[1],0));instrumentation.sendPointerSync(android.view.MotionEvent.obtain(down,down+50,android.view.MotionEvent.ACTION_UP,point[0],point[1],0))}
+                linkPoint(true);Thread.sleep(500);instrumentation.waitForIdleSync();val before=position()
+                http.fileAvailable=false;tapLink();until("A physical inline tap shows the unavailable dialog"){has("引用不可用")};click("返回原对话")
+                until("Unavailable returns to the older turn and draft"){has("Generated history answer 1")&&main{shown().filterIsInstance<EditText>().any{it.text.toString()==draft}}};Thread.sleep(500);instrumentation.waitForIdleSync();val unavailable=position()
+                assertEquals("Unavailable inline reference keeps its scroll",before.first,unavailable.first);assertTrue("Unavailable returns the same turn to the same screen position",kotlin.math.abs(before.second-unavailable.second)<=2);assertEquals(0,http.fileReads.get())
+                http.fileAvailable=true;tapLink();until("The exact earlier file opens"){has("Generated exact file original")};click("返回上级")
+                until("File reader returns to the same earlier turn and draft"){has("Generated history answer 1")&&!has("Generated history answer 29")&&main{shown().filterIsInstance<EditText>().any{it.text.toString()==draft}}};Thread.sleep(500);instrumentation.waitForIdleSync();val returned=position()
+                assertEquals("File reference keeps the older page scroll",before.first,returned.first);assertTrue("File reference returns the same turn to the same screen position",kotlin.math.abs(before.second-returned.second)<=2)
+                assertEquals(1,http.fileReads.get());assertEquals(0,http.queryPosts.get());assertEquals(0,http.capturePosts.get());picture("inline-earlier-file-return-position")
+                File(context.filesDir,"final-selected-risk").apply{mkdirs()}.resolve("inline-position-facts.json").writeText(JSONObject().put("beforeScroll",before.first).put("beforeQuestionY",before.second).put("unavailableScroll",unavailable.first).put("unavailableQuestionY",unavailable.second).put("returnedScroll",returned.first).put("returnedQuestionY",returned.second).put("queries",http.queryPosts.get()).put("captureWrites",http.capturePosts.get()).toString(2))
+            }}finally{CentralDraftWrites.barrier{};directory.deleteRecursively()}
+        }
+    }
+    @Test fun runningConversationResumesPollingAfterNativeCitationReader()=fixture{
+        HttpFixture().use{http->
+            http.pagedHistory=true;http.pagedFileReference=true;http.nativeReference=true;http.runningFixture=true
+            val settings=Settings(context)
+            until("Generated connection waits for any existing background read to finish"){
+                try { ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated running reader",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}; true }
+                catch (error: ConnectionFailure) { if(error.category=="busy") false else throw error }
+            }
+            val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());val draft="Generated later unsent draft while another run finishes"
+            store.write(JSONObject().put("conversationId",http.conversation).put("question",draft).put("runId",http.runId).put("runStatus","running"))
+            fun saved()=CentralDraftWrites.barrier { store.read() }
+            try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{scenario->
+                until("The running conversation and its older citation are visible"){has("Generated history answer 29")&&main{shown().any{it.contentDescription?.toString()?.startsWith("查看引用 1 · ")==true}}}
+                until("The same running request is polled"){http.runReads.get()>0&&saved().optString("runStatus")=="running"}
+                until("The citation row can be opened while the run remains active"){var idle=false;scenario.onActivity{idle=!it.isWorking};idle}
+                main{shown().single{it.contentDescription?.toString()?.startsWith("查看引用 1 · ")==true}.performClick()}
+                until("The separate native reader shows the exact cited original"){has("Generated exact file original")&&main{WindowInspector.getGlobalWindowViews().any{it.hasWindowFocus()&&it.isShown}}}
+                val readsWhileOpen=http.runReads.get();http.runCompleted=true;Thread.sleep(1900);assertEquals("The paused conversation does not poll behind the reader",readsWhileOpen,http.runReads.get())
+                click("返回上一页")
+                until("Return polls the same request and observes its completion"){saved().optString("runId")==http.runId&&saved().optString("runStatus")=="completed"&&http.runReads.get()>readsWhileOpen}
+                until("The same conversation and independent draft remain"){var selected=false;scenario.onActivity{selected=!it.isWorking&&it.selectedAskConversationId==http.conversation};selected&&main{shown().filterIsInstance<EditText>().any{it.contentDescription=="你的问题"&&it.text.toString()==draft}}}
+                assertEquals(draft,saved().getString("question"));assertEquals(0,http.queryPosts.get());assertEquals(0,http.capturePosts.get());picture("running-native-citation-resumed")
+                File(context.filesDir,"final-selected-risk").apply{mkdirs()}.resolve("running-reader-facts.json").writeText(JSONObject().put("runId",http.runId).put("readsWhileReaderOpen",readsWhileOpen).put("readsAfterReturn",http.runReads.get()).put("statusAfterReturn",saved().getString("runStatus")).put("draftRetained",true).put("queryWrites",http.queryPosts.get()).put("captureWrites",http.capturePosts.get()).toString(2))
+            }}finally{CentralDraftWrites.barrier{};directory.deleteRecursively()}
+        }
+    }
+    @Test fun unreadableLocalDraftJournalDoesNotBlockAuthorizedRemoteNote()=fixture{
+        HttpFixture().use{http->
+            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated remote note",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val journal=File(context.noBackupFilesDir,"record-draft/record.enc");val before=if(journal.exists())journal.readBytes()else null
+            try{
+                journal.parentFile!!.mkdirs();journal.writeText("generated-invalid-encrypted-journal")
+                val intent=Intent(context,CaptureRecordsActivity::class.java).putExtra("recordId",http.noteId).putExtra("recordRemote",true).putExtra("recordOrigin",http.origin).putExtra("directReader",true)
+                ActivityScenario.launch<CaptureRecordsActivity>(intent).use {
+                    until("Authorized remote note is readable despite unavailable local preview cache"){has("Generated remote note original")}
+                    assertEquals(0,http.queryPosts.get());assertEquals(0,http.capturePosts.get());picture("remote-note-with-unreadable-local-cache")
+                }
+            }finally{if(before==null)journal.delete()else journal.writeBytes(before)}
+        }
+    }
+    @Test fun staleInlineCitationCannotOpenAfterNavigationOrSessionChange()=fixture{
+        HttpFixture().use{http->
+            http.pagedHistory=true;http.pagedFileReference=true
+            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated stale citation",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());store.write(JSONObject().put("conversationId",http.conversation).put("question","Generated retained citation draft"))
+            try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{scenario->
+                fun olderInline():Pair<TextView,android.text.style.ClickableSpan>{
+                    until("Latest page"){has("Generated history answer 29")&&has("加载更早的对话")};click("加载更早的对话")
+                    lateinit var result:Pair<TextView,android.text.style.ClickableSpan>
+                    until("Earlier verified inline citation"){main{val view=shown().filterIsInstance<TextView>().firstOrNull{it.text.toString().startsWith("Generated history answer 1 ")};val text=view?.text as? android.text.Spanned;val span=text?.getSpans(0,text.length,android.text.style.ClickableSpan::class.java)?.firstOrNull();if(view!=null&&span!=null){result=view to span;true}else false}}
+                    return result
+                }
+                val old=olderInline();scenario.onActivity{it.navigate("overview")};until("Other page is idle"){var idle=false;scenario.onActivity{idle=!it.isWorking};idle}
+                main{old.second.onClick(old.first)};instrumentation.waitForIdleSync();assertEquals(0,http.referenceReads.get());assertEquals(0,http.fileReads.get())
+                scenario.onActivity{it.navigate("ask")};val current=olderInline();http.holdReference=true
+                main{current.second.onClick(current.first)};assertTrue("Reference request reached controlled server",http.referenceEntered.await(5,java.util.concurrent.TimeUnit.SECONDS))
+                settings.signIn(http.origin,"generated-replacement-owner-token",86400000);http.referenceRelease.countDown()
+                until("Late reference result has settled"){var idle=false;scenario.onActivity{idle=!it.isWorking};idle};instrumentation.waitForIdleSync()
+                assertEquals(1,http.referenceReads.get());assertEquals("Old owner response cannot open a file",0,http.fileReads.get());assertEquals(0,http.queryPosts.get());assertEquals(0,http.capturePosts.get())
+            }}finally{http.referenceRelease.countDown();CentralDraftWrites.barrier{};directory.deleteRecursively()}
+        }
+    }
+    @Test fun erasedTurnCannotOpenEvidenceStillReferencedByAnotherTurn()=fixture{
+        HttpFixture().use{http->
+            http.pagedHistory=true;http.pagedFileReference=true;http.twoCitations=true
+            val settings=Settings(context);ConnectionGuard.change(context,http.origin,bindLocal=true){settings.saveConnection(http.origin,http.token,"Generated erased turn",true);settings.save(settings.read().copy(syncMode="manual",syncPaused=true),confirmCentralEndpoint=true)}
+            val directory=File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin));val store=CentralStateFile(directory,"ask",context.secretBox());store.write(JSONObject().put("conversationId",http.conversation).put("question","Generated retained erasure draft"))
+            try{ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",http.conversation)).use{
+                until("Latest page loaded"){has("Generated history answer 29")&&has("加载更早的对话")};click("加载更早的对话")
+                val first=UUID.nameUUIDFromBytes((http.conversation+":1").toByteArray()).toString();lateinit var view:TextView;lateinit var span:android.text.style.ClickableSpan
+                until("Original first turn displays its own citation"){main{val found=shown().filterIsInstance<TextView>().firstOrNull{it.tag=="ask-answer:$first"};val text=found?.text as? android.text.Spanned;val link=text?.getSpans(0,text.length,android.text.style.ClickableSpan::class.java)?.firstOrNull();if(found!=null&&link!=null){view=found;span=link;true}else false}}
+                http.erasedFirstTurn=true;main{span.onClick(view)};until("Erased turn does not open another turn's still available evidence"){has("引用不可用")}
+                assertEquals(0,http.fileReads.get());assertEquals(0,http.referenceReads.get());assertEquals(0,http.queryPosts.get());assertEquals(0,http.capturePosts.get());click("返回原对话")
+                until("Unsent draft still present"){main{shown().filterIsInstance<EditText>().any{it.text.toString()=="Generated retained erasure draft"}}}
+            }}finally{CentralDraftWrites.barrier{};directory.deleteRecursively()}
         }
     }
     @Test fun finalHomeMenuSourceArchiveAndRegisteredCentralConsumersReturnWithoutWrites()=fixture{withFinalOwner{api->
@@ -381,10 +518,10 @@ class FinalSelectedRiskInstrumentedTest {
             ActivityScenario.launch<SourcesActivity>(Intent(context,SourcesActivity::class.java).putExtra("detailSourceId",local.id)).use{
                 until("Actual same local source detail"){has(local.name)&&has("中央资料库")};picture("final-source-before-central");clickRow("中央资料库");val catalog=api.get("/api/library/catalog?limit=24").getJSONArray("items");require(catalog.length()>0);until("Actual generic same-origin Central archive"){has(catalog.getJSONObject(0).getString("title"))&&has("全部资料")};picture("final-source-central-generic-archive");backActivity();until("Return same local source identity and description"){has(local.name)&&main{shown().any{it.tag=="source-primary-status"}}};assertEquals(local,sources.sources().single());picture("final-source-return-same-local-detail")
             }
-        }finally{sources.remove(local.id);draft.edit(old.getString("text"),old.getJSONArray("attachments"),old.getJSONObject("origin"),old.optString("description"))}
+        }finally{sources.remove(local.id);draft.edit(old.getString("text"),old.getJSONArray("attachments"),old.getJSONObject("origin"),old.optString("description"),old.optJSONObject("originPresentation"))}
     }}
     private class HttpFixture:AutoCloseable{
-        val token="generated-only-local-risk-owner-token";val conversation=UUID.randomUUID().toString();val redeems=AtomicInteger();val deletes=AtomicInteger();val queryPosts=AtomicInteger();val capturePosts=AtomicInteger();val helpReads=AtomicInteger();val olderReads=AtomicInteger();@Volatile var failReads=false;@Volatile var pagedHistory=false;private val server=ServerSocket(0,10,InetAddress.getByName("127.0.0.1"));val origin="http://127.0.0.1:${server.localPort}";private val threads=Executors.newCachedThreadPool()
+        val token="generated-only-local-risk-owner-token";val conversation=UUID.randomUUID().toString();val fileId=UUID.randomUUID().toString();val noteId=UUID.randomUUID().toString();val runId=UUID.randomUUID().toString();val redeems=AtomicInteger();val deletes=AtomicInteger();val queryPosts=AtomicInteger();val capturePosts=AtomicInteger();val helpReads=AtomicInteger();val olderReads=AtomicInteger();val fileReads=AtomicInteger();val referenceReads=AtomicInteger();val runReads=AtomicInteger();val referenceEntered=java.util.concurrent.CountDownLatch(1);val referenceRelease=java.util.concurrent.CountDownLatch(1);@Volatile var failReads=false;@Volatile var pagedHistory=false;@Volatile var pagedFileReference=false;@Volatile var nativeReference=false;@Volatile var runningFixture=false;@Volatile var runCompleted=false;@Volatile var twoCitations=false;@Volatile var erasedFirstTurn=false;@Volatile var fileAvailable=true;@Volatile var holdReference=false;private val server=ServerSocket(0,10,InetAddress.getByName("127.0.0.1"));val origin="http://127.0.0.1:${server.localPort}";private val threads=Executors.newCachedThreadPool()
         init{threads.submit{while(!server.isClosed)runCatching{server.accept()}.getOrNull()?.let{socket->threads.submit{socket.use{
             val input=it.getInputStream().bufferedReader();val first=input.readLine().orEmpty();val path=first.split(' ').getOrElse(1){""};val headers=mutableListOf<String>();while(true){val h=input.readLine();if(h.isNullOrEmpty())break;headers.add(h)};val size=headers.firstOrNull{h->h.startsWith("Content-Length:",true)}?.substringAfter(':')?.trim()?.toInt()?:0;val body=CharArray(size);var n=0;while(n<size){val x=input.read(body,n,size-n);if(x<0)break;n+=x}
             if(path=="/generated-install-help"){helpReads.incrementAndGet();val bytes="<!doctype html><title>Generated Mote help</title><h1>Generated Mote installation help boundary</h1><p>Generated local documentation only. No sign in or installation.</p>".toByteArray();it.getOutputStream().apply{write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray());write(bytes);flush()};return@use}
@@ -392,10 +529,17 @@ class FinalSelectedRiskInstrumentedTest {
             if(path=="/api/connections/redeem"){redeems.incrementAndGet();return@use}
             var status="200 OK";val response=when{
                 failReads&&first.startsWith("GET ")->{status="503 Service Unavailable";JSONObject().put("error","config_unavailable")}
+                runningFixture&&path=="/api/query-runs/$runId"->{runReads.incrementAndGet();JSONObject().put("id",runId).put("status",if(runCompleted)"completed" else "running").put("conversationId",conversation).put("events",JSONArray())}
+                pagedFileReference&&path=="/api/conversations/$conversation/references/$fileId"->{referenceReads.incrementAndGet();if(holdReference){referenceEntered.countDown();referenceRelease.await(10,java.util.concurrent.TimeUnit.SECONDS)};JSONObject().put("id",fileId).put("available",fileAvailable)}
+                pagedFileReference&&path=="/api/capture-browser/$fileId"->{fileReads.incrementAndGet();JSONObject().put("id",fileId).put("source",if(nativeReference)"screen"else"file").put("deviceId","generated-device").put("libraryVersion","generated-version").put("appName","Generated file").put("capturedAt","2026-10-30T00:00:00Z").put("ocrText","Generated exact file original").put("metadata",JSONObject())}
+                path=="/api/capture-browser/$noteId"->JSONObject().put("id",noteId).put("deviceId","generated-device").put("source","note").put("appName","Generated note").put("capturedAt","2026-10-30T00:00:00Z").put("ocrText","Generated remote note original").put("metadata",JSONObject().put("version",1))
                 pagedHistory&&path.startsWith("/api/conversations/$conversation")-> {
                     val older=path.contains("cursor=");if(older)olderReads.incrementAndGet()
                     val numbers=if(older)1..9 else 10..29
-                    JSONObject().put("id",conversation).put("scope",JSONObject()).put("turns",JSONArray(numbers.map{n->JSONObject().put("id",UUID.nameUUIDFromBytes((conversation+":"+n).toByteArray()).toString()).put("status","completed").put("question","Generated history question $n").put("evidenceStale",true).put("result",JSONObject().put("answer","Generated history answer $n").put("citations",JSONArray()))})).put("nextCursor",if(older)JSONObject.NULL else "generated-earlier-page")
+                    JSONObject().put("id",conversation).put("scope",JSONObject()).put("turns",JSONArray(numbers.map{n->
+                        val cites=pagedFileReference&&(n==1||(twoCitations&&n==2)||(nativeReference&&n==29));val erased=erasedFirstTurn&&n==1
+                        JSONObject().put("id",UUID.nameUUIDFromBytes((conversation+":"+n).toByteArray()).toString()).put("status","completed").put("question","Generated history question $n").put("evidenceStale",true).also { if(erased)it.put("evidenceDeleted",true) }.put("result",JSONObject().put("answer","Generated history answer $n" + if(pagedFileReference)" " + "generated detail ".repeat(18) + if(cites)" [$fileId]"else "" else "").put("citations",if(cites)JSONArray().put(JSONObject().put("id",fileId).put("title","Generated file"))else JSONArray()))
+                    })).put("nextCursor",if(older)JSONObject.NULL else "generated-earlier-page")
                 }
                 first.startsWith("DELETE ")&&path=="/api/conversations/$conversation"->{deletes.incrementAndGet();status="503 Service Unavailable";JSONObject().put("error","generated_delete_unavailable")}
                 first.startsWith("POST ")&&path.startsWith("/api/query-runs")->{queryPosts.incrementAndGet();status="503 Service Unavailable";JSONObject().put("error","query_not_allowed")}

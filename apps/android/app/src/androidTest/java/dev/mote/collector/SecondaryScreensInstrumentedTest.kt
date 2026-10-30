@@ -327,6 +327,7 @@ class SecondaryScreensInstrumentedTest {
         assertFalse(settings.enabled)
     }
     @Test fun realDiskDaysAndImageSettingsKeepCountsAndUnsavedChoicesSeparate() = fixture {
+        val before=context.queue().inventory()
         val directory=File(context.filesDir,"generated-statistics-days").apply { mkdirs() }
         val first=File(directory,"generated-day-one.txt").apply { writeText("Generated disk bytes, not a daily saved count.");check(setLastModified(java.time.Instant.parse("2026-10-25T12:00:00Z").toEpochMilli())) }
         val second=File(directory,"generated-day-two.txt").apply { writeText("Generated second disk day.");check(setLastModified(java.time.Instant.parse("2026-10-26T12:00:00Z").toEpochMilli())) }
@@ -335,7 +336,7 @@ class SecondaryScreensInstrumentedTest {
             clickTag("statistics-scope");clickTag("statistics-disk")
             until("Two actual modification days"){main{visible().filterIsInstance<TextView>().any{it.text.toString().startsWith("2026-10-25 ·")} && visible().filterIsInstance<TextView>().any{it.text.toString().startsWith("2026-10-26 ·")}}}
             main{assertTrue(visible().filterIsInstance<TextView>().any{it.text.toString().contains("日期分布不是每日新增量")});assertTrue(visible().filterIsInstance<TextView>().any{it.text.toString()=="未单独统计"});visible().filterIsInstance<TextView>().single{it.text.toString().startsWith("2026-10-25 ·")}.requestRectangleOnScreen(android.graphics.Rect(0,0,400,400),true)}
-            screenshots(scenario,"statistics-two-actual-utc-days");assertEquals(0,context.queue().inventory().records)
+            screenshots(scenario,"statistics-two-actual-utc-days");assertEquals(before,context.queue().inventory())
         }
         ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","PROCESSING")).awaitMainUi().use { scenario -> screenshots(scenario,"image-quality-and-diagnostics-settings");assertFalse(Settings(context).enabled) }
         } finally { first.delete();second.delete();directory.delete() }

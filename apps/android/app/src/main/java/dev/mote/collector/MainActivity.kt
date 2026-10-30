@@ -485,7 +485,7 @@ class MainActivity : MoteActivity() {
             val draft = applicationContext.recordDraftStore().draft()
             captures.put("hasDraft", draft.optString("text").isNotBlank() || draft.optString("description").isNotBlank() || (draft.optJSONArray("attachments")?.length() ?: 0) > 0 || draft.optJSONObject("origin")?.optString("text").orEmpty().isNotBlank())
             captures.put("hasAnyRecords", applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 1, source = "").getInt("totalCount") > 0)
-            NativeRecordReceipt.recordId?.let { id -> applicationContext.queue().capture(id)?.let { captures.put("savedReceipt",it) } }
+            NativeRecordReceipt.recordId?.let { id -> applicationContext.queue().capture(id)?.let { captures.put("savedReceipt",applicationContext.withNativeNotePreview(it)) } }
             Triple(sources, captures, applicationContext.localFileContents(3))
         }) { result ->
             result.onSuccess { (sources, capturePage, files) ->

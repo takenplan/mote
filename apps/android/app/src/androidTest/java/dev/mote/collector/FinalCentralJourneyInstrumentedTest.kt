@@ -114,7 +114,33 @@ class FinalCentralJourneyInstrumentedTest {
         val config=configuration(); val api=connect(config); val id=config.getString("conversationId"); val question=config.getString("question")
         val prior=api.get("/api/conversations/$id?limit=50").getJSONArray("turns"); val priorIds=(0 until prior.length()).map { prior.getJSONObject(it).getString("id") }.toSet()
         require(prior.length() > 0)
+        val resolveGeneratedDraft = config.optBoolean("verifyGeneratedDraftGuard")
+        if (resolveGeneratedDraft) {
+            // This path is selected only for a generated, externally snapshotted test profile.
+            // A real user's draft is never discarded by this test.
+            val store = CentralStateFile(File(context.noBackupFilesDir, "central-native/" + SourceRules.hash(api.server)), "ask", context.secretBox())
+            val saved = CentralDraftWrites.barrier { store.read() }
+            val savedQuestion = saved.optString("question")
+            val savedAttachments = saved.optJSONArray("attachments")?.toString() ?: "[]"
+            require(savedQuestion.isNotBlank() && saved.optString("conversationId") != id)
+            ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",id)).use {
+                until("Existing draft blocks switching") { main { shown().filterIsInstance<TextView>().any { it.text.toString() == "还有未发送的内容" } } }
+                screenshot("draft-switch-guard")
+                click("继续编辑")
+                until("Continue editing preserves the existing draft") { main { shown().filterIsInstance<EditText>().any { it.contentDescription == "你的问题" && it.text.toString() == savedQuestion } } }
+                val retained = CentralDraftWrites.barrier { store.read() }
+                assertEquals(savedQuestion, retained.optString("question"))
+                assertEquals(savedAttachments, retained.optJSONArray("attachments")?.toString() ?: "[]")
+                screenshot("draft-continued")
+            }
+            val after = api.get("/api/conversations/$id?limit=50").getJSONArray("turns")
+            assertEquals("Cancelling the switch must not admit a query", priorIds, (0 until after.length()).map { after.getJSONObject(it).getString("id") }.toSet())
+        }
         ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",id)).use {
+            if (resolveGeneratedDraft) {
+                until("Generated draft switch requires explicit confirmation") { main { shown().filterIsInstance<TextView>().any { it.text.toString() == "还有未发送的内容" } } }
+                click("舍弃并切换")
+            }
             until("Shared conversation and composer loaded") { main { (current() as? CentralActivity)?.let { !it.isWorking && it.selectedAskConversationId==id } == true && shown().filterIsInstance<EditText>().any { it.contentDescription == "你的问题" && it.isEnabled } } }
             main { assertEquals("Explicit shared conversation must be selected before any model admission",id,(current() as CentralActivity).selectedAskConversationId) }
             screenshot("shared-conversation-before")
@@ -138,6 +164,89 @@ class FinalCentralJourneyInstrumentedTest {
         ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",id)).use {
             until("Persisted actual target is selected before read-only citation work") { main { (current() as? CentralActivity)?.let{!it.isWorking&&it.selectedAskConversationId==id}==true&&shown().filterIsInstance<EditText>().any{it.contentDescription=="你的问题"&&it.isEnabled} } }
             verifyPersistedTurn(config,api,id,turn,newInference=false)
+        }
+    }
+    /** Reuses one completed real turn; saving a generated note must not start another query. */
+    @Test fun savePersistedTurnWithExactIdentityAndReadableQuote() {
+        val config=configuration();val api=connect(config);val id=config.getString("conversationId");val turnId=config.getString("existingTurnId")
+        val originalRuns=api.get("/api/query-runs").getJSONArray("items").toString()
+        val snapshot=api.get("/api/conversations/$id?limit=50");val turns=snapshot.getJSONArray("turns")
+        val turn=(0 until turns.length()).map(turns::getJSONObject).single{it.getString("id")==turnId}
+        val answer=turn.getJSONObject("result");val raw=turn.getString("question")+"\n\n"+answer.getString("answer")
+        val citations=answer.getJSONArray("citations");val ids=(0 until citations.length()).map{citations.getJSONObject(it).getString("id")}.distinct()
+        val evidence=config.getString("expectedEvidenceId");val number=ids.indexOf(evidence)+1;require(number>0)
+        val before=context.queue().dedupeIds().toSet();assertEquals("Do not upload unrelated queued originals",0,context.queue().pendingSync().count)
+        val draft="Generated same-turn inline return draft";val description="Generated independent Android context for $turnId"
+        ActivityScenario.launch<CentralActivity>(Intent(context,CentralActivity::class.java).putExtra("page","ask").putExtra("conversationId",id)).use {
+            if(config.optBoolean("verifyGeneratedDraftGuard")) {
+                until("Previously snapshotted generated draft requires confirmation") { main { shown().filterIsInstance<TextView>().any { it.text.toString()=="还有未发送的内容" } } };click("舍弃并切换")
+            }
+            until("Saved actual turn is selected") { main { (currentOrNull() as? CentralActivity)?.let{!it.isWorking&&it.selectedAskConversationId==id}==true&&shown().any{it.tag=="ask-answer:$turnId"} } }
+            main{shown().filterIsInstance<EditText>().single{it.contentDescription=="你的问题"}.setText(draft)}
+            var point:FloatArray?=null
+            until("Exact verified inline citation is laid out") { main {
+                val view=shown().filterIsInstance<TextView>().single{it.tag=="ask-answer:$turnId"};val layout=view.layout?:return@main false
+                val text=view.text as? android.text.Spanned?:return@main false
+                val span=text.getSpans(0,text.length,android.text.style.ClickableSpan::class.java).firstOrNull { text.subSequence(text.getSpanStart(it),text.getSpanEnd(it)).toString()=="[$number]" }?:return@main false
+                val start=text.getSpanStart(span);val end=text.getSpanEnd(span);val line=layout.getLineForOffset(start)
+                val x=(layout.getPrimaryHorizontal(start)+layout.getPrimaryHorizontal(end))/2+view.totalPaddingLeft;val y=(layout.getLineTop(line)+layout.getLineBottom(line))/2f+view.totalPaddingTop
+                view.requestRectangleOnScreen(android.graphics.Rect(x.toInt(),y.toInt(),x.toInt()+1,y.toInt()+1),true)
+                val where=IntArray(2);view.getLocationOnScreen(where);point=floatArrayOf(where[0]+x,where[1]+y);true
+            } }
+            // requestRectangleOnScreen may finish after the first animation frame; measure only
+            // after it settles so the before/after comparison reflects the user's actual position.
+            Thread.sleep(500);instrumentation.waitForIdleSync()
+            fun position(): Pair<Int,Int> = main {
+                val question=shown().filterIsInstance<TextView>().single{it.text.toString()==turn.getString("question")};val location=IntArray(2);question.getLocationOnScreen(location)
+                shown().filterIsInstance<android.widget.ScrollView>().first().scrollY to location[1]
+            }
+            val beforePosition=position()
+            val retainedViews = main { shown().filterIsInstance<android.widget.ScrollView>().first() to shown().filterIsInstance<TextView>().single{it.text.toString()==turn.getString("question")} }
+            main {
+                val view=shown().filterIsInstance<TextView>().single{it.tag=="ask-answer:$turnId"};val text=view.text as android.text.Spanned
+                val span=text.getSpans(0,text.length,android.text.style.ClickableSpan::class.java).first{ text.subSequence(text.getSpanStart(it),text.getSpanEnd(it)).toString()=="[$number]" }
+                val start=text.getSpanStart(span);val end=text.getSpanEnd(span);val layout=view.layout;val line=layout.getLineForOffset(start);val where=IntArray(2);view.getLocationOnScreen(where)
+                point=floatArrayOf(where[0]+(layout.getPrimaryHorizontal(start)+layout.getPrimaryHorizontal(end))/2+view.totalPaddingLeft,where[1]+(layout.getLineTop(line)+layout.getLineBottom(line))/2f+view.totalPaddingTop)
+            }
+            screenshot("saved-turn-inline-before")
+            val down=SystemClock.uptimeMillis();instrumentation.sendPointerSync(android.view.MotionEvent.obtain(down,down,android.view.MotionEvent.ACTION_DOWN,point!![0],point!![1],0));instrumentation.sendPointerSync(android.view.MotionEvent.obtain(down,down+50,android.view.MotionEvent.ACTION_UP,point!![0],point!![1],0))
+            val afterTapPosition=main { val location=IntArray(2);retainedViews.second.getLocationOnScreen(location);retainedViews.first.scrollY to location[1] }
+            val original=api.get("/api/capture-browser/$evidence").getString("ocrText")
+            until("Inline citation opens the exact stored original") { main { currentOrNull() is CaptureRecordsActivity&&shown().filterIsInstance<TextView>().any{it.text.toString()==original} } };screenshot("saved-turn-inline-original")
+            main{shown().single{it.contentDescription=="返回上一页"}.performClick()}
+            until("Inline citation returns to the same turn and unsent draft") { main { (currentOrNull() as? CentralActivity)?.selectedAskConversationId==id&&shown().filterIsInstance<EditText>().any{it.contentDescription=="你的问题"&&it.text.toString()==draft}&&shown().any{it.tag=="ask-answer:$turnId"} } }
+            Thread.sleep(500);instrumentation.waitForIdleSync();val afterPosition=position();screenshot("saved-turn-inline-return")
+            output.resolve("inline-scroll-result.json").writeText(JSONObject().put("beforeScroll",beforePosition.first).put("afterTapScroll",afterTapPosition.first).put("afterScroll",afterPosition.first).put("beforeQuestionY",beforePosition.second).put("afterTapQuestionY",afterTapPosition.second).put("afterQuestionY",afterPosition.second).toString(2))
+            assertEquals("Citation return must preserve the actual scroll",beforePosition.first,afterPosition.first)
+            assertTrue("The same turn must return to the same screen position",kotlin.math.abs(beforePosition.second-afterPosition.second)<=2)
+            if (config.optBoolean("verifyInlineOnly")) {
+                assertEquals("No new model request",originalRuns,api.get("/api/query-runs").getJSONArray("items").toString())
+                output.resolve("inline-only-result.json").writeText(JSONObject().put("generatedOnly",true).put("newInference",false).put("conversationId",id).put("turnId",turnId).put("evidenceId",evidence).put("inlineCitationAndReturnVerified",true).toString(2))
+                return@use
+            }
+            main {
+                val question=shown().filterIsInstance<TextView>().single{it.text.toString()==turn.getString("question")};val parent=question.parent as ViewGroup
+                val start=parent.indexOfChild(question)+1;val end=(start until parent.childCount).firstOrNull{(parent.getChildAt(it) as? TextView)?.text?.toString() in (0 until turns.length()).map{n->turns.getJSONObject(n).getString("question")}}?:parent.childCount
+                val action=(start until end).flatMap{n->views(parent.getChildAt(n))}.filterIsInstance<TextView>().single{it.text.toString()=="保存为记录"&&it.isClickable}
+                action.requestRectangleOnScreen(android.graphics.Rect(0,0,action.width,action.height),true);assertTrue(action.performClick())
+            }
+            until("Native record editor opened") { main { currentOrNull() is RecordEditorActivity } }
+            if(main{shown().filterIsInstance<TextView>().any{it.text.toString()=="替换草稿"&&it.isClickable}})click("替换草稿")
+            until("Saved quote carries the exact turn") { context.recordDraftStore().draft().getJSONObject("origin").optJSONArray("messageIds")?.optString(0)==turnId }
+            val expectedDisplay=turn.getString("question")+"\n\n"+NativeAnswerPresentation.format(answer.getString("answer"),ids).text
+            until("Readable quote is shown without changing the original") { main { shown().filterIsInstance<TextView>().any{it.tag=="record-origin-fulltext"&&it.text.toString()==expectedDisplay} } }
+            val initial=context.recordDraftStore().draft();assertEquals(raw,initial.getJSONObject("origin").getString("text"));assertEquals(id,initial.getJSONObject("origin").getString("conversationId"));assertEquals("",initial.getString("text"))
+            click("资料说明（选填）");main{shown().filterIsInstance<EditText>().single{it.tag=="record-description"}.setText(description)}
+            until("Independent context is retained") { context.recordDraftStore().draft().optString("description")==description };screenshot("saved-turn-readable-quote")
+            click("保存");until("Exactly one generated record is saved") {(context.queue().dedupeIds().toSet()-before).size==1}
+            val recordId=(context.queue().dedupeIds().toSet()-before).single();val local=requireNotNull(context.queue().capture(recordId));val origin=local.getJSONObject("metadata").getJSONObject("noteOrigin")
+            assertEquals(raw,origin.getString("text"));assertEquals(id,origin.getString("conversationId"));assertEquals(turnId,origin.getJSONArray("messageIds").getString(0));assertEquals("",local.getString("ocrText"));assertEquals(description,local.getJSONObject("metadata").getString("ownerDescription"))
+            UploadWorker.schedule(context,Settings(context).read(),true)
+            until("Exact generated note receives Central acknowledgement",120_000){context.queue().capture(recordId)?.optBoolean("uploaded")==true}
+            val remote=api.get("/api/capture-browser/$recordId");val receivedOrigin=remote.getJSONObject("metadata").getJSONObject("noteOrigin")
+            assertEquals(origin.toString(),receivedOrigin.toString());assertEquals(listOf(description),NativeRecordDescription.read(remote,true))
+            assertEquals("No new model request",originalRuns,api.get("/api/query-runs").getJSONArray("items").toString())
+            output.resolve("saved-turn-result.json").writeText(JSONObject().put("generatedOnly",true).put("newInference",false).put("conversationId",id).put("turnId",turnId).put("recordId",recordId).put("evidenceId",evidence).put("exactOriginReceived",true).put("independentDescriptionReceived",true).put("inlineCitationAndReturnVerified",true).toString(2))
         }
     }
     private fun verifyPersistedTurn(config:JSONObject,api:CentralClient,id:String,turn:JSONObject,newInference:Boolean) {

@@ -40,6 +40,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private var askHistory = JSONObject()
     private var askHistoryReadable = false
     private var lastConversation: JSONObject? = null
+    private var lastConversationCursor: String? = null
     private var messages: LinearLayout? = null
     private var scopeBox: LinearLayout? = null
     private var scopeLabel: TextView? = null
@@ -528,11 +529,13 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         if (run.getString("status") == "running") ui.scheduleAskPoll()
         else ui.requestedAskConversation()?.let { selectConversation(it,fromIntent=true) } ?: askState.optString("conversationId").takeIf { it.isNotBlank() }?.let { loadConversation(it) }
     }
-    private fun loadConversation(id: String, cursor: String? = null) {
+    private fun loadConversation(id: String, cursor: String? = null, afterLoad: (() -> Unit)? = null) {
         val api = client
         ui.work(MoteI18n.text("正在读取对话…"), { api.get("/api/conversations/" + encode(id) + "?limit=20" + (cursor?.let { "&cursor=" + encode(it) } ?: "")) }) { conversation ->
             lastConversation = JSONObject(conversation.toString())
+            lastConversationCursor = cursor
             renderConversation(conversation)
+            afterLoad?.invoke()
         }
     }
     private fun renderConversation(conversation: JSONObject) {
@@ -552,16 +555,35 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 val citations = (0 until sourceCitations.length()).map { sourceCitations.getJSONObject(it) }.distinctBy { it.getString("id") }
                 val display = NativeAnswerPresentation.format(answer.optString("answer"), citations.map { it.getString("id") })
                 val styled = android.text.SpannableString(display.text)
+                var touchScroll: Int? = null
                 display.emphasis.forEach { span -> styled.setSpan(android.text.style.StyleSpan(if (span.bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.ITALIC), span.start, span.end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
-                ui.text("", parent = target).apply { text = styled; textSize = 14f; setPadding(0,0,0,ui.moteDp(12)); setTextIsSelectable(true) }
+                display.citations.forEach { span -> styled.setSpan(object : android.text.style.ClickableSpan() {
+                    override fun onClick(widget: android.view.View) { val start = touchScroll; touchScroll = null; if (!ui.isWorking) openAskCitation(id,turn.getString("id"),span.id,start) }
+                    override fun updateDrawState(paint: android.text.TextPaint) { paint.color = MoteUi.accent; paint.isUnderlineText = false }
+                }, span.start, span.end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+                ui.text("", parent = target).apply {
+                    tag = "ask-answer:" + turn.getString("id"); text = styled; textSize = 14f; setPadding(0,0,0,ui.moteDp(12)); setTextIsSelectable(true); movementMethod = android.text.method.LinkMovementMethod.getInstance()
+                    setOnTouchListener { view, event ->
+                        when (event.actionMasked) {
+                            android.view.MotionEvent.ACTION_DOWN -> touchScroll = ui.contentScroll()
+                            android.view.MotionEvent.ACTION_CANCEL -> touchScroll = null
+                            android.view.MotionEvent.ACTION_UP -> view.post { touchScroll = null }
+                        }
+                        false
+                    }
+                }
                 if (citations.isNotEmpty()) {
                     ui.text(MoteI18n.text("依据"), NativeFontRole.META, target)
-                    citations.forEachIndexed { index, citation -> citationRow(target, index + 1, citation) { openAskCitation(id,citation.getString("id")) } }
+                    citations.forEachIndexed { index, citation -> citationRow(target, index + 1, citation) { openAskCitation(id,turn.getString("id"),citation.getString("id")) } }
 
                 }
                 val actions = LinearLayout(ui).apply { gravity = android.view.Gravity.END; setPadding(0,ui.moteDp(8),0,ui.moteDp(18)) }.also(target::addView)
-                conversationAction(actions,"保存为记录") { ui.recordConversation(turn.getString("question") + "\n\n" + answer.optString("answer"), id) }
-                conversationAction(actions,"更多") { showTurnDetails(id,answer,citations) }
+                conversationAction(actions,"保存为记录") {
+                    val original = turn.getString("question") + "\n\n" + answer.optString("answer")
+                    if (original.length > 100000) ui.notice(MoteI18n.text("文字目前最多 100000 字符。"))
+                    else ui.recordConversation(original, id, turn.getString("id"), turn.getString("question"), citations.map { it.getString("id") })
+                }
+                conversationAction(actions,"更多") { showTurnDetails(id,turn.getString("id"),answer,citations) }
             }
             turn.optJSONObject("error")?.let { error ->
                 ui.text(MoteI18n.text("回答未完成"),NativeFontRole.SUPPORT,target)
@@ -590,7 +612,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         parent.addView(row,LinearLayout.LayoutParams(-1,-2))
         parent.addView(android.view.View(ui).apply { MoteUi.backgroundColor(this,NativeColorRole.DIVIDER) },LinearLayout.LayoutParams(-1,ui.moteDp(1)))
     }
-    private fun showTurnDetails(conversationId: String, answer: JSONObject, citations: List<JSONObject>) {
+    private fun showTurnDetails(conversationId: String, turnId: String, answer: JSONObject, citations: List<JSONObject>) {
         val content = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL; setPadding(ui.moteDp(20),ui.moteDp(12),ui.moteDp(20),ui.moteDp(20)) }
         val usage = answer.optJSONObject("usage")
         fun fact(label: String, value: String) {
@@ -608,19 +630,54 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         var dialog: android.app.AlertDialog? = null
         conversationAction(content,"已读取的依据") { evidence.visibility = if (evidence.visibility == android.view.View.VISIBLE) android.view.View.GONE else android.view.View.VISIBLE }
         if (citations.isEmpty()) ui.text(MoteI18n.text("没有档案引用"),NativeFontRole.SUPPORT,evidence)
-        citations.forEachIndexed { index, citation -> citationRow(evidence,index + 1,citation) { dialog?.dismiss(); openAskCitation(conversationId,citation.getString("id")) } }
+        citations.forEachIndexed { index, citation -> citationRow(evidence,index + 1,citation) { dialog?.dismiss(); openAskCitation(conversationId,turnId,citation.getString("id")) } }
         content.addView(evidence)
         dialog = MoteDialogBuilder(ui).setTitle(MoteI18n.text("本轮详情")).setView(ScrollView(ui).apply { addView(content) }).setPositiveButton(MoteI18n.text("关闭"),null).show()
     }
-    private fun openAskCitation(conversationId: String, evidenceId: String) {
-        openConversationEvidence(conversationId,evidenceId) { library.captureEvidence(evidenceId,conversationId) }
+    private fun openAskCitation(conversationId: String, turnId: String, evidenceId: String, initialScroll: Int? = null) {
+        val api = client; val cursor = lastConversationCursor; val scroll = initialScroll ?: ui.contentScroll()
+        val selected = CentralAccess.resolve(ui); val expected = selected.server to selected.generation
+        fun stillCurrent(): Boolean {
+            val current = runCatching { CentralAccess.resolve(ui) }.getOrNull() ?: return false
+            val page = lastConversation?.takeIf { it.optString("id") == conversationId } ?: return false
+            val turns = page.optJSONArray("turns") ?: return false
+            val turn = (0 until turns.length()).mapNotNull(turns::optJSONObject).singleOrNull { it.optString("id") == turnId } ?: return false
+            val citations = turn.optJSONObject("result")?.optJSONArray("citations") ?: return false
+            return currentPage == "ask" && ui.client === api && askState.optString("conversationId") == conversationId && (current.server to current.generation) == expected &&
+                (0 until citations.length()).any { citations.optJSONObject(it)?.optString("id") == evidenceId }
+        }
+        if (!stillCurrent()) return
+        // LinkMovementMethod can scroll its TextView while taking focus on ACTION_DOWN.
+        // Keep the position from the user's tap even when the reference is unavailable.
+        if (initialScroll != null) ui.restoreContentScroll(scroll)
+        ui.work(MoteI18n.text("正在读取…"), {
+            val fresh = api.get("/api/conversations/" + encode(conversationId) + "?limit=20" + (cursor?.let { "&cursor=" + encode(it) } ?: ""))
+            val turns = fresh.optJSONArray("turns") ?: JSONArray()
+            val turn = if (fresh.optString("id") == conversationId) (0 until turns.length()).mapNotNull(turns::optJSONObject).singleOrNull { it.optString("id") == turnId } else null
+            val citations = turn?.takeUnless { it.optBoolean("evidenceDeleted") }?.optJSONObject("result")?.optJSONArray("citations")
+            val inTurn = citations != null && (0 until citations.length()).any { citations.optJSONObject(it)?.optString("id") == evidenceId }
+            inTurn && CentralConversationReference.available(api,conversationId,evidenceId)
+        }) { available ->
+            if (!stillCurrent()) return@work
+            if (!available) { ui.restoreContentScroll(scroll); showUnavailableCitation(); return@work }
+            library.captureEvidence(evidenceId,conversationId,scroll) {
+                val current = runCatching { CentralAccess.resolve(ui) }.getOrNull()
+                if (currentPage == "ask" && ui.client === api && askState.optString("conversationId") == conversationId && current != null && (current.server to current.generation) == expected) {
+                    ui.restoreAskHeader(); buildAsk(askHistory)
+                    loadConversation(conversationId,cursor) { ui.restoreContentScroll(scroll) }
+                } else refresh()
+            }
+        }
+    }
+    private fun showUnavailableCitation() {
+        MoteDialogBuilder(ui).setTitle(MoteI18n.text("引用不可用")).setMessage(MoteI18n.text("引用原文已删除，历史问答仍保留。"))
+            .setPositiveButton(MoteI18n.text("返回原对话"), null).show()
     }
     fun openConversationEvidence(conversationId: String, evidenceId: String, open: () -> Unit) {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { CentralConversationReference.available(api, conversationId, evidenceId) }) { available ->
             if (available) open()
-            else MoteDialogBuilder(ui).setTitle(MoteI18n.text("引用不可用")).setMessage(MoteI18n.text("引用原文已删除，历史问答仍保留。"))
-                .setPositiveButton(MoteI18n.text("返回原对话"), null).show()
+            else showUnavailableCitation()
         }
     }
 

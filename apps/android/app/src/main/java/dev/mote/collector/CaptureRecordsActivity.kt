@@ -487,6 +487,10 @@ class CaptureRecordsActivity : MoteActivity() {
                     intent.getStringExtra("conversationReference")?.let { conversation -> check(CentralConversationReference.available(requireNotNull(current.client),conversation,id)) { MoteI18n.text("引用原文已删除，历史问答仍保留。") } }
                 }
                 val bitmap = bytes?.let { CapturePreview.decode(it, 1600) }
+                val localNote = if (record.optString("source") == "note") {
+                    if (remote) runCatching { applicationContext.recordDraftStore().record(id) }.getOrNull()
+                    else applicationContext.recordDraftStore().record(id)
+                } else null
                 runOnUiThread {
                     if (isDestroyed || stamp != generation || !reading()) { bitmap?.recycle(); if (reading()) closeReader(); return@runOnUiThread }
                     if (selection != null) {
@@ -568,10 +572,12 @@ class CaptureRecordsActivity : MoteActivity() {
                     }
                     if (CapturePreview.showMediaContext(record)) text(content, CapturePreview.mediaLabel(record), MoteTheme.fontSupport.toFloat())
                     if (isNote) {
-                        record.optJSONObject("metadata")?.optJSONObject("noteOrigin")?.optString("text")?.takeIf { it.isNotBlank() }?.let { original ->
+                        record.optJSONObject("metadata")?.optJSONObject("noteOrigin")?.takeIf { it.optString("text").isNotBlank() }?.let { noteOrigin ->
                             val quote=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; background=MoteUi.shape(this@CaptureRecordsActivity,NativeColorRole.TINT,NativeRadiusRole.READING); setPadding(moteDp(14),moteDp(12),moteDp(14),moteDp(12)) }
                             text(quote,MoteI18n.text("引用原文"),MoteTheme.fontSupport.toFloat())
-                            text(quote,original,MoteTheme.fontBody.toFloat()).setTextIsSelectable(true); content.addView(quote)
+                            val expectedOrigin = if (remote) selection?.server else Settings(this@CaptureRecordsActivity).dataOrigin()
+                            val presentation = expectedOrigin?.let { NativeConversationQuote.scoped(localNote,it) }
+                            text(quote,NativeConversationQuote.display(noteOrigin,presentation),MoteTheme.fontBody.toFloat()).setTextIsSelectable(true); content.addView(quote)
                         }
                         if (!intent.getBooleanExtra("centralReaderActions",false)) content.addView(MoteUi.button(Button(this).apply { text = MoteI18n.text("基于这条记录提问"); setOnClickListener { startActivity(Intent(this@CaptureRecordsActivity, CentralActivity::class.java).putExtra("page", "ask").putExtra("evidenceId", id).putExtra("evidenceOrigin", if (remote) selection?.server else record.optString("dataOrigin").takeIf(String::isNotBlank))) } }))
                         if (remote) record.optJSONObject("metadata")?.optJSONArray("attachments")?.let { files ->
@@ -584,7 +590,7 @@ class CaptureRecordsActivity : MoteActivity() {
                                 }))
                             }
                         }
-                        if (!remote) applicationContext.recordDraftStore().record(id)?.getJSONArray("attachments")?.let { files ->
+                        if (!remote) localNote?.getJSONArray("attachments")?.let { files ->
                             for (index in 0 until files.length()) { val attachment = files.getJSONObject(index); text(content, attachment.getString("name"), MoteTheme.fontBody.toFloat()).apply { isFocusable = true; setOnClickListener { RecordOriginalPreview.open(this@CaptureRecordsActivity, attachment) } } }
                         }
                     }

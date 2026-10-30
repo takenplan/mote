@@ -160,7 +160,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             ui.button(MoteI18n.text("查看原文"), parent = card) { material(row.getString("id"), row.getString("revision")) }.tag="material-open:"+row.getString("id")
         }
     }
-    fun captureEvidence(id: String, conversationId: String? = null) { capture(id, conversationId = conversationId) }
+    fun captureEvidence(id: String, conversationId: String? = null, returnScroll: Int? = null, returnToConversation: (() -> Unit)? = null) { capture(id, conversationId = conversationId, returnScroll = returnScroll, returnToConversation = returnToConversation) }
     fun evidence(reference: String, offset: Int = 0) {
         require(reference.isNotBlank() && reference.length <= 4096)
         val materialRef = Regex("^material:(mat_[a-f0-9]{64})(?:@([a-f0-9]{64}))?$").matchEntire(reference)
@@ -181,7 +181,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             for (i in 0 until refs.length()) ui.button(MoteI18n.text("查看原始记录") + " · " + refs.getString(i).takeLast(8)) { evidence(refs.getString(i)) }
         }
     }
-    private fun capture(id: String, topicMemoryId: String? = null, accept: ((JSONObject) -> Boolean)? = null, conversationId: String? = null) {
+    private fun capture(id: String, topicMemoryId: String? = null, accept: ((JSONObject) -> Boolean)? = null, conversationId: String? = null, returnScroll: Int? = null, returnToConversation: (() -> Unit)? = null) {
         val api = client;val currentVisit=ui.readVisit()
         ui.work(MoteI18n.text("正在读取原文…"), {
             val row = api.get("/api/capture-browser/" + enc(id))
@@ -197,10 +197,10 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             if (memory != null && accept != null && !accept(memory)) return@work
             if (CentralCaptureReader.supports(row.optString("source"))) {
                 check(row.getString("id") == id)
-                ui.openCaptureReader(api.server,row,conversationId)
+                ui.openCaptureReader(api.server,row,conversationId,returnScroll)
                 return@work
             }
-            body.removeAllViews(); screens.setBack { screens.refresh() }
+            body.removeAllViews(); screens.setBack { returnToConversation?.invoke() ?: screens.refresh() }
             ui.text(row.optString("appName"), NativeFontRole.TITLE_MOBILE); ui.text(row.optString("capturedAt"))
             projected?.speaker?.let { ui.text(MoteI18n.text("说话人 {0}",it),NativeFontRole.SUPPORT) }
             ui.text(projected?.text ?: row.optString("ocrText")).tag="capture-reference-text"
