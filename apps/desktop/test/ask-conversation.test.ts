@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {AskClient,type AskConversation} from '../src/ask';
-import {prependConversationTurns} from '../src/ask-conversation';
+import {currentTurnCites,prependConversationTurns} from '../src/ask-conversation';
 import {defaultConfig} from '../src/config';
 
 afterEach(()=>vi.unstubAllGlobals());
@@ -56,4 +56,18 @@ it('checks current reference availability through the exact conversation before 
  await expect(client.request(config,'reference',{id:'../other',conversationId:id})).rejects.toThrow('Invalid ID');expect(fetcher).toHaveBeenCalledTimes(1);
  fetcher.mockImplementation(async()=>new Response(JSON.stringify({id:evidenceId,available:'true'})));
  await expect(client.request(config,'reference',{id:evidenceId,conversationId:id})).rejects.toThrow('Invalid reference availability');
+});
+
+it('requires the exact historical turn to retain its citation even if another turn cites the same record',async()=>{
+ const evidence='22222222-2222-4222-8222-222222222222';
+ const citation={id:evidence,appName:'Generated',capturedAt:'2026-01-01T00:00:00Z',excerpt:'Generated'};
+ const newer={...page(['newer'],'20'),turns:[{...turn('newer'),result:{answer:'Other answer',citations:[citation]}}]};
+ const erased={...page(['older'],null),turns:[{...turn('older'),evidenceDeleted:true as const,result:{answer:'',citations:[]}}]};
+ const load=vi.fn(async(cursor?:string)=>cursor?erased:newer);
+ expect(await currentTurnCites(id,'older',evidence,load)).toBe(false);
+ expect(load.mock.calls.map(call=>call[0])).toEqual([undefined,'20']);
+ const retained={...erased,turns:[{...turn('older'),result:{answer:'Retained answer',citations:[citation]}}]};
+ expect(await currentTurnCites(id,'older',evidence,async cursor=>cursor?retained:newer)).toBe(true);
+ await expect(currentTurnCites(id,'older',evidence,async cursor=>cursor?{...retained,revision:4}:newer)).rejects.toThrow('对话状态已变化');
+ await expect(currentTurnCites(id,'missing',evidence,async()=>newer)).rejects.toThrow('对话状态已变化');
 });

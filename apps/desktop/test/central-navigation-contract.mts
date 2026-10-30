@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { buildApp, type QueryAgent } from '../../server/src/app';
 import type { Config as ServerConfig } from '../../server/src/config';
 import { defaultConfig } from '../src/config';
-import { showCentral, type CentralNavigation } from '../src/central-navigation';
+import { pollBrowserLogin, prepareBrowserSession, showCentral, type CentralNavigation } from '../src/central-navigation';
 import { consumeLoginTicket } from '../../web/src/login-handoff';
 import { createApi } from '../../web/src/api';
 import { clearSession, connectionStorageKey, readStoredSession } from '../../web/src/session';
@@ -62,7 +62,7 @@ function browser(url: string) {
 }
 
 function navigation(settings = { ...defaultConfig(), serverUrl: origin, token: owner }): CentralNavigation & { launchChrome: ReturnType<typeof mock.fn>; openDefault: ReturnType<typeof mock.fn> } {
-  return { settings: () => settings, browserLogin: () => undefined, ensureBrowserLogin: async () => {}, platform: 'darwin', launchChrome: mock.fn(async () => undefined), openDefault: mock.fn(async () => undefined) };
+  return { settings: () => settings, authorizationGeneration: () => 0, browserLogin: () => undefined, ensureBrowserLogin: async () => {}, platform: 'darwin', launchChrome: mock.fn(async () => undefined), openDefault: mock.fn(async () => undefined) };
 }
 
 it('carries the current desktop ticket into the real Web session consumer and rejects replay', async () => {
@@ -149,6 +149,85 @@ it('cannot exchange a desktop ticket at another Central origin or send that orig
     await consumeLoginTicket();
     assert.equal(readStoredSession(origin)?.token, owner);
   } finally { await other.close(); await f.close(); }
+});
+
+it('does not open another node when a ticket response arrives after the connection changes', async () => {
+  const f = await fixture();
+  try {
+    let current = { ...defaultConfig(), serverUrl: origin, token: owner };
+    const entry = navigation(current);
+    entry.settings = () => current;
+    const originalFetch = globalThis.fetch;
+    let release!: () => void, started!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const requested = new Promise<void>(resolve => { started = resolve; });
+    stubGlobal('fetch', async (...args: Parameters<typeof fetch>) => {
+      const response = await originalFetch(...args);
+      if (String(args[0]).endsWith('/api/login/ticket')) { started(); await held; }
+      return response;
+    });
+    const opening = showCentral(entry, 'ask', 'capture:11111111-2222-4333-8444-555555555555', undefined, '11111111-2222-4333-8444-555555555555');
+    await requested;
+    current = { ...current, serverUrl: 'https://other.invalid', token: 'generated-other-owner-token' };
+    release();
+    await assert.rejects(opening, /登录会话已变更/);
+    assert.equal(entry.launchChrome.mock.calls.length, 0);
+    assert.equal(entry.openDefault.mock.calls.length, 0);
+  } finally { await f.close(); }
+});
+
+it('does not install an old owner credential after a delayed connection check changes nodes', async () => {
+  let current = { ...defaultConfig(), serverUrl: origin, token: owner }, generation = 0;
+  let release!: () => void, started!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const requested = new Promise<void>(resolve => { started = resolve; });
+  const install = mock.fn(async (_token: string, _duration: number) => {});
+  const preparing = prepareBrowserSession({
+    settings: () => current, authorizationGeneration: () => generation,
+    inspect: async () => { started(); await held; return {credential:{id:'owner'}}; }, install,
+  });
+  await requested;
+  current = { ...current, serverUrl: 'https://other.invalid', token: 'generated-other-owner-token' }; generation++;
+  release();
+  await assert.rejects(preparing, /登录会话已变更/);
+  assert.equal(install.mock.calls.length, 0);
+});
+
+it('never installs or acknowledges a late login grant after switching nodes', async () => {
+  let isCurrent = true, release!: () => void, started!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const requested = new Promise<void>(resolve => { started = resolve; });
+  const install = mock.fn(async (_token: string) => {}), acknowledge = mock.fn(async () => {});
+  const pending = pollBrowserLogin({
+    current: () => isCurrent,
+    poll: async () => { started(); await held; return {ready:true,token:'generated-A-grant'}; },
+    install, acknowledge, wait: async () => {},
+  });
+  await requested; isCurrent = false; release();
+  await assert.rejects(pending, /登录会话已变更/);
+  assert.equal(install.mock.calls.length, 0); assert.equal(acknowledge.mock.calls.length, 0);
+});
+
+it('does not launch a ticket after a connection changes away and back during the request', async () => {
+  const f = await fixture();
+  try {
+    const current = { ...defaultConfig(), serverUrl: origin, token: owner };
+    let generation = 0;
+    const entry = navigation(current); entry.authorizationGeneration = () => generation;
+    const originalFetch = globalThis.fetch;
+    let release!: () => void, started!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const requested = new Promise<void>(resolve => { started = resolve; });
+    stubGlobal('fetch', async (...args: Parameters<typeof fetch>) => {
+      const response = await originalFetch(...args);
+      if (String(args[0]).endsWith('/api/login/ticket')) { started(); await held; }
+      return response;
+    });
+    const opening = showCentral(entry, 'notes');
+    await requested; generation += 2; release();
+    await assert.rejects(opening, /登录会话已变更/);
+    assert.equal(entry.launchChrome.mock.calls.length, 0); assert.equal(entry.openDefault.mock.calls.length, 0);
+  } finally { await f.close(); }
 });
 
 it('browser logout revokes the shared desktop credential and rejects an outstanding ticket', async () => {

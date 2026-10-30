@@ -43,3 +43,10 @@ it('carries an admitted unresolved run as identity only and never fabricates a r
   keepLanguageAskDraft(storage,draft);const restored=takeLanguageAskDraft(storage,draft.scope)!;
   expect(restored).toEqual(draft);expect(restored.pendingRequest).toBeUndefined();expect(takeLanguageAskDraft(storage,draft.scope)).toBeUndefined();
 });
+
+it('retains an exact older reading anchor and submitted question only in the same scope',()=>{
+  const storage=session(),draft={scope:'generated-owner/device',question:'Later local draft',view:'conversation' as const,conversationId:'612585bd-2c32-4406-83eb-5aeed1b8ef8f',reading:{oldestTurnId:'older-turn',scrollY:1200,anchor:{turnId:'visible-turn',top:-35}},submittedQuestion:'Already admitted question'};
+  keepLanguageAskDraft(storage,draft);expect(takeLanguageAskDraft(storage,draft.scope)).toEqual(draft);
+  keepLanguageAskDraft(storage,{...draft,reading:{...draft.reading,scrollY:Infinity}});expect(takeLanguageAskDraft(storage,draft.scope)).toBeUndefined();
+  keepLanguageAskDraft(storage,{...draft,reading:{...draft.reading,anchor:{turnId:'',top:0}}});expect(takeLanguageAskDraft(storage,draft.scope)).toBeUndefined();
+});

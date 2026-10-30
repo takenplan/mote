@@ -4,6 +4,8 @@ export interface LanguageAskDraft {
   question:string;
   conversationId?:string;
   view:'history'|'conversation';
+  reading?:{oldestTurnId?:string;scrollY:number;anchor?:{turnId:string;top:number}};
+  submittedQuestion?:string;
   pendingRequest?:{id:string;question:string;conversationId?:string};
   /** An admitted run may have no local request body. Only its identity is retained. */
   unresolvedRun?:{id:string;conversationId?:string;stopPending?:true};
@@ -17,6 +19,10 @@ export function takeLanguageAskDraft(storage:Pick<Storage,'getItem'|'removeItem'
   try {
     const value=JSON.parse(text);
     if(value.scope!==scope||typeof value.question!=='string'||value.question.length>8000||!['history','conversation'].includes(value.view)||value.conversationId!==undefined&&!uuid.test(value.conversationId))return;
+    if(value.submittedQuestion!==undefined&&(typeof value.submittedQuestion!=='string'||value.submittedQuestion.length>8000))return;
+    const reading=value.reading;
+    const turnId=(id:unknown)=>typeof id==='string'&&id.length>0&&id.length<=128;
+    if(reading!==undefined&&(!value.conversationId||!reading||typeof reading!=='object'||!Number.isFinite(reading.scrollY)||reading.scrollY<0||reading.scrollY>1e9||reading.oldestTurnId!==undefined&&!turnId(reading.oldestTurnId)||reading.anchor!==undefined&&(!reading.anchor||typeof reading.anchor!=='object'||!turnId(reading.anchor.turnId)||!Number.isFinite(reading.anchor.top)||Math.abs(reading.anchor.top)>1e6)))return;
     const pending=value.pendingRequest;
     if(pending&&(typeof pending.question!=='string'||!pending.question.trim()||pending.question.length>8000||!uuid.test(pending.id)||pending.conversationId!==undefined&&!uuid.test(pending.conversationId)))return;
     const run=value.unresolvedRun;

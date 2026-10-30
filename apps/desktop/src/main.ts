@@ -32,7 +32,7 @@ import { NoteDraftStore, type NoteDraft } from './note-draft';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { openCentralBrowser,validateCentralWorkId } from './central-browser';
-import { showCentral as navigateCentral, type BrowserLogin } from './central-navigation';
+import { showCentral as navigateCentral, prepareBrowserSession, pollBrowserLogin, type BrowserLogin } from './central-navigation';
 import {centralWorkActivity} from './work-activity';
 import { join, resolve } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
@@ -138,6 +138,7 @@ let ensureBrowserLogin: (()=>Promise<void>)|undefined;
 async function showCentral(page?: string, evidenceId?: string,workId?:string,conversationId?:string): Promise<void> {
   return navigateCentral({
     settings: () => settings,
+    authorizationGeneration: () => collector.status().authorizationGeneration ?? 0,
     browserLogin: () => browserLogin,
     ensureBrowserLogin: async () => { await ensureBrowserLogin?.(); },
     platform: process.platform,
@@ -561,21 +562,25 @@ else {
         throw error;
       }
       loginGeneration++;updateUi(clientStatus());
+      const installed=settings, installedGeneration=collector.status().authorizationGeneration;
       if(requested.token&&requested.token!==credential)await loginRequest(requested,'/api/login/logout',{},requested.token).catch(()=>{});
+      if(settings!==installed||collector.status().authorizationGeneration!==installedGeneration)throw Error(moteText('登录会话已变更，请重新打开中央页面。'));
     };
-    ensureBrowserLogin=async()=>{const current=settings;if(connectionToken(current)&&(await testConnection(current)).credential.id==='owner')await installLogin(current.token!,current.authSessionOnly?0:2592000000);};
+    ensureBrowserLogin=()=>prepareBrowserSession({settings:()=>settings,authorizationGeneration:()=>collector.status().authorizationGeneration??0,inspect:current=>testConnection(current),install:installLogin});
     browserLogin=async(page,evidenceId,durationMs=2592000000,workId,conversationId)=>{
       if(![0,86400000,604800000,2592000000].includes(durationMs))throw Error('Invalid lifetime');
       const requested=settings,generation=++loginGeneration,{verifier,challenge}=loginVerifier();
       const {id}=await loginRequest(requested,'/api/login/requests',{serverUrl:requested.serverUrl,deviceId:requested.deviceId,deviceName:requested.deviceName,platform:currentPlatform,challenge,durationMs});
-      await openCentralBrowser(requested.serverUrl,page,process.platform,url=>promisify(execFile)('/usr/bin/open',['-a','Google Chrome',url]),url=>shell.openExternal(url),evidenceId,undefined,id,workId,conversationId);
-      const deadline=Date.now()+10*60000;
-      while(Date.now()<deadline&&generation===loginGeneration&&settings===requested&&!quitting){
-        const grant=await loginRequest(requested,'/api/login/poll',{id,verifier});
-        if(grant.ready){await installLogin(grant.token,durationMs,generation);await loginRequest(requested,'/api/login/ack',{id,verifier}).catch(()=>{});return;}
-        await new Promise(resolve=>setTimeout(resolve,1500));
-      }
-      throw Error(moteText('登录会话已变更，请重新打开中央页面。'));
+      const ensureCurrent=()=>{if(settings!==requested||generation!==loginGeneration||quitting)throw Error(moteText('登录会话已变更，请重新打开中央页面。'));};
+      ensureCurrent();
+      await openCentralBrowser(requested.serverUrl,page,process.platform,url=>{ensureCurrent();return promisify(execFile)('/usr/bin/open',['-a','Google Chrome',url]);},url=>{ensureCurrent();return shell.openExternal(url);},evidenceId,undefined,id,workId,conversationId);
+      await pollBrowserLogin({
+        current:()=>generation===loginGeneration&&settings===requested&&!quitting,
+        poll:()=>loginRequest(requested,'/api/login/poll',{id,verifier}),
+        install:token=>installLogin(token,durationMs,generation),
+        acknowledge:()=>loginRequest(requested,'/api/login/ack',{id,verifier}).catch(()=>{}),
+        wait:()=>new Promise(resolve=>setTimeout(resolve,1500)),
+      });
     };
     let authCheck:Promise<unknown>|undefined;let nextAuthCheck=0;
     const authTimer=setInterval(()=>{
