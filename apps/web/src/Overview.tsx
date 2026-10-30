@@ -1,4 +1,4 @@
-import {FirstUseHome,type FirstDeviceData} from './FirstUseHome';
+import {FirstUseHome,FirstDataFailure,type FirstDeviceData} from './FirstUseHome';
 import {OriginalNoteRow,type OwnerBrowsePage} from './owner-library-browse';
 import {useEffect,useState} from 'react';
 import {featureRequirementsAvailable} from '@mote/shared';
@@ -76,7 +76,7 @@ export function Overview({api,status,devices,insights,onPage,onOpen}: {
      <p><strong>{moteText('中央已接收')}</strong>{' · '}{sample.deviceName}{' · '}<time dateTime={sample.receivedAt}>{new Date(sample.receivedAt).toLocaleString()}</time></p>
      <p>{moteText(firstData.loading?'尚未验证':complete?'原件已保留':'原件不可用')}{retained?.originalAvailable&&<> · <button className="text-button" onClick={()=>onOpen('capture:'+sample.id)}>{moteText('查看原文')}<ArrowRight size={15}/></button></>}</p>
     </div>}
-    {firstData.loading?<p role="status">{moteText('正在读取采集记录…')}</p>:firstData.error?<p className="error" role="alert">{errorMessage(firstData.error)}</p>:!sample&&<p>{moteText(checked?.state==='waiting'?'准备好接住第一份记录':'最近记录')}{checked?.state!=='waiting'&&<> · {moteText('尚未验证')}</>}</p>}
+    {firstData.loading?<p role="status">{moteText('正在读取采集记录…')}</p>:firstData.error?<FirstDataFailure error={firstData.error}/>:!sample&&<p>{moteText(checked?.state==='waiting'?'准备好接住第一份记录':'最近记录')}{checked?.state!=='waiting'&&<> · {moteText('尚未验证')}</>}</p>}
     <details className="central-first-actions" open={!complete}><summary>{moteText('更多')}</summary><div className="button-row"><button className="button subtle" onClick={()=>firstData.refresh()} disabled={firstData.loading}>{moteText('刷新')}</button><button className="text-button" onClick={()=>onPage('archive')}>{moteText('打开资料库')}</button></div></details>
    </div>
   </section>;
