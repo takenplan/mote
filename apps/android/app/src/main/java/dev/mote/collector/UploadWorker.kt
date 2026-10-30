@@ -296,11 +296,16 @@ internal object SyncHeartbeat {
         val runtimeAlive = (config.screenCollectionEnabled && (CaptureAccessibilityService.connected || ProjectionService.running)) || (config.observesSystem() && MediaCollectionService.connected)
         val status = if (!settings.enabled) "paused" else if (!runtimeAlive) "permission_required" else settings.state()
         val inventory = queue.syncInventory()
+        val current = settings.read(); val syncStatus = settings.storedSyncStatus(); val pending = SyncSchedule.pending(context)
+        val translations = if (current == config && syncStatus.state in setOf("unconfigured", "paused")) MoteI18n.translations(SyncReadiness.obsoleteMessages) else emptyMap()
+        val syncState = if (current == config) SyncReadiness.heartbeatState(current, syncStatus, inventory.getInt("blocked"), pending) { source, value ->
+            source == value || translations[source]?.contains(value) == true
+        } else syncStatus.state
         val body = JSONObject().put("deviceId", settings.deviceId).put("deviceName", config.deviceName).put("platform", "android")
             .put("status", status).put("queueDepth", queue.depth()).put("lastCaptureAt", settings.lastCapture())
-            .put("sync", JSONObject().put("mode", config.syncMode).put("state", settings.syncState())
+            .put("sync", JSONObject().put("mode", config.syncMode).put("state", syncState)
                 .put("intervalMinutes", config.syncIntervalMinutes).put("batchSize", config.syncBatchSize)
-                .put("pendingRecords", SyncSchedule.pending(context).count.coerceAtMost(1_000_000))
+                .put("pendingRecords", pending.count.coerceAtMost(1_000_000))
                 .put("blockedRecords", inventory.getInt("blocked")).put("awaitingOcrRecords", inventory.getInt("awaitingOcr")).put("retainedRecords", inventory.getInt("retained"))
                 .apply { settings.lastUploadAt()?.let { put("lastUploadAt", it) }
                     SyncSchedule.delay(context, config)?.takeIf { it > 0 }?.let { put("nextUploadAt", java.time.Instant.ofEpochMilli(System.currentTimeMillis() + it).toString()) } })

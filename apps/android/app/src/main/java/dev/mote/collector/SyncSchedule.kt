@@ -95,7 +95,9 @@ object SyncSchedule {
     }
     private var registeredStamp: String? = null
     @Synchronized private fun scheduleNow(context: Context, config: CollectorConfig, explicit: Boolean) {
-        val manager = WorkManager.getInstance(context); val settings = Settings(context)
+        val settings = Settings(context)
+        if (!ScheduleAdmission.isCurrent(config, settings.read())) return
+        val manager = WorkManager.getInstance(context)
         if (config.syncPaused) {
             HeartbeatWorker.configure(context, config)
             listOf("mote-upload", "mote-upload-timer", "mote-upload-recovery", "mote-source-upload").forEach(manager::cancelUniqueWork)

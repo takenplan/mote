@@ -210,6 +210,10 @@ class Settings(private val context: Context) {
     fun lastAcknowledgedAt(): String? = prefs.getString("lastUploadAt", null)?.takeIf { prefs.getString("lastUploadOrigin", null) == read().server }
     fun lastUploadAt(): String? = prefs.getString("lastUploadAt", null)
     fun syncState(): String = prefs.getString("syncState", "idle")!!
+    internal fun storedSyncStatus(): StoredSyncStatus {
+        val values = prefs.all
+        return StoredSyncStatus(values["syncState"] as? String ?: "idle", values["uploadStatus"] as? String ?: MoteI18n.text("尚未上传"))
+    }
     fun syncStatus(state: String, message: String, uploaded: Boolean = false) {
         if (!uploaded && syncState() == state && uploadStatus() == message) return
         val edit = prefs.edit().putString("syncState", state).putString("uploadStatus", message)
