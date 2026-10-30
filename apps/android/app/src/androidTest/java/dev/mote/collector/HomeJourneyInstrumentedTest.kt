@@ -143,7 +143,9 @@ class HomeJourneyInstrumentedTest {
     @Test fun captureLineSeparatesAPauseFromAnInterruption() {
         val settings = Settings(context)
         settings.capturePreviewAccepted()
-        ActivityScenario.launch(MainActivity::class.java).use {
+        // MainActivity replaces its intent on onNewIntent; ActivityScenario then loses it, so this journey owns the activity.
+        context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        try {
             val paused = onTop("An intentional stop is quiet and offers resume") { activity -> shown(activity).any { it.tag == "home-capture-paused" } }
             instrumentation.runOnMainSync {
                 assertTrue("采集已暂停" in texts(paused) && "恢复采集" in texts(paused))
@@ -166,7 +168,19 @@ class HomeJourneyInstrumentedTest {
             }
             capture(panel, "capture-status")
             instrumentation.runOnMainSync { panel.onBackPressedDispatcherCompat() }
-            resumed(MainActivity::class.java, "Back from the panel returns to the home")
+            val home = onTop("Back from the panel returns to the home") { activity -> activity is MainActivity && shown(activity).any { it.tag == "home-attention" } }
+            click(home) { it.tag == "home-attention" }
+            val again = resumed(CaptureStatusActivity::class.java, "The amber line opens the panel again")
+            onTop("The panel is ready") { activity -> shown(activity).any { it.tag == "capture-status-screen" } }
+            click(again) { it.tag == "capture-status-screen" }
+            val scope = onTop("The screen row leads to the recovery scope page") { activity -> activity is MainActivity && shown(activity).any { it.tag == "local-back:PRIVACY" } }
+            until("The panel finished when the app took over") { inStage(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED).none { it is CaptureStatusActivity } }
+            instrumentation.runOnMainSync { scope.onBackPressedDispatcherCompat() }
+            onTop("Back leaves the scope page inside the app") { activity -> activity is MainActivity && shown(activity).none { it.tag == "local-back:PRIVACY" } }
+        } finally {
+            val open = inStage(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED)
+            instrumentation.runOnMainSync { open.forEach { it.finish() } }
+            until("The journey's activities finished") { inStage(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED).isEmpty() }
         }
     }
 
