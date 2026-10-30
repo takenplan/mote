@@ -353,3 +353,8 @@
 .reader-tools-dialog .evidence-canonical{min-width:0;max-width:100%}.reader-tools-dialog .evidence-canonical pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto}
 
 .first-use-failure details{font-size:11px;color:var(--mote-muted);margin-top:8px}.first-use-failure pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-width:100%}
+
+/* Declared source text uses the reader's prose treatment, independent of source-management cards. */
+.reference-detail .material-detail .source-material-blocks>.source-item{padding:0;border:0;border-radius:0;background:transparent;margin:25px 0 28px}
+.reference-detail .material-detail .source-material-blocks>.source-item>.file-text{font-size:14px;line-height:2.05;color:var(--mote-ink);margin:0;overflow-wrap:anywhere}
+.reference-detail .material-detail .source-material-tools-target{margin:16px 0}
