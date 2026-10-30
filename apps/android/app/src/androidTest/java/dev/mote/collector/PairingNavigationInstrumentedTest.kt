@@ -116,7 +116,9 @@ class PairingNavigationInstrumentedTest {
             settings.save(settings.read().copy(server = "https://old.generated.invalid", token = "generated-old-token-1234567890123456", deviceName = "Generated device", debugHttp = true, syncMode = "manual", intervalSeconds = 30))
             ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
                 val monitor = instrumentation.addMonitor(ConnectionActivity::class.java.name, null, false)
+                lateinit var originalMain: MainActivity
                 scenario.onActivity { activity ->
+                    originalMain = activity
                     click(activity, "设置"); menu(activity, "连接与同步")
                     views(activity.window.decorView).single { it.isShown && it.tag=="connection-settings-toggle" }.performClick()
                     editor(activity, "https://mote.example.com").setText("https://discard.generated.invalid")
@@ -167,6 +169,18 @@ class PairingNavigationInstrumentedTest {
                     assertEquals(View.GONE, editor(activity, "建议通过邀请获取本设备凭据").visibility)
                     assertFalse(saveVisible(activity))
                     activity.onBackPressed(); assertFalse(saveVisible(activity))
+                    assertSame("Pairing returns to the same MainActivity", originalMain, activity)
+                }
+                waitUntil {
+                    var updated = false
+                    scenario.onActivity { activity ->
+                        val row = activity.window.decorView.findViewWithTag<View>("menu:连接与设备")
+                        updated = row?.isShown == true && row.findViewWithTag<TextView>("row-detail")?.text.toString() == node &&
+                            row.contentDescription.toString() == "连接与设备，$node"
+                    }
+                    updated
+                }
+                scenario.onActivity { activity ->
                     menu(activity, "连接与同步")
                     assertEquals(node, editor(activity, "https://mote.example.com").text.toString())
                     click(activity, "设置"); menu(activity, "采集与存储")
@@ -183,6 +197,21 @@ class PairingNavigationInstrumentedTest {
                     activity.onBackPressed(); menu(activity, "采集与存储")
                     assertEquals("47", editor(activity, "30").text.toString()); assertFalse(saveVisible(activity))
                 }
+                // A newer edit made while the accepted save is blocked remains a draft.
+                ConnectionGuard.processing.incrementAndGet()
+                try {
+                    scenario.onActivity { activity ->
+                        editor(activity, "30").setText("55"); click(activity, "保存设置")
+                        editor(activity, "30").setText("56")
+                    }
+                } finally { ConnectionGuard.processing.decrementAndGet() }
+                waitUntil { settings.read().intervalSeconds == 55 && !ConnectionGuard.changing() }
+                waitUntil {
+                    var retained = false
+                    scenario.onActivity { retained = editor(it, "30").text.toString() == "56" && saveVisible(it) }
+                    retained
+                }
+                scenario.onActivity { activity -> editor(activity, "30").setText("55"); assertFalse(saveVisible(activity)) }
                 ConnectionGuard.processing.incrementAndGet()
                 try {
                     scenario.onActivity { activity -> editor(activity, "30").setText("60"); click(activity, "保存设置") }
