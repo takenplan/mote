@@ -49,7 +49,7 @@ class SettingsStorageInstrumentedTest {
         try {
             val settings = Settings(generated); val config = settings.read()
             val prefs = generated.getSharedPreferences("mote", 0)
-            assertEquals(3, prefs.getInt("configurationFormat", 0))
+            assertEquals(4, prefs.getInt("configurationFormat", 0))
             assertEquals(AppCollectionRules.DEFAULT, config.appCollectionRules)
             assertEquals(AppCollectionRules.DEFAULT, prefs.getString("appCollectionRules", null))
             assertEquals("", settings.dataOrigin()); assertTrue(prefs.contains("dataOrigin"))
