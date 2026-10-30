@@ -509,12 +509,25 @@ export class FileProcessing {
     return {token,revision:this.view().revision,count:items.length,skipped,bounded:rows.length>1000||items.length===100,items:items.map(({fingerprint,...item})=>item)};
   }
   private jobFingerprint(id:string){return sha256(JSON.stringify(this.files.store.db.prepare('SELECT * FROM file_jobs WHERE capture_id=?').get(id)));}
-  reprocess(raw:unknown){
+  private reprocessPreview(raw:unknown){
     const q=z.object({token:z.string().uuid()}).strict().parse(raw),preview=this.previews.get(q.token);
     if(!preview||preview.expires<Date.now()||preview.revision!==this.saved.revision)throw new StoreError(moteText("预览已过期或设置已改变，请重新预览"),409);
     for(const item of preview.items)if(this.jobFingerprint(item.id)!==item.fingerprint)throw new StoreError(moteText("文件状态已改变，请重新预览"),409);
-    const db=this.files.store.db;db.exec('BEGIN IMMEDIATE');try{for(const item of preview.items)this.retry(item.id,'transcribe',true);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
-    this.previews.delete(q.token);return {queued:preview.items.length};
+    return {token:q.token,preview};
+  }
+  /** The preview freezes the targets; the caller still has to supply owner authority. */
+  reprocessTargets(raw:unknown):readonly string[]{return this.reprocessPreview(raw).preview.items.map(item=>item.id);}
+  reprocess(raw:unknown){
+    const {token,preview}=this.reprocessPreview(raw),db=this.files.store.db,own=!db.isTransaction;
+    if(own)db.exec('BEGIN IMMEDIATE');
+    try{
+      for(const item of preview.items){
+        if(this.options.modelAuthority&&!this.options.modelAuthority.ownerIntent?.(item.id))throw new StoreError('Explicit model processing intent is required',409);
+        this.retry(item.id,'transcribe',true);
+      }
+      if(own)db.exec('COMMIT');
+    }catch(e){if(own&&db.isTransaction)db.exec('ROLLBACK');throw e;}
+    this.previews.delete(token);return {queued:preview.items.length};
   }
   private project(step:ExecutionStep,phase:'pipeline'|'summary'){
     const id=String(step.input.captureId);if(!this.validStep(step,phase)){this.programRuns.delete(step.id);return;}
