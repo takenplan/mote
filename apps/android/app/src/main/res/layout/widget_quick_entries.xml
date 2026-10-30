@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp" android:background="@drawable/widget_background">
+    <TextView android:id="@+id/widget_ask" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
+        android:gravity="center_vertical" android:paddingStart="14dp" android:paddingEnd="12dp" android:singleLine="true"
+        android:background="@drawable/widget_ask_background" android:drawableStart="@drawable/ic_widget_ask" android:drawablePadding="10dp"
+        android:text="@string/widget_ask" android:textColor="@color/mote_muted" android:textSize="15sp" />
+    <ImageView android:id="@+id/widget_record" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="6dp"
+        android:src="@drawable/ic_entry_record" tools:ignore="ContentDescription" />
+    <ImageView android:id="@+id/widget_photo" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="4dp"
+        android:src="@drawable/ic_entry_photo" tools:ignore="ContentDescription" />
+    <ImageView android:id="@+id/widget_audio" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="4dp"
+        android:src="@drawable/ic_entry_audio" tools:ignore="ContentDescription" />
+</LinearLayout>

@@ -357,7 +357,7 @@ internal class CentralContent(
         title.text = CentralScreens.pages.firstOrNull { it.first == page }?.second?.let { MoteI18n.text(it) } ?: MoteI18n.text("中央资料库")
         text(MoteI18n.text(when {
             page == "ask" -> "中央问答暂不可用。连接中央后，可以根据已整理的内容提问；文件和随手记仍可在本机保存。"
-            page in MoteNavigation.libraryPages -> "中央资料库暂不可用。连接中央后，可浏览已归档的资料；文件和随手记仍可在本机保存和查看。"
+            MoteNavigation.libraryRoute(page) -> "中央资料库暂不可用。连接中央后，可浏览已归档的资料；文件和随手记仍可在本机保存和查看。"
             else -> "中央功能需要连接中央；文件和随手记仍可在本机保存和查看。"
         }))
         connectionButton()

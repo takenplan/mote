@@ -29,7 +29,27 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             "sources" -> sources()
             "memories" -> memories()
             "insights" -> insights()
+            MoteNavigation.SEARCH -> search()
         }
+    }
+    /** One search field over archived originals. The query goes to Central's evidence reader unchanged. */
+    private fun search() {
+        val form = ui.card()
+        val field = ui.field(MoteI18n.text("搜索原文"), query, parent = form).apply {
+            tag = "material-search-field"; isSingleLine = true; imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+        }
+        fun submit() { query = field.text.toString().trim(); screens.refresh() }
+        field.setOnEditorActionListener { _, id, _ -> (id == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH).also { if (it) submit() } }
+        ui.button(MoteI18n.text("搜索"), parent = form) { submit() }.tag = "material-search-submit"
+        if (query.isNotBlank()) searchResults("/api/context/search?limit=24&query=" + enc(query), ui.card())
+        else field.post {
+            field.requestFocus()
+            ui.getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(field, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+    private fun searchResults(path: String, list: LinearLayout) = paged(path, list) { row, card ->
+        ui.text(row.optString("title"), NativeFontRole.ROW, card); ui.text(row.optString("snippet"), parent = card)
+        ui.button(MoteI18n.text("查看原文"), parent = card) { evidence(row.getString("ref")) }
     }
     private fun archive() {
         val api = client
@@ -99,11 +119,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
         if (query.isNotBlank()) {
             // Search is delegated to the server's evidence reader, with no local intent classifier.
-            val path = "/api/context/search?" + params.filterNot { it.startsWith("source=") }.joinToString("&") + "&query=" + enc(query)
-            paged(path, list) { row, card ->
-                ui.text(row.optString("title"), NativeFontRole.ROW, card); ui.text(row.optString("snippet"), parent = card)
-                ui.button(MoteI18n.text("查看原文"), parent = card) { evidence(row.getString("ref")) }
-            }
+            searchResults("/api/context/search?" + params.filterNot { it.startsWith("source=") }.joinToString("&") + "&query=" + enc(query), list)
         } else paged("/api/capture-browser?" + params.joinToString("&"), list) { row, card ->
             ui.text(row.optString("appName"), NativeFontRole.ROW, card); ui.text(row.optString("capturedAt"), NativeFontRole.SUPPORT, card)
             ui.text(row.optString("textPreview"), parent = card)

@@ -116,6 +116,12 @@ open class RecordEditorActivity : MoteActivity() {
             attachments = draft.getJSONArray("attachments"); origin = draft.getJSONObject("origin"); originPresentation = draft.optJSONObject("originPresentation"); field.setText(draft.getString("text")); description.setText(draft.optString("description")); ready = true; enabled(!attachmentTask.busy); renderAttachments()
             if (state == null) importIntent(intent)
             if (cameraResultReady) stageCamera() else if (state == null) recoverPendingMedia()
+            // Home and launcher quick records add media to the same draft; saving remains an explicit tap.
+            if (state == null && !attachmentTask.busy) when (intent.getStringExtra("startMedia")) {
+                "camera" -> if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera() else requestPermissions(arrayOf(Manifest.permission.CAMERA), 21)
+                "audio" -> if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecording() else requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 22)
+                else -> Unit
+            }
         }.onFailure { status.text = it.message; enabled(false) } }
     }
     private fun enabled(value: Boolean) { field.isEnabled = value; description.isEnabled = value; save.isEnabled = value && canSubmit(); renderDraftState() }
@@ -321,7 +327,7 @@ open class RecordEditorActivity : MoteActivity() {
 class ConversationRecordEditorActivity : RecordEditorActivity()
 /** This session's receipt points to a real local row; it never claims a Central acknowledgement. */
 internal object NativeRecordReceipt { @Volatile var recordId: String? = null; @Volatile var fromFirstUse: Boolean = false }
-internal fun android.app.Activity.openRecordEditor(text: String? = null, conversationId: String? = null, turnId: String? = null, question: String? = null, citations: List<String>? = null, quoteOrigin: String? = null) {
+internal fun android.app.Activity.openRecordEditor(text: String? = null, conversationId: String? = null, turnId: String? = null, question: String? = null, citations: List<String>? = null, quoteOrigin: String? = null, media: String? = null) {
     val editor = if (text == null) RecordEditorActivity::class.java else ConversationRecordEditorActivity::class.java
-    startActivity(Intent(this, editor).apply { putExtra("firstUse",(this@openRecordEditor as? MainActivity)?.isFirstUseRecordEntry() ?: this@openRecordEditor.intent.getBooleanExtra("firstUse",false)); text?.let { putExtra("recordText", it) }; conversationId?.let { putExtra("conversationId", it) }; turnId?.let { putExtra("turnId", it) }; question?.let { putExtra("quoteQuestion", it) }; citations?.let { putStringArrayListExtra("quoteCitations", ArrayList(it)) }; quoteOrigin?.let { putExtra("quoteOrigin",it) } })
+    startActivity(Intent(this, editor).apply { putExtra("firstUse",(this@openRecordEditor as? MainActivity)?.isFirstUseRecordEntry() ?: this@openRecordEditor.intent.getBooleanExtra("firstUse",false)); text?.let { putExtra("recordText", it) }; conversationId?.let { putExtra("conversationId", it) }; turnId?.let { putExtra("turnId", it) }; question?.let { putExtra("quoteQuestion", it) }; citations?.let { putStringArrayListExtra("quoteCitations", ArrayList(it)) }; quoteOrigin?.let { putExtra("quoteOrigin",it) }; media?.let { putExtra("startMedia", it) } })
 }

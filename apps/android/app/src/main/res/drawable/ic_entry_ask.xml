@@ -1,0 +1,8 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="@color/mote_accent" android:pathData="M24,4a20,20 0,1 1,0 40a20,20 0,1 1,0 -40z" />
+    <group android:translateX="12" android:translateY="12">
+        <path android:fillColor="@android:color/transparent" android:strokeColor="@color/mote_on_accent" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M7,3h10a4,4 0,0 1,4 4v7a4,4 0,0 1,-4 4h-5l-5,4v-4a4,4 0,0 1,-4 -4V7a4,4 0,0 1,4 -4z" />
+        <path android:fillColor="@android:color/transparent" android:strokeColor="@color/mote_on_accent" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M7,8h10" />
+        <path android:fillColor="@android:color/transparent" android:strokeColor="@color/mote_on_accent" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M7,12h7" />
+    </group>
+</vector>

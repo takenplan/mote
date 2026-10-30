@@ -10090,5 +10090,18 @@ export const french: Readonly<Record<string, string>> = {
   "使用 {0}。有足够新增资料且达到周期时生成。": "Utilise {0}. La génération démarre lorsque les nouvelles données sont suffisantes et que l’intervalle est écoulé.",
   "当前显示本机副本；中央接收仍待确认。正文最多预览 100000 个字符。": "La copie locale est affichée ; la réception par Central reste à confirmer. L’aperçu affiche jusqu’à 100000 caractères.",
   "一次最多选择 4,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Sélectionnez jusqu’à 4 000 fichiers à la fois. Pour des collections plus volumineuses, utilisez une archive ZIP ou importez en plusieurs lots.",
-  "当前默认": "Valeur par défaut actuelle"
+  "当前默认": "Valeur par défaut actuelle",
+  "屏幕采集已暂停": "Capture d'écran suspendue",
+  "其他来源照常采集": "Les autres sources continuent la collecte",
+  "文件夹照常同步": "Les dossiers continuent de se synchroniser",
+  "采集已中断": "Collecte interrompue",
+  "恢复采集": "Reprendre",
+  "处理": "Résoudre",
+  "屏幕": "Écran",
+  "媒体": "Médias",
+  "{0} 个文件夹": "Dossiers : {0}",
+  "{0} 起": "Depuis {0}",
+  "等你补充": "À compléter",
+  "暂停全部采集": "Suspendre toute la collecte",
+  "暂停屏幕采集": "Suspendre la capture d'écran"
 };

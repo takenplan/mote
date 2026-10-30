@@ -25,6 +25,10 @@
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity android:configChanges="uiMode" android:name=".StartUsingActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".CaptureStatusActivity" android:exported="false" />
+        <!-- Launcher shortcuts arrive with a cleared task; this entry owns its own task so the app's back stack is kept. -->
+        <activity android:name=".QuickEntryActivity" android:exported="false" android:taskAffinity="" android:excludeFromRecents="true"
+            android:noHistory="true" android:theme="@android:style/Theme.NoDisplay" />
         <activity android:configChanges="uiMode" android:name=".RecordEditorActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.SEND" /><category android:name="android.intent.category.DEFAULT" /><data android:mimeType="*/*" /></intent-filter>
             <intent-filter><action android:name="android.intent.action.SEND_MULTIPLE" /><category android:name="android.intent.category.DEFAULT" /><data android:mimeType="*/*" /></intent-filter>
@@ -67,6 +71,15 @@
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service" />
         </service>
         <receiver android:name=".StopReceiver" android:exported="false" />
+        <receiver android:name=".PauseScreenReceiver" android:exported="false" />
+        <service android:name=".ScreenCaptureTileService" android:exported="true" android:label="@string/tile_screen_capture"
+            android:icon="@drawable/ic_tile_screen" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+        </service>
+        <receiver android:name=".QuickEntryWidget" android:exported="true" android:label="@string/widget_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_entries" />
+        </receiver>
         <receiver android:name=".AppUpdateResultReceiver" android:exported="false" />
     </application>
 </manifest>

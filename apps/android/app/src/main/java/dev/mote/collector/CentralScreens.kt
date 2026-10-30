@@ -73,7 +73,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             "files" -> ui.requestedFileId()?.let { id ->
                 if (ui.requestedFileOriginMatches()) library.openFile(id) else ui.text(MoteI18n.text("访问凭据已失效，请重新连接。"))
             } ?: library.show(page)
-            "archive", "timeline", "materials", "coding", "memories", "insights", "sources" -> library.show(page)
+            "archive", "timeline", "materials", "coding", "memories", "insights", "sources", MoteNavigation.SEARCH -> library.show(page)
             else -> admin.show(page)
         }
     }
@@ -911,7 +911,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         fun encode(value: String): String = java.net.URLEncoder.encode(value, "UTF-8")
         fun next(value: JSONObject): String? = if (value.isNull("nextCursor") || !value.has("nextCursor")) null else value.opt("nextCursor").toString()
         val pages = listOf(
-            "overview" to "中央工作台", "archive" to "中央资料库", "ask" to "问一问", "activity" to "活动", "notes" to "随手记",
+            "overview" to "中央工作台", "archive" to "中央资料库", MoteNavigation.SEARCH to "搜索资料", "ask" to "问一问", "activity" to "活动", "notes" to "随手记",
             "materials" to "正式资料", "coding" to "Coding 会话同步状态", "timeline" to "片段", "files" to "文件与录音",
             "memories" to "记忆", "insights" to "洞察", "actions" to "行动", "agentView" to "Agent 视角",
             "sources" to "来源", "devices" to "设备", "connections" to "对外授权", "lark" to "飞书",
