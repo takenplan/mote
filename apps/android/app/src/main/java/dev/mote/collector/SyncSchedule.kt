@@ -9,20 +9,28 @@ import java.util.concurrent.TimeUnit
 /** One scheduling gate for screenshots, notes, source revisions and device heartbeats. */
 object SyncSchedule {
     private data class Request(val context: Context, val intent: ScheduleIntent)
-    private val dispatcher = CoalescingDispatcher<Request>(Executors.newSingleThreadExecutor(),
-        merge = { old, next -> next.copy(intent = old.intent.merge(next.intent)) }, action = { request ->
+    private val executor = Executors.newSingleThreadExecutor()
+    private val dispatcher = CoalescingDispatcher<Request>(executor,
+        merge = { old, next -> next.copy(intent = old.intent.merge(next.intent)) }, action = ::dispatch)
+    private fun dispatch(request: Request) {
             val app = request.context
             runCatching {
                 val ran = ConnectionGuard.sync {
-                    val current = Settings(app).read()
-                    if (stamp(current) == request.intent.stamp) scheduleNow(app, current, request.intent.explicit)
+                    scheduleNow(app, request.intent.stamp, request.intent.explicit)
                 }
                 if (ran == null && request.intent.explicit) reportBusy(app)
-            }.onFailure {
-                SupportEvents.record(app, EventStage.UPLOAD, EventCode.SCHEDULER)
-                Settings(app).syncStatus("error", MoteI18n.text("同步调度暂不可用，记录保留在本机，请稍后重试"))
-            }
-        })
+            }.onFailure { error -> handleDispatchFailure(app, error) }
+    }
+    internal fun handleDispatchFailure(context: Context, error: Throwable) {
+        // The rejection was recorded before SettingsChangedFailure was thrown.
+        // Repeating it here can resurrect an older notice after a later request succeeds.
+        if (error is SettingsChangedFailure) return
+        SupportEvents.record(context, EventStage.UPLOAD, EventCode.SCHEDULER)
+        Settings(context).syncStatus("error", MoteI18n.text("同步调度暂不可用，记录保留在本机，请稍后重试"))
+    }
+    internal fun reportChanged(context: Context) {
+        Settings(context).syncRequestRejected(true)
+    }
     internal fun reportBusy(context: Context) {
         Settings(context).syncStatus("waiting", MoteI18n.text("正在应用设置，请完成后重试本次扫描或立即同步"))
     }
@@ -61,14 +69,21 @@ object SyncSchedule {
     }
 
     fun schedule(context: Context, config: CollectorConfig, explicit: Boolean = false) {
+        val requestedStamp = stamp(config)
         if (Looper.myLooper() == Looper.getMainLooper()) {
             val app = context.applicationContext
             // Pending counts can scan a large queue or wait for storage recovery.
             // Service ticks and UI actions must never perform that work on the main looper.
-            dispatcher.submit(Request(app, ScheduleIntent(stamp(config), explicit)))
+            val request = Request(app, ScheduleIntent(requestedStamp, explicit))
+            if (explicit) executor.execute { dispatch(request) } else dispatcher.submit(request)
             return
         }
-        scheduleNow(context, config, explicit)
+        scheduleNow(context, requestedStamp, explicit)
+    }
+    /** A completed scan must stay complete if sending is paused before its derived upload. */
+    internal fun scheduleAfterSourceScan(context: Context, config: CollectorConfig, explicit: Boolean) {
+        check(Looper.myLooper() != Looper.getMainLooper())
+        scheduleNow(context, stamp(config), explicit, afterScan = true)
     }
     fun invalidate() { synchronized(this) { registeredStamp = null }; HeartbeatWorker.invalidate() }
     internal fun continueUpload(context: Context, config: CollectorConfig, explicit: Boolean) {
@@ -94,8 +109,14 @@ object SyncSchedule {
         manager.enqueueUniqueWork("mote-upload", policy, request).result.get()
     }
     private var registeredStamp: String? = null
-    @Synchronized private fun scheduleNow(context: Context, config: CollectorConfig, explicit: Boolean) {
-        val manager = WorkManager.getInstance(context); val settings = Settings(context)
+    @Synchronized private fun scheduleNow(context: Context, requestedStamp: String, explicit: Boolean, afterScan: Boolean = false) {
+        val settings = Settings(context); val config = settings.read()
+        if (stamp(config) != requestedStamp || (explicit && (config.syncPaused || !config.hasSyncConnection()))) {
+            if (explicit && !afterScan) { reportChanged(context); throw SettingsChangedFailure() }
+            if (explicit && afterScan && !config.syncPaused && config.hasSyncConnection()) reportChanged(context)
+            return
+        }
+        val manager = WorkManager.getInstance(context)
         if (config.syncPaused) {
             HeartbeatWorker.configure(context, config)
             listOf("mote-upload", "mote-upload-timer", "mote-upload-recovery", "mote-source-upload").forEach(manager::cancelUniqueWork)
@@ -133,6 +154,7 @@ object SyncSchedule {
         if (wait == 0L) {
             manager.cancelUniqueWork("mote-upload-timer")
             enqueueImmediate(context, request, replace = explicit)
+            if (explicit) settings.syncRequestRejected(false)
         } else {
             if (settings.syncState() != "uploading") settings.syncStatus("waiting", MoteI18n.text("等待约定同步时间 · 系统省电可能推迟后台运行"))
             manager.enqueueUniqueWork("mote-upload-timer", ExistingWorkPolicy.KEEP, request)

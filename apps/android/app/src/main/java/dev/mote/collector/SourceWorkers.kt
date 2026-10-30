@@ -222,7 +222,7 @@ object SourceWork {
             .setInputData(workDataOf("manual" to true, "syncExplicit" to explicit, "sourceId" to id)).build()
         WorkManager.getInstance(context).enqueueUniqueWork("mote-source-scan", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
-    fun upload(context: Context, explicit: Boolean = false) = UploadWorker.schedule(context, Settings(context).read(), explicit)
+    fun upload(context: Context, explicit: Boolean = false) = SyncSchedule.scheduleAfterSourceScan(context, Settings(context).read(), explicit)
     internal fun enqueueUpload(context: Context, config: CollectorConfig, explicit: Boolean, continuation: Boolean = false, delaySeconds: Long = 0) {
         if (context.localSources().sources().none { it.enabled }) return
         val request = OneTimeWorkRequestBuilder<SourceUploadWorker>().setInitialDelay(delaySeconds, TimeUnit.SECONDS).setConstraints(SyncSchedule.constraints(config, explicit))

@@ -11,6 +11,9 @@ import org.json.JSONObject
 class SyncQueueActivity : MoteActivity() {
     private val task by lazy { UiTask(this) }
     private val actionTask by lazy { UiTask(this) }
+    private val statusTextTask by lazy { UiTask(this) }
+    private var statusTranslations: Map<String, Set<String>>? = null
+    private var statusTranslationFailed = false
     private lateinit var sendStatus: TextView
     private lateinit var sendCount: TextView
     private lateinit var pauseSend: Button
@@ -68,6 +71,10 @@ class SyncQueueActivity : MoteActivity() {
         historyPanel = UploadHistoryPanel(this, historyBody, state)
         SecondaryUi.row(body, MoteI18n.text("同步与恢复")) { startActivity(Intent(this, SyncRecoveryActivity::class.java)) }
         refreshSendState(LocalStateRepository.get(this).state.value)
+        statusTextTask.start(MoteI18n.text("正在读取本机同步状态…"), {}, { MoteI18n.translations(SyncReadiness.obsoleteMessages) }) { outcome ->
+            statusTranslations = outcome.getOrNull(); statusTranslationFailed = outcome.isFailure
+            refreshSendState(LocalStateRepository.get(this).state.value)
+        }
         MoteUi.styleTree(body)
         updateTabs()
         task.start(MoteI18n.text("正在读取来源…"), { summary.text = it }, { localSources().sources() }) { result ->
@@ -88,8 +95,15 @@ class SyncQueueActivity : MoteActivity() {
     private fun refreshSendState(state: LocalStateSnapshot) {
         if (!::sendStatus.isInitialized || !::pauseSend.isInitialized) return
         val settings = Settings(this); val config = settings.read()
-        if (!actionTask.busy) sendStatus.text = SyncSchedule.waitingReason(this, config) ?: settings.uploadStatus()
-        sendCount.text = state.active?.let { MoteI18n.text("本机保留 {0} 条 · 待发 {1} 条", it.records, it.pending) } ?: state.imageLabel()
+        if (!actionTask.busy) {
+            val status = settings.storedSyncStatus()
+            val visible = SyncReadiness.visible(config, status, SyncSchedule.waitingReason(this, config), state.active, state.sourceIssues, state.pending,
+                inventoryUnavailable = state.error != null, sourceUnavailable = state.sourceError, labelsReady = statusTranslations != null, labelsFailed = statusTranslationFailed) { source, value ->
+                source == value || statusTranslations?.get(source)?.contains(value) == true
+            }
+            sendStatus.text = SyncReadiness.text(visible) + if (settings.syncRequestRejected()) "\n" + MoteI18n.text("配置已发生变化，请刷新后重试。") else ""
+        }
+        sendCount.text = state.active?.let { MoteI18n.text("本机保留 {0} 条 · 待发 {1} 条", it.records, state.pending ?: "—") } ?: state.imageLabel()
         sendingPaused = config.syncPaused
         pauseSend.text = MoteI18n.text(if (config.syncPaused) "恢复全部发送" else "暂停全部发送")
         pauseSend.isEnabled = !actionTask.busy
