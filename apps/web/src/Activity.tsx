@@ -14,6 +14,7 @@ import {CodingReceiptPanel} from './CodingReceiptPanel';
 import {Imports} from './Imports';
 import {MemoryDetailPage} from './Memories';
 import {ActivityMemoryResults} from './ActivityMemoryResults';
+import {confirmNavigation} from './unsaved';
 
 const activityKinds:Record<string,{label:string;symbol:string}>={import:{label:'资料导入',symbol:'⇣'},memory:{label:'记忆整理',symbol:'◈'},insight:{label:'回顾',symbol:'✧'},query:{label:'回答问题',symbol:'↗'}};
 type Section='progress'|'evidence'|'branches'|'technical';
@@ -80,7 +81,7 @@ function WorkDetail({api,id,onBack,onNavigate,onOpen}:{api:Api;id:string;onBack:
    <details className="activity-section activity-technical" data-activity-section="technical" open={ui.sections.technical} onToggle={event=>toggle('technical',event.currentTarget.open)}><summary>{moteText('运行信息')}<ChevronDown size={13}/></summary><p>{moteText('技术执行记录、尝试次数与依赖用于排查问题。')}</p><dl><dt>{moteText('执行记录')}</dt><dd>{work.technical.operationIds.map(operationId=><div key={operationId}><code>{operationId}</code></div>)}</dd><dt>{moteText('执行状态')}</dt><dd><WorkStateBadge state={work.state}/></dd>{(work.technical.runId??work.evidence.runId)&&<><dt>{moteText('运行编号')}</dt><dd><code>{work.technical.runId??work.evidence.runId}</code></dd></>}</dl><div className="processing-actions"><button className="button" onClick={()=>go('processing')}>{moteText('技术执行记录')}</button><button className="text-button" onClick={inspector}>{moteText('Agent 读取轨迹')}</button><button className="text-button" onClick={relatedAction}>{moteText('打开相关资料与操作')}<ArrowRight size={14}/></button></div></details>
   </>}
   </div>
-  {relatedOpen&&importId&&!memoryOpen&&<section className="activity-related-import"><button className="back-link" onClick={()=>{setRelated(undefined);refresh();}}><ArrowLeft size={14}/>{moteText('返回活动详情')}</button><Imports api={api} initialJobId={importId} onOpen={open} onMemories={()=>go('memories')} onSettings={()=>go('settings')} onChanged={refresh}/></section>}
+  {relatedOpen&&importId&&!memoryOpen&&<section className="activity-related-import"><button className="back-link" onClick={()=>{if(confirmNavigation()){setRelated(undefined);refresh();}}}><ArrowLeft size={14}/>{moteText('返回活动详情')}</button><Imports api={api} initialJobId={importId} onOpen={open} onMemories={()=>go('memories')} onSettings={()=>go('settings')} onChanged={refresh}/></section>}
   {memoryOpen&&<MemoryDetailPage api={api} id={memoryOpen} isolatedSelection onOpen={open} onBack={()=>{const token=window.history.state?.moteActivityMemory;if(typeof token==='string'&&ui.memoryEntries.has(token))window.history.back();else{setRelated(undefined);setMemoryRevision(value=>value+1);refresh();}}}/>}
  </div>;
 }

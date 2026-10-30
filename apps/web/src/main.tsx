@@ -40,7 +40,8 @@ type Capture,
 type Connection,
 type Device,
 type Range,
-type Status
+type Status,
+type Api
 } from "./api";
 import { changeEvidenceRoute,readEvidenceRoute } from './evidence-route';
 import { FeaturePage } from './features/runtime';
@@ -80,7 +81,8 @@ import './imports-final.css';
 import {QuickNoteDialog} from './QuickNoteDialog';
 import {QuickNoteContext} from './quick-note-context';
 import {enterGuide,guideVisit} from './feature-guide-state';
-import { confirmNavigation } from './unsaved';
+import { confirmNavigation,hasUnsavedChanges } from './unsaved';
+import {ImportNavigationContext,clearImportReturn,importOrigin,importOriginOpener,markImportReturn,refreshImportOrigin,rememberImportOrigin,type ImportOrigin} from './import-navigation';
 
 
 installGlobalErrorLogging(window);
@@ -118,23 +120,42 @@ function App() {
   const settingsContext = isSettingsContext(page);
   const [archiveTab, updateArchiveTab] = useState<ArchiveTab>(initialRoute.current.collection);
   const archiveTabRef=useRef(archiveTab); archiveTabRef.current=archiveTab;
-  const currentHash=useRef(location.hash);
+  const currentHash=useRef(location.hash),currentHistoryState=useRef<unknown>(history.state);
+  const apiRef=useRef<Api|null>(null),preparedImport=useRef<{api:Api;origin:ImportOrigin}|undefined>(undefined),pendingImportReturn=useRef<{api:Api;origin:ImportOrigin}|undefined>(undefined),activeImportParent=useRef<{api:Api;origin:ImportOrigin}|undefined>(undefined),lastScroll=useRef(window.scrollY),allowedImportHash=useRef<string|undefined>(undefined);
   const pageRef = useRef(page); pageRef.current = page;
   useEffect(() => {
     const navigate = () => {
       const next = readWorkspaceRoute(location.hash,readPage,collectionIds());
-      if (location.hash !== currentHash.current && !confirmNavigation()) {
-        history.replaceState(null, '', currentHash.current); return;
+      const allowed=allowedImportHash.current===location.hash;allowedImportHash.current=undefined;
+      if (location.hash !== currentHash.current && !allowed && !confirmNavigation()) {
+        const owner=apiRef.current,parent=owner&&readPage(currentHash.current)==='imports'?importOrigin(owner,history.state,'moteImportParent'):undefined;
+        const before=currentHistoryState.current as {moteEvidenceParent?:unknown;moteEvidenceReturn?:unknown}|null,after=history.state as {moteEvidenceParent?:unknown;moteEvidenceReturn?:unknown}|null;
+        const evidenceBack=readEvidenceRoute(currentHash.current)&&(before?.moteEvidenceParent===location.hash||before?.moteEvidenceReturn===location.hash);
+        const evidenceForward=readEvidenceRoute(location.hash)&&(after?.moteEvidenceParent===currentHash.current||after?.moteEvidenceReturn===currentHash.current);
+        if(owner)clearImportReturn(owner);pendingImportReturn.current=undefined;preparedImport.current=undefined;
+        if(parent&&parent.hash===location.hash||evidenceBack){allowedImportHash.current=currentHash.current;history.forward();}
+        else if(evidenceForward){allowedImportHash.current=currentHash.current;history.back();}
+        else history.replaceState(currentHistoryState.current, '', currentHash.current);
+        return;
       }
+      const prepared=preparedImport.current;
+      if(next.page==='imports'&&readPage(currentHash.current)!=='imports'&&prepared?.api===apiRef.current&&prepared.origin.hash===currentHash.current)history.replaceState({...history.state,moteImportOrigin:prepared.origin.token},'',location.href);
+      preparedImport.current=undefined;
       currentHash.current=location.hash;
+      currentHistoryState.current=history.state;
+      const owner=apiRef.current,parent=owner&&importOrigin(owner,history.state,'moteImportParent');activeImportParent.current=owner&&parent?{api:owner,origin:parent}:undefined;
       setRouteHash(location.hash);
       setClientLogin(loginRequestId());
       setPage(next.page); updateArchiveTab(next.collection);
       updateEvidenceId(readEvidenceRoute(location.hash));
     };
-    const remember=()=>{currentHash.current=location.hash;setRouteHash(location.hash);};
-    window.addEventListener('hashchange', navigate);window.addEventListener('mote:workspace-state',remember);
-    return () => {window.removeEventListener('hashchange', navigate);window.removeEventListener('mote:workspace-state',remember);};
+    const pop=()=>{const owner=apiRef.current,from=readPage(currentHash.current),next=readPage(location.hash);
+      if(owner&&from!=='imports'&&next==='imports'){const origin=importOrigin(owner,history.state,'moteImportOrigin'),active=activeImportParent.current;if(origin&&active?.api===owner&&active.origin===origin&&!hasUnsavedChanges())refreshImportOrigin(owner,origin,currentHash.current,lastScroll.current);}
+      const origin=owner&&from==='imports'?importOrigin(owner,history.state,'moteImportParent'):undefined;if(owner&&origin&&location.hash===origin.hash){pendingImportReturn.current={api:owner,origin};markImportReturn(owner,origin);}};
+    const remember=()=>{currentHash.current=location.hash;currentHistoryState.current=history.state;setRouteHash(location.hash);};
+    const scroll=()=>{lastScroll.current=window.scrollY;};
+    window.addEventListener('hashchange', navigate);window.addEventListener('popstate',pop);window.addEventListener('mote:workspace-state',remember);window.addEventListener('scroll',scroll,{passive:true});
+    return () => {window.removeEventListener('hashchange', navigate);window.removeEventListener('popstate',pop);window.removeEventListener('mote:workspace-state',remember);window.removeEventListener('scroll',scroll);};
   }, []);
   const [period, setPeriod] = useState<Period>(()=>readPeriod(connection));
   const [status, setStatus] = useState<Status | null>(null);
@@ -154,11 +175,13 @@ function App() {
   const setEvidenceId = useCallback((id:string|null) => {
     updateEvidenceId(changeEvidenceRoute(window,id));
     currentHash.current=location.hash;
+    currentHistoryState.current=history.state;
     setRouteHash(location.hash);
   }, []);
   const openNestedEvidence = useCallback((id:string) => {
     updateEvidenceId(changeEvidenceRoute(window,id,{returnToCurrent:true}));
     currentHash.current=location.hash;
+    currentHistoryState.current=history.state;
     setRouteHash(location.hash);
   }, []);
   const [notice, setNotice] = useState("");
@@ -224,6 +247,18 @@ function App() {
     },
     [connection, unauthorized],
   );
+  apiRef.current=api;
+  useEffect(()=>{
+    if(!api)return;
+    const capture=(event:MouseEvent)=>{
+      if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||!(event.target instanceof Element))return;
+      const anchor=event.target.closest<HTMLAnchorElement>('a[href]');if(!anchor||anchor.target&&anchor.target!=='_self'||anchor.hasAttribute('download'))return;
+      const target=new URL(anchor.href,location.href);if(target.origin!==location.origin||target.pathname!==location.pathname||readPage(target.hash)!=='imports'||readPage(currentHash.current)==='imports')return;
+      const route=readWorkspaceRoute(currentHash.current,readPage,collectionIds());
+      preparedImport.current={api,origin:rememberImportOrigin(api,currentHash.current,window.scrollY,anchor,route.page==='archive'&&['materials','records','memories'].includes(route.collection)&&!hasUnsavedChanges())};
+    };
+    document.addEventListener('click',capture,true);return()=>document.removeEventListener('click',capture,true);
+  },[api]);
   useEffect(()=>{if(api)associateChatScope(api,connection?.viewScope);},[api,connection?.viewScope]);
   useEffect(() => {
     if (!api || verified) return;
@@ -289,16 +324,39 @@ function App() {
   }, [api, refresh]);
   useEffect(() => {
     if (showConnect||readEvidenceRoute(location.hash)) return;
+    if(pendingImportReturn.current?.api===apiRef.current&&pendingImportReturn.current?.origin.hash===location.hash)return;
     const heading = Array.from(document.querySelectorAll<HTMLElement>(".content h1")).find(element => element.getClientRects().length);
     if (heading) { heading.tabIndex = -1; heading.focus({preventScroll: true}); }
   }, [page, showConnect]);
+  useEffect(()=>{
+    const pending=pendingImportReturn.current;if(!pending||pending.api!==api)return;
+    if(location.hash!==pending.origin.hash){clearImportReturn(api,pending.origin);pendingImportReturn.current=undefined;return;}
+    let done=false;const finish=()=>{
+      if(done||pendingImportReturn.current!==pending||location.hash!==pending.origin.hash)return;
+      const opener=importOriginOpener(pending.origin),heading=document.querySelector<HTMLElement>('.content h1'),content=document.querySelector('.content');if(!heading)return;
+      const view=readPage(pending.origin.hash)==='archive'?new URLSearchParams(pending.origin.hash.split('?')[1]??'').get('view')??'materials':undefined;
+      const expected=view==='materials'?'.library-materials':view==='records'?'.library-time-final':view==='memories'?'.memories-page':readPage(pending.origin.hash)==='sourceCatalog'?'.discovery-source-catalog':undefined;
+      const region=expected?content?.querySelector<HTMLElement>(expected):undefined;if(expected&&region?.dataset.importReturnReady!=='true')return;
+      if(view==='records'&&region?.querySelector('.library-time-group[open][data-import-return-ready="false"]'))return;
+      const settled=Boolean(region?.dataset.importReturnReady==='true'||content?.querySelector('[role="alert"]'));
+      if(pending.origin.opener&&!opener&&!settled)return;
+      if(pending.origin.scroll>document.documentElement.scrollHeight-window.innerHeight&&!settled)return;
+      done=true;clearImportReturn(api,pending.origin);pendingImportReturn.current=undefined;(opener??heading).focus({preventScroll:true});window.scrollTo({top:pending.origin.scroll});observer.disconnect();
+    };
+    const observer=new MutationObserver(()=>finish());observer.observe(document.querySelector('.content')??document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['data-import-return-ready','aria-busy']});
+    const frame=window.requestAnimationFrame(()=>finish());return()=>{observer.disconnect();window.cancelAnimationFrame(frame);};
+  },[api,page,routeHash]);
   function onPage(next: Page) {
     const target=canonicalDestination(next,archiveTabRef.current,collectionIds());
     if(!webFeatures.page(target.page)){setNotice(moteText('当前服务未提供此入口'));return;}
+    const retainImportOrigin=page==='archive'&&['materials','records','memories'].includes(archiveTabRef.current)&&!hasUnsavedChanges();
     if ((target.page !== page || (target.page==='archive'&&target.collection!==archiveTabRef.current)) && !confirmNavigation()) return;
     if(target.page==='featureGuide'&&page!=='featureGuide'&&api)enterGuide(api,location.hash);
-    history.pushState(null, '', workspaceHash(routes[target.page],target.page==='archive'?target.collection:undefined));
+    const origin=target.page==='imports'&&page!=='imports'&&api?rememberImportOrigin(api,currentHash.current,window.scrollY,document.activeElement,retainImportOrigin):undefined;
+    history.pushState(origin?{moteImportOrigin:origin.token}:null, '', workspaceHash(routes[target.page],target.page==='archive'?target.collection:undefined));
+    activeImportParent.current=undefined;
     currentHash.current=location.hash;
+    currentHistoryState.current=history.state;
     setRouteHash(location.hash);
     archiveTabRef.current=target.collection; updateArchiveTab(target.collection);
     updateEvidenceId(null);
@@ -310,7 +368,9 @@ function App() {
     archiveTabRef.current=next; updateArchiveTab(next);
     if(pageRef.current==='archive') {
       history.pushState(null,'',workspaceHash(routes.archive,next,location.hash));
+      activeImportParent.current=undefined;
       currentHash.current=location.hash;
+      currentHistoryState.current=history.state;
       setRouteHash(location.hash);
     }
   }
@@ -335,6 +395,9 @@ function App() {
     if (connection) setConnection(persistSession(connection, lifetime));
   }
   const notesAvailable=Boolean(webFeatures.page('notes'));
+  const returningImport=api&&page==='imports'?importOrigin(api,history.state,'moteImportOrigin'):undefined;
+  const importReturnLabel=returningImport?readPage(returningImport.hash)==='archive'&&(!new URLSearchParams(returningImport.hash.split('?')[1]??'').get('view')||new URLSearchParams(returningImport.hash.split('?')[1]??'').get('view')==='materials')?'我的资料':'返回':'资料库';
+  const importNavigation={label:importReturnLabel,leave:()=>{if(!confirmNavigation())return;if(returningImport){allowedImportHash.current=returningImport.hash;history.back();}else{allowedImportHash.current='#/library?view=materials';window.location.hash=allowedImportHash.current;}}};
   const pageLabel=page==='ask'&&new URLSearchParams(routeHash.split('?')[1]??'').has('question')?moteText('需要你补充'):pageLabels[page];
   useEffect(()=>{if(!notesAvailable)setQuickNoteApi(null);},[notesAvailable]);
   const openQuickNote=useCallback(()=>{if(!webFeatures.page('notes')){setNotice(moteText('当前服务未提供此入口'));return;}if(api&&verified)setQuickNoteApi(api);else setShowConnect(true);},[api,verified]);
@@ -368,7 +431,7 @@ function App() {
                     className="period-select"
                     aria-label={moteText("选择时间范围")}
                     value={period}
-                    onChange={(e) => setPeriod(savePeriod(connection,e.target.value))}
+                    onChange={(e) => {if(e.target.value!==period&&confirmNavigation())setPeriod(savePeriod(connection,e.target.value));}}
                   >
                     {Object.entries(periodNames).map(([key, label]) => (
                       <option key={key} value={key}>
@@ -449,7 +512,7 @@ function App() {
                 : api && (
                     <>
                       {!["notes","devices","connections","settings","sources","archive","memories","imports","insights","about"].includes(page) && !status && !error && <Spinner label={moteText("正在读取节点状态…")}/>}
-                      <FeaturePage page={page} props={{api,viewScope:connection.viewScope,status,devices,activity,recent,insights,onPage,onOpen:setEvidenceId,range,rangeSelectionKey:period,archiveTab,setArchiveTab,timelineRevision,refresh,disconnect,sessionLifetime,changeSessionLifetime}}/>
+                      <ImportNavigationContext.Provider value={page==='imports'?importNavigation:null}><FeaturePage page={page} props={{api,viewScope:connection.viewScope,status,devices,activity,recent,insights,onPage,onOpen:setEvidenceId,range,rangeSelectionKey:period,archiveTab,setArchiveTab,timelineRevision,refresh,disconnect,sessionLifetime,changeSessionLifetime}}/></ImportNavigationContext.Provider>
                     </>
                   )}
             </>

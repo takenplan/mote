@@ -6,7 +6,7 @@ import {importQueue,validateImportFiles,type ImportQueueEntry} from './import-qu
 import {readImportDrop} from './import-drop';
 import {ImportQueueRow,ImportQueueDetail} from './ImportQueueEntry';
 import { moteText } from '@mote/shared/i18n';
-import React,{useEffect,useLayoutEffect,useState,useRef,useSyncExternalStore} from 'react';
+import React,{useContext,useEffect,useLayoutEffect,useState,useRef,useSyncExternalStore} from 'react';
 import {Check,ChevronRight,FileArchive,FileText,FolderOpen,LoaderCircle,Plus,RefreshCw,Trash2,X} from 'lucide-react';
 import type {ArchivedFile,ImportJob,ImportStatus} from '@mote/shared';
 import {ApiError,type Api,type Capture,bytes,dateTime,errorMessage} from './api';
@@ -14,6 +14,8 @@ import {ArchivedFileButton} from './ArchivedFileButton';
 import {MemoryProgress,useMemoryJob} from './MemoryProgress';
 import {useResource} from './useResource';
 import {FileProcessingControls} from './FileProcessingControls';
+import {confirmNavigation,useUnsavedChanges} from './unsaved';
+import {ImportNavigationContext} from './import-navigation';
 
 const importFailure=(error:unknown)=>error instanceof ApiError?commonFailureMessage(error.code??'',error.status)||httpStatusMessage(error.status):errorMessage(error);
 export const importStatusLabels:Record<ImportStatus,string>={queued:moteText("原件已归档"),preparing:moteText("正在理解资料"),awaiting_confirmation:moteText("等待你确认"),importing:moteText("正在保存记录"),completed:moteText("记录已保存"),failed:moteText("需要重试"),cancelled:moteText("已取消"),needs_configuration:moteText("等待配置模型"),unsupported:moteText("原件已保留")};
@@ -25,6 +27,7 @@ const mediaStates:Record<string,string>={waiting:moteText('等待内容提取'),
 const memoryStates:Record<string,string>={waiting:moteText('等待记忆整理'),waiting_for_model:moteText('等待配置或处理条件'),paused:moteText('已暂停'),cancelled:moteText('已取消'),running:moteText('记忆整理中'),completed:moteText('记忆整理完成'),failed:moteText('记忆整理失败'),disabled:moteText('未启用自动记忆')};
 
 export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersion=0,initialJobId}:{refreshVersion?:number;api:Api;onOpen:(id:string)=>void;onMemories:()=>void;onSettings:()=>void;onChanged:()=>void;initialJobId?:string}){
+  const navigation=useContext(ImportNavigationContext);
   const queue=importQueue(api);
   const queueState=useSyncExternalStore(queue.subscribe,queue.getSnapshot,queue.getSnapshot);
   const queueVersion=useRef(queueState.completedVersion);
@@ -59,6 +62,8 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   const instructionValue=active&&instructionDrafts.owner===api&&Object.hasOwn(instructionDrafts.values,active.id)?instructionDrafts.values[active.id]:active?.instruction??'';
   const hostDiagnostics=active?importHostDiagnostics(active):[];
   const instructionsDirty=Boolean(active&&instructionValue!==active.instruction);
+  const anyInstructionDirty=instructionDrafts.owner===api&&Object.entries(instructionDrafts.values).some(([id,value])=>{const job=ownedItems.find(item=>item.id===id);return job?value!==job.instruction:true;});
+  useUnsavedChanges(Boolean(readingFiles||files.length||name||instruction||sourcePackId||imageProfileId||anyInstructionDirty));
   function editInstruction(id:string,value:string){const next={owner:api,values:{...(instructionDraftRef.current.owner===api?instructionDraftRef.current.values:{}),[id]:value}};instructionDraftRef.current=next;setInstructionDrafts(next);confirmGeneration.current++;setConfirmError(null);}
   function confirmImport(){if(!active||busy)return;const drafts=instructionDraftRef.current;if(drafts.owner===api&&Object.hasOwn(drafts.values,active.id)&&drafts.values[active.id]!==active.instruction)return;action('/api/imports/'+encodeURIComponent(active.id)+'/confirm',undefined,active.id);}
   const [actionErrors,setActionErrors]=useState<Record<string,string>>({});
@@ -114,6 +119,7 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   }
   function editEntry(entry:ImportQueueEntry){
     const draft=queue.draft(entry.id);if(!draft||draft.source.kind!=='files')return;
+    if((readingFiles||files.length||name||instruction||sourcePackId||imageProfileId)&&!confirmNavigation())return;
     fileRead.current?.abort();fileRead.current=null;setReadingFiles(false);
     queue.discard(entry.id);setFiles([]);setName(draft.name);setInstruction(draft.instruction);setSourcePackId(draft.sourcePackId);setImageProfileId(draft.imageProfileId??'');setCreating(true);setSelected('');setError('');
   }
@@ -143,8 +149,8 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   return <section className={"imports-page final-imports"+(creating?" import-creating":selected?" import-selected":"")} aria-busy={loading}>
     {original?.owner===api&&<ArchivedFileReader key={original.file.id} api={api} file={original.file} onBack={()=>{originalReturn.current=original.opener;setOriginal(null);}}/>}
     <div className="imports-surface" hidden={original?.owner===api}>
-    {(creating||selected)&&<button className="text-button import-list-back" aria-label={moteText('返回导入列表')} onClick={()=>{setCreating(false);setSelected('');}}>← {moteText('导入资料')}</button>}
-    <div className="page-heading split-heading"><div><div className="eyebrow">{moteText("让已有资料成为可用的上下文")}</div><h1>{moteText(creating?"添加资料":selected?"导入详情":"导入资料")}</h1><p>{moteText("上传后保留原件。解析结果明确可靠且无歧义时自动保存，否则先预览并确认。")}</p></div><button className="button" onClick={()=>{rememberList();setCreating(true);setSelected('');setError('');}}><Plus size={16}/>{moteText("新建导入")}</button></div>
+    {(creating||selected)?<button className="text-button import-list-back" aria-label={moteText('返回导入列表')} onClick={()=>{setCreating(false);setSelected('');}}>← {moteText('导入资料')}</button>:navigation&&<button className="text-button import-list-back" onClick={navigation.leave}>← {moteText(navigation.label)}</button>}
+    <div className="page-heading split-heading"><div><div className="eyebrow">{moteText("让已有资料成为可用的上下文")}</div><h1>{moteText(creating?"添加资料":selected?"导入详情":"导入资料")}</h1><p>{moteText("上传后保留原件。解析结果明确可靠且无歧义时自动保存，否则先预览并确认。")}</p></div><button className="button" onClick={()=>{rememberList();setCreating(true);setSelected('');setError('');}}><Plus size={16}/>{moteText("添加资料")}</button></div>
     {loadError&&<div className="error-banner" role="alert">{loadError}<button className="text-button" onClick={()=>setRevision(v=>v+1)}>{moteText("刷新状态")}</button></div>}
     {!creating&&!selected&&<nav className="import-status-tabs" aria-label={moteText("导入状态")}>{[['all',moteText("全部")],['attention',moteText("需处理")],['completed',moteText("已完成")]].map(([value,label])=><button key={value} aria-pressed={listFilter===value} onClick={()=>setListFilter(value)}>{label} {ownedItems.filter(job=>value==='all'||value==='completed'&&job.status==='completed'||value==='attention'&&needsAction(job)).length}</button>)}<button className="icon-button import-refresh" aria-label={moteText('刷新导入记录')} onClick={()=>setRevision(v=>v+1)}><RefreshCw size={15}/></button></nav>}
     <div className="workspace-layout">

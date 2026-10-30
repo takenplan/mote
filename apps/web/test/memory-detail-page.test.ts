@@ -6,6 +6,8 @@ import {JSDOM} from 'jsdom';
 import {configureLocale,getLocale} from '@mote/shared/i18n';
 import {MemoryDetailPage} from '../src/Memories';
 import {ApiError,type Api} from '../src/api';
+import {confirmNavigation} from '../src/unsaved';
+import {resources} from '../src/resource-cache';
 import {modelView} from './fixtures/model-settings';
 const at='2026-10-29T00:00:00.000Z',a='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',b='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const memory=(id:string)=>({id,title:'Generated Memory '+id[0],statement:'Complete generated original statement '+id[0],uncertainty:'Generated evidence only',status:'published',version:1,fingerprint:id[0].repeat(64),createdAt:at,evidence:[],evidenceIds:[],admission:{layer:'memory'}});
@@ -50,6 +52,34 @@ test('unmounting an exact Memory detail during committed deletion cannot close a
  await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:next,id:b,onOpen:()=>{},onBack:()=>nextBack++})));
  await act(async()=>resolve({externalErase:'acknowledged',physicalEraseVerified:false}));
  assert.equal(d.querySelector('.memory-detail-heading h2')?.textContent,'Generated Memory b');assert.equal(oldBack,0);assert.equal(nextBack,0);assert.equal(window.location.hash,'#/search?q=generated');
+});
+test('leaving a Memory detail aborts a pending download and a late response cannot create a download',async t=>{
+ const {root,d}=await fixture(t);let release!:(value:unknown)=>void,signal:AbortSignal|undefined,clicks=0;
+ const owner=api(path=>path==='/api/memories/'+a?memory(a):undefined);owner.raw=(_path,init)=>{signal=init?.signal??undefined;return new Promise(done=>release=done) as any;};
+ const original=d.defaultView!.HTMLAnchorElement.prototype.click;d.defaultView!.HTMLAnchorElement.prototype.click=function(){clicks++;};t.after(()=>{d.defaultView!.HTMLAnchorElement.prototype.click=original;});
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,onOpen:()=>{},onBack:()=>{}})));await click(d,'更多');await click(d,'下载文本');assert.ok(signal);assert.equal(signal!.aborted,false);
+ await act(async()=>root.render(React.createElement('div',null,'Generated import view')));assert.equal(signal!.aborted,true);await act(async()=>release({blob:async()=>new Blob(['generated'])}));assert.equal(clicks,0);assert.equal(d.body.textContent,'Generated import view');
+});
+test('an unsaved Memory correction is protected by the shared navigation confirmation',async t=>{
+ const {root,d}=await fixture(t),owner=api();let prompts=0;d.defaultView!.confirm=()=>{prompts++;return false;};
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,onOpen:()=>{},onBack:()=>{}})));await click(d,'更多');await click(d,'纠正这条记忆');const area=d.querySelector<HTMLTextAreaElement>('.memory-correction textarea')!;
+ await act(async()=>{area.focus();Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(area,'Generated unsaved correction');area.dispatchEvent(new d.defaultView!.Event('input',{bubbles:true}));area.dispatchEvent(new d.defaultView!.KeyboardEvent('keyup',{bubbles:true,key:'n'}));});
+ assert.equal(confirmNavigation(),false);assert.equal(prompts,1);assert.equal(area.value,'Generated unsaved correction');await click(d,'返回');assert.equal(prompts,2);assert.equal(d.querySelector<HTMLTextAreaElement>('.memory-correction textarea')?.value,'Generated unsaved correction');
+ d.defaultView!.confirm=()=>true;await click(d,'返回');assert.equal(d.querySelector('.memory-correction'),null);
+});
+test('an ordinary background job refresh does not hide a focused Memory correction',async t=>{
+ const {root,d}=await fixture(t);let hold=false,release!:(value:unknown)=>void;const owner=api(path=>path==='/api/memory-jobs'&&hold?new Promise(done=>release=done):undefined);
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,onOpen:()=>{},onBack:()=>{}})));await click(d,'历史与管理');await click(d,'更多');await click(d,'纠正这条记忆');const area=d.querySelector<HTMLTextAreaElement>('.memory-correction textarea')!;
+ await act(async()=>{area.focus();Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(area,'Focused correction');area.dispatchEvent(new d.defaultView!.Event('input',{bubbles:true}));area.dispatchEvent(new d.defaultView!.KeyboardEvent('keyup',{bubbles:true,key:'n'}));});
+ hold=true;await act(async()=>resources(owner).get('/api/memory-jobs').refresh());assert.ok(release);assert.equal(d.querySelector<HTMLElement>('.memories-page')!.style.visibility,'visible');assert.equal(d.activeElement,area);assert.equal(area.value,'Focused correction');
+ await act(async()=>release({items:[],nextCursor:null}));assert.equal(d.activeElement,area);assert.equal(area.value,'Focused correction');
+});
+test('unmount aborts a pending Memory correction and a late response cannot change the next view',async t=>{
+ const {root,d}=await fixture(t);let release!:(value:unknown)=>void,signal:AbortSignal|undefined;
+ const owner=api((path,init)=>{if(path.endsWith('/correct')){signal=init?.signal??undefined;return new Promise(done=>release=done);}return undefined;});
+ await act(async()=>root.render(React.createElement(MemoryDetailPage,{api:owner,id:a,onOpen:()=>{},onBack:()=>{}})));await click(d,'更多');await click(d,'纠正这条记忆');const area=d.querySelector<HTMLTextAreaElement>('.memory-correction textarea')!;
+ await act(async()=>{area.focus();Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(area,'Generated correction');area.dispatchEvent(new d.defaultView!.Event('input',{bubbles:true}));area.dispatchEvent(new d.defaultView!.KeyboardEvent('keyup',{bubbles:true,key:'n'}));});await click(d,'保存纠正');assert.ok(signal);assert.equal(signal!.aborted,false);assert.equal(d.querySelector<HTMLButtonElement>('.memory-detail-back')!.disabled,true);await click(d,'返回');assert.ok(d.querySelector('.memory-correction'),'same-page Back cannot dismiss a correction waiting for acknowledgement');
+ await act(async()=>root.render(React.createElement('div',null,'Generated import view')));assert.equal(signal!.aborted,true);await act(async()=>release(memory(b)));assert.equal(d.body.textContent,'Generated import view');assert.equal(window.location.hash,'#/search?q=generated');
 });
 test('successful detail deletion returns once and does not reinitialize the deleted initial ID',async t=>{
  const{root,d}=await fixture(t);let returned=0;const seen:{path:string;method:string}[]=[],owner=api((_path,init)=>init?.method==='DELETE'?{}:undefined,seen);

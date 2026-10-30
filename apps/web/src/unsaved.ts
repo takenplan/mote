@@ -1,6 +1,7 @@
 import {useEffect, useId} from 'react';
 import {moteText} from '@mote/shared/i18n';
 const drafts = new Set<string>();
+export function hasUnsavedChanges(){return drafts.size>0;}
 export function confirmNavigation() {
   return drafts.size === 0 || window.confirm(moteText('有未保存的修改。离开并丢弃修改？'));
 }

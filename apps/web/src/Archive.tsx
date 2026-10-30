@@ -53,7 +53,7 @@ export function Archive({ api, devices, range, rangeSelectionKey, activity, revi
         (position.opener?.isConnected?position.opener:listHeading.current)?.focus({preventScroll:true});
         if(window.scrollY!==position.scroll)window.scrollTo({top:position.scroll});
     }, [api,entry?.id,selected]);
-    const rememberSelection = useCallback((reference?:string)=>{const [route,queryText]=window.location.hash.split('?'),query=new URLSearchParams(queryText);if(reference)query.set('selected',reference);else query.delete('selected');window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));},[]);
+    const rememberSelection = useCallback((reference?:string)=>{const [route,queryText]=window.location.hash.split('?'),query=new URLSearchParams(queryText);if(reference)query.set('selected',reference);else query.delete('selected');window.history.replaceState(window.history.state,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));},[]);
     const clearSelection = useCallback(() => { setSelection(undefined); rememberSelection(); }, [rememberSelection]);
     const select = useCallback((ref: string) => { if(!confirmNavigation())return;returnPosition.current={owner:api,view:entry?.id??tab,scroll:window.scrollY,opener:document.activeElement as HTMLElement|null}; const parsed = parseEvidenceRef(ref),reference=parsed ? formatEvidenceRef(parsed.kind, parsed.id) : ref; setSelection({ owner: api, view: entry?.id ?? tab, reference });rememberSelection(reference);if(window.scrollY)window.scrollTo({top:0}); }, [api, entry?.id, tab,rememberSelection]);
     const visit=(id:string)=>{clearSelection();setTab(id);};
