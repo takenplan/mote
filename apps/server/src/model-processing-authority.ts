@@ -12,4 +12,6 @@ export type ModelProcessingAuthority={
  /** Called only at a host-controlled explicit retry/backfill boundary. The
   * returned ID is persisted, then revalidated by the host on every execution. */
  ownerIntent?:(captureId:string)=>string|undefined;
+ /** A read-only negative hint; successful work still requires full authority. */
+ deniedOriginal?:(captureId:string)=>boolean;
 };

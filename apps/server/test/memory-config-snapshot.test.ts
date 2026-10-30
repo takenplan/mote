@@ -28,11 +28,13 @@ for(const changed of [false,true])test(`Memory configuration ${changed?'blocks c
 });
 
 test('Memory recovery preserves configuration and completed checkpoints until explicit rebase',async t=>{
- const f=await fixture(t);let config=snapshot(),available=true,calls=0;
- const options={...f,batchCharacters:256,models:{model:()=>config.model,configured:()=>available,configuration:()=>config},phases:{query:async()=>{calls++;if(calls===1)available=false;return empty();}}};
+ const f=await fixture(t);let config=snapshot(),available=true,missing=false,calls=0;
+ const options={...f,batchCharacters:256,models:{model:()=>config.model,configured:()=>available,configuration:()=>{if(missing)throw Error('Generated missing profile');return config;}},phases:{query:async()=>{calls++;if(calls===1)available=false;return empty();}}};
  let pipeline=fixtureMemoryPipeline(options);const job=pipeline.create({evidenceIds:[f.id]});assert.equal((await pipeline.run(job.id)).completedBatches,1);await pipeline.close();
  config=snapshot('two',2);available=true;pipeline=fixtureMemoryPipeline(options);t.after(()=>pipeline.close());
  const blocked=await pipeline.run(job.id);assert.equal(blocked.status,'waiting_for_model');assert.equal(blocked.errorCode,'configuration_changed');assert.equal(calls,1);
+ assert.equal(pipeline.configurationStillChanged(job.id),true);missing=true;assert.equal(pipeline.configurationStillChanged(job.id),true,'a missing pinned profile is not a restored configuration');missing=false;
+ config=snapshot('one',3);assert.equal(pipeline.configurationStillChanged(job.id),false);config=snapshot('two',2);
  const done=await pipeline.retry(job.id);assert.equal(done.status,'completed');assert.equal(calls,3);assert.equal((done.batches[0] as any).configuration.fingerprint,'one');assert.equal((done.batches[1] as any).configuration.fingerprint,'two');
 });
 

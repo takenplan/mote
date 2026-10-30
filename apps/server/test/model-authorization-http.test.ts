@@ -97,6 +97,29 @@ test('historical audio batch confirmation authorizes only previewed originals ac
  assert.equal(f.node.files.chunks(later.id).length,0);assert.equal(f.node.modelAuthorization.view().state,'unapproved');
 });
 
+test('denied audio stays pending without repeatedly rebuilding materials, while explicit retry still processes it',async t=>{
+ const bodies:Buffer[]=[];
+ const service=createServer(async(req,res)=>{const chunks:Buffer[]=[];for await(const part of req)chunks.push(Buffer.from(part));bodies.push(Buffer.concat(chunks));res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text:'Generated transcription'}]}));});
+ await new Promise<void>(resolve=>service.listen(0,'127.0.0.1',resolve));const address=service.address();assert.ok(address&&typeof address!=='string');
+ t.after(async()=>{service.closeAllConnections();await new Promise<void>(resolve=>service.close(()=>resolve()));});
+ const f=await fixture(t,async()=>({configured:true,close:async()=>{},query:async()=>{throw Error('No language model call expected');}}));
+ const settings={...f.node.processing.currentSettings(),enabled:true,audioProcessor:'audio.http',endpoint:'http://127.0.0.1:'+address.port+'/transcribe',summarize:false};
+ await f.node.processing.save({revision:f.node.processing.view().revision,settings,policy:fixtureFilePolicy(settings,f.node.processing.runtime.registry)});
+ f.node.sources.register({id:'generated-audio',name:'Generated audio',kind:'local-files',deviceId:'generated-device',platform:'android',retention:'archive'});
+ const upload=async()=>{const bytes=Buffer.from('Generated audio '+randomUUID()),begun=f.node.files.begin({sourceId:'generated-audio',item:{externalId:randomUUID(),revision:'1',observedAt:new Date().toISOString(),title:'Generated audio',kind:'file',layer:'original',text:'',mimeType:'audio/wav',deleted:false},sha256:sha256(bytes),sizeBytes:bytes.length},()=>{});f.node.files.part(begun.uploadId,0,bytes,()=>{});return {id:(await f.node.files.commit(begun.uploadId,()=>{})).id,bytes};};
+ const old=await upload();await f.node.processing.tick();assert.equal(bodies.length,0);
+ const changed=()=>Number(f.node.store.db.prepare('SELECT count(*) n FROM changes WHERE id=?').get(old.id)!.n),baseline=changed();
+ for(let n=0;n<3;n++){f.node.store.db.prepare("UPDATE execution_steps SET available_at=0 WHERE operation_id=? AND kind='files.pipeline'").run('file:'+old.id);await f.node.processing.tick();}
+ assert.equal(changed(),baseline,'authorization rechecks must not produce new material change events');
+ assert.equal(f.node.files.detail(old.id).job?.error,'background_model_authorization_required');assert.equal(bodies.length,0);
+ await f.restart();const view=(await f.node.app.inject({url:'/api/model-authorization',headers:f.headers})).json();
+ const approved=await f.node.app.inject({method:'POST',url:'/api/model-authorization/commands',headers:f.headers,payload:{revision:view.authorization.revision,operationId:randomUUID(),action:'authorize',connections:view.connections,scope:{sourceIds:['generated-audio'],dataKinds:['audio','text']}}});assert.equal(approved.statusCode,200,approved.body);
+ f.node.store.db.prepare("UPDATE execution_steps SET available_at=0 WHERE operation_id=? AND kind='files.pipeline'").run('file:'+old.id);await f.node.processing.tick();assert.equal(changed(),baseline);assert.equal(bodies.length,0,'later automatic approval must not authorize old audio');
+ const fresh=await upload();await f.node.processing.tick();assert.equal(bodies.length,1);assert.deepEqual(bodies[0],fresh.bytes);
+ const retried=await f.node.app.inject({method:'POST',url:'/api/files/'+old.id+'/retry',headers:f.headers,payload:{stage:'transcribe'}});assert.equal(retried.statusCode,200,retried.body);await f.node.processing.tick();
+ assert.equal(bodies.length,2);assert.deepEqual(bodies[1],old.bytes);assert.equal(f.node.files.chunks(old.id)[0].ocrText,'Generated transcription');
+});
+
 
 test('assembled embedding transport requires approval and stop fences its late vector publication',async t=>{
  const inputs:string[]=[];let hold=false,enter!:()=>void,release!:()=>void;const started=new Promise<void>(r=>enter=r),held=new Promise<void>(r=>release=r);

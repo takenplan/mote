@@ -32,7 +32,7 @@ import {processingConfigurationSchema,defaultProcessingConfiguration,type Proces
 import {isDeepStrictEqual} from 'node:util';
 import {effectiveProcessorParameters} from './processor-parameters.js';
 import {mediaRuntimeSettings,type MediaRuntimeSettings} from './media-configuration.js';
-import type {ModelConnection} from './background-model-authorization.js';
+import {BACKGROUND_MODEL_AUTHORIZATION_RECHECK_MS,type ModelConnection} from './background-model-authorization.js';
 import type {ModelProcessingAuthority,ModelProcessingRequest} from './model-processing-authority.js';
 
 import {createDefaultFilePolicy,publicFilePolicy,parseFilePolicy,selectFilePolicy,effectiveFileSettings,type AppliedFilePolicy} from './file-policy.js';
@@ -678,6 +678,12 @@ export class FileProcessing {
   }
   private admit(id:string,phase:'pipeline'|'summary'){
     if(this.processorWaits(id).length)return new ExecutionFailure('blocked',this.cancellation(id).wait==='running'?'processor_still_running':'processor_response_unknown');
+    // A prior model-bound execution already established the reason for this
+    // wait. A denied original cannot be approved retroactively; avoid claiming
+    // and reprojecting it on every timer while preserving explicit owner retry.
+    if(phase==='pipeline'&&this.files.store.db.prepare('SELECT error FROM file_jobs WHERE capture_id=?').get(id)?.error==='background_model_authorization_required'&&
+      !this.modelIntent(id,phase)&&this.options.modelAuthority?.deniedOriginal?.(id))
+      return new ExecutionFailure('waiting','background_model_authorization_required',BACKGROUND_MODEL_AUTHORIZATION_RECHECK_MS);
     try{
       const {db,mime,settings,processorId,effective}=this.executionSettings(id,phase);
       if(phase==='summary'){
