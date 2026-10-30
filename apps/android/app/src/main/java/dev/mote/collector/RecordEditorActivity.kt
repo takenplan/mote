@@ -30,6 +30,7 @@ class RecordEditorActivity : MoteActivity() {
     private lateinit var originView: LinearLayout
     private lateinit var save: Button
     private lateinit var microphone: Button
+    private val mediaActions = mutableListOf<Button>()
     private lateinit var draftState: TextView
     private lateinit var recordingNote: TextView
     private var attachments = JSONArray()
@@ -77,6 +78,7 @@ class RecordEditorActivity : MoteActivity() {
             setOnClickListener { if (ready && !task.busy && !attachmentTask.busy && (recorder == null || label == "录音")) run() }
         }, MoteUi.ButtonRole.TEXT).also { button ->
             NativePresentationStyles.bind(button, "record-media-action") { (it as Button).apply { minHeight = moteDp(78); textSize = 11f; setPadding(0, moteDp(8),0,moteDp(8)) } }
+            mediaActions.add(button)
             actions.addView(button, LinearLayout.LayoutParams(0, -2, 1f))
         }
         action("▣", "拍照") { if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) camera() else requestPermissions(arrayOf(Manifest.permission.CAMERA), 21) }
@@ -119,6 +121,7 @@ class RecordEditorActivity : MoteActivity() {
     private fun renderDraftState() {
         draftState.text = MoteI18n.text(if (field.text.isNotBlank() || attachments.length() > 0 || origin.optString("text").isNotBlank() || description.text.isNotBlank()) "未保存的草稿" else "文字、照片或录音")
         recordingNote.visibility = if (recorder != null) android.view.View.VISIBLE else android.view.View.GONE
+        mediaActions.forEach { it.isEnabled = ready && !task.busy && !attachmentTask.busy && (recorder == null || it === microphone) }
     }
     private fun canSubmit() = recorder == null && (field.text.isNotBlank() || attachments.length() > 0 || origin.optString("text").isNotBlank())
     private fun persist() {
