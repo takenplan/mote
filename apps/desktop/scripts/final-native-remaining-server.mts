@@ -10,12 +10,22 @@ const directory=process.argv[2];
 if(!directory?.includes('/mote-native-remaining-'))throw Error('Private generated directory required');
 const token=randomBytes(32).toString('hex');
 const node=await buildApp({dataDir:join(directory,'central'),token,tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:20_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{webRoot:resolve('apps/web/dist'),backgroundWorker:false,agent:{configured:false,query:async()=>{throw Error('No model permitted');},close:async()=>{}}});
-let queryAdmissions=0,seed:unknown;
+let queryAdmissions=0,capturePosts=0,seed:unknown;
 node.app.addHook('onRequest',async(req,reply)=>{
  if(req.method==='POST'&&req.url.startsWith('/api/query-runs')){queryAdmissions++;return reply.code(503).send({error:'fixture_no_model'});}
  if(req.method==='GET'&&req.url.startsWith('/api/capture-browser?'))while(existsSync(join(directory,'hold-content')))await delay(15);
  if(req.method==='GET'&&req.url.startsWith('/api/memories')&&existsSync(join(directory,'deny-memory')))return reply.code(403).send({error:'forbidden'});
  if(req.method==='GET'&&req.url==='/api/features'&&existsSync(join(directory,'fail-features')))return reply.code(503).send({error:'service_unavailable'});
+ if(req.method==='POST'&&req.url==='/api/captures')capturePosts++;
+ if(req.method==='GET'&&/^\/api\/capture-browser\/[a-f0-9-]{36}$/.test(req.url)&&existsSync(join(directory,'hide-capture')))return reply.code(503).send({error:'service_unavailable'});
+});
+node.app.addHook('onSend',async(req,reply,payload)=>{
+ if(req.method==='POST'&&req.url==='/api/captures'&&reply.statusCode<300){
+  const held=existsSync(join(directory,'hold-capture-ack'));
+  if(held){writeFileSync(join(directory,'capture-committed'),'true');while(existsSync(join(directory,'hold-capture-ack')))await delay(15);}
+  if(held||existsSync(join(directory,'fail-capture-ack'))){reply.code(503);return JSON.stringify({error:'service_unavailable'});}
+ }
+ return payload;
 });
 node.app.post('/__fixture/seed',async(req,reply)=>{
  if(req.headers.authorization!=='Bearer '+token)return reply.code(403).send({error:'forbidden'});
@@ -30,7 +40,7 @@ node.app.post('/__fixture/seed',async(req,reply)=>{
  const conversation=node.featureServices.conversations.get(appended.conversationId);
  seed={originalId:id,text,materialRef:material.ref,conversationId:conversation.id,title:conversation.title,turnId:conversation.turns[0].id};return seed;
 });
-node.app.get('/__fixture/counts',async(req,reply)=>req.headers.authorization==='Bearer '+token?{queryAdmissions,captures:node.store.db.prepare('SELECT count(*) AS n FROM captures').get()!.n}:reply.code(403).send({error:'forbidden'}));
+node.app.get('/__fixture/counts',async(req,reply)=>req.headers.authorization==='Bearer '+token?{queryAdmissions,capturePosts,captures:node.store.db.prepare('SELECT count(*) AS n FROM captures').get()!.n}:reply.code(403).send({error:'forbidden'}));
 await node.app.listen({host:'127.0.0.1',port:0});const address=node.app.server.address();if(!address||typeof address==='string')throw Error('Loopback port required');
 writeFileSync(join(directory,'runtime.json'),JSON.stringify({origin:'http://127.0.0.1:'+address.port,token}),{mode:0o600});
 process.once('SIGTERM',()=>{void node.app.close().then(()=>process.exit(0));});
