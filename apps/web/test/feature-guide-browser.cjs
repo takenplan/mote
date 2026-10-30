@@ -57,7 +57,7 @@ async function run(){
 
  await openGuideUnit('A15');
  await until(()=>js(`location.hash==='#/library?view=coding-status'&&document.querySelector('.coding-uploads')?.textContent.includes('Generated Coding upload')`),'Guide A15 consumes actual Coding sync status');
- assert.match(await js(`document.querySelector('.coding-uploads').textContent`),/已接收增量事件3/);
+ assert.match(await js(`document.querySelector('.coding-uploads').textContent`),/已接收事件3/);
  await snap('guide-coding-status');
  await js('history.back()');await until(()=>js(`location.hash==='#/guide'&&!!document.querySelector('.feature-guide')`),'Guide return path');
  await js('history.forward()');await until(()=>js(`document.querySelector('.coding-uploads')?.textContent.includes('Generated Coding upload')`),'Guide Coding forward path');
