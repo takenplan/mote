@@ -32,7 +32,7 @@ import {processingConfigurationSchema,defaultProcessingConfiguration,type Proces
 import {isDeepStrictEqual} from 'node:util';
 import {effectiveProcessorParameters} from './processor-parameters.js';
 import {mediaRuntimeSettings,type MediaRuntimeSettings} from './media-configuration.js';
-import type {ModelConnection} from './background-model-authorization.js';
+import {BACKGROUND_MODEL_AUTHORIZATION_RECHECK_MS,type ModelConnection} from './background-model-authorization.js';
 import type {ModelProcessingAuthority,ModelProcessingRequest} from './model-processing-authority.js';
 
 import {createDefaultFilePolicy,publicFilePolicy,parseFilePolicy,selectFilePolicy,effectiveFileSettings,type AppliedFilePolicy} from './file-policy.js';
@@ -509,12 +509,25 @@ export class FileProcessing {
     return {token,revision:this.view().revision,count:items.length,skipped,bounded:rows.length>1000||items.length===100,items:items.map(({fingerprint,...item})=>item)};
   }
   private jobFingerprint(id:string){return sha256(JSON.stringify(this.files.store.db.prepare('SELECT * FROM file_jobs WHERE capture_id=?').get(id)));}
-  reprocess(raw:unknown){
+  private reprocessPreview(raw:unknown){
     const q=z.object({token:z.string().uuid()}).strict().parse(raw),preview=this.previews.get(q.token);
     if(!preview||preview.expires<Date.now()||preview.revision!==this.saved.revision)throw new StoreError(moteText("预览已过期或设置已改变，请重新预览"),409);
     for(const item of preview.items)if(this.jobFingerprint(item.id)!==item.fingerprint)throw new StoreError(moteText("文件状态已改变，请重新预览"),409);
-    const db=this.files.store.db;db.exec('BEGIN IMMEDIATE');try{for(const item of preview.items)this.retry(item.id,'transcribe',true);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
-    this.previews.delete(q.token);return {queued:preview.items.length};
+    return {token:q.token,preview};
+  }
+  /** The preview freezes the targets; the caller still has to supply owner authority. */
+  reprocessTargets(raw:unknown):readonly string[]{return this.reprocessPreview(raw).preview.items.map(item=>item.id);}
+  reprocess(raw:unknown){
+    const {token,preview}=this.reprocessPreview(raw),db=this.files.store.db,own=!db.isTransaction;
+    if(own)db.exec('BEGIN IMMEDIATE');
+    try{
+      for(const item of preview.items){
+        if(this.options.modelAuthority&&!this.options.modelAuthority.ownerIntent?.(item.id))throw new StoreError('Explicit model processing intent is required',409);
+        this.retry(item.id,'transcribe',true);
+      }
+      if(own)db.exec('COMMIT');
+    }catch(e){if(own&&db.isTransaction)db.exec('ROLLBACK');throw e;}
+    this.previews.delete(token);return {queued:preview.items.length};
   }
   private project(step:ExecutionStep,phase:'pipeline'|'summary'){
     const id=String(step.input.captureId);if(!this.validStep(step,phase)){this.programRuns.delete(step.id);return;}
@@ -665,6 +678,12 @@ export class FileProcessing {
   }
   private admit(id:string,phase:'pipeline'|'summary'){
     if(this.processorWaits(id).length)return new ExecutionFailure('blocked',this.cancellation(id).wait==='running'?'processor_still_running':'processor_response_unknown');
+    // A prior model-bound execution already established the reason for this
+    // wait. A denied original cannot be approved retroactively; avoid claiming
+    // and reprojecting it on every timer while preserving explicit owner retry.
+    if(phase==='pipeline'&&this.files.store.db.prepare('SELECT error FROM file_jobs WHERE capture_id=?').get(id)?.error==='background_model_authorization_required'&&
+      !this.modelIntent(id,phase)&&this.options.modelAuthority?.deniedOriginal?.(id))
+      return new ExecutionFailure('waiting','background_model_authorization_required',BACKGROUND_MODEL_AUTHORIZATION_RECHECK_MS);
     try{
       const {db,mime,settings,processorId,effective}=this.executionSettings(id,phase);
       if(phase==='summary'){

@@ -20,7 +20,11 @@ type Work={id:string;kind:'manual'|'automatic'|'probe';purpose?:AutomaticModelPu
 type Authority={work:Work;controller:AbortController};
 const command=z.object({revision:z.number().int().nonnegative(),operationId:z.string().uuid(),action:z.enum(['authorize','pause','stop']),connections:z.array(z.object({id:z.string().min(1).max(256),fingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).max(100).optional(),scope:scopeSchema.optional()}).strict();
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
-const pending=()=>new ProviderFailure({category:'blocked',code:'background_model_authorization_required',executionStarted:false,admissionWaiting:true},'Background model processing needs owner authorization');
+// An owner decision is not a short-lived provider capacity event. Keep the
+// durable wait inexpensive while preserving the existing prospective consent
+// checks and without spending an execution attempt.
+export const BACKGROUND_MODEL_AUTHORIZATION_RECHECK_MS=60000;
+const pending=()=>new ProviderFailure({category:'blocked',code:'background_model_authorization_required',executionStarted:false,admissionWaiting:true,retryAfterMs:BACKGROUND_MODEL_AUTHORIZATION_RECHECK_MS},'Background model processing needs owner authorization');
 
 /** One durable owner decision and immutable original-receipt permissions.
  * A lane, model login, source timestamp, retry or derived publication cannot
@@ -99,6 +103,13 @@ export class BackgroundModelAuthorization {
   roots(identity:string):string[]{
     if(this.store.db.prepare('SELECT 1 FROM background_model_receipts WHERE identity=?').get(identity))return [identity];
     return this.store.db.prepare('SELECT original FROM background_model_lineage WHERE identity=? ORDER BY original').all(identity).map(row=>String(row.original));
+  }
+  /** A negative hint only: it cannot admit work or replace the disclosure and
+   * connection checks at the model boundary. Denied original receipts cannot
+   * be changed by later background approval. */
+  deniedOriginal(identity:string):boolean{
+    const roots=this.roots(identity),accepted=this.store.db.prepare('SELECT 1 FROM background_model_receipts WHERE identity=? AND authorized=1');
+    return !roots.length||roots.some(root=>!accepted.get(root));
   }
   /** Host-derived grouping can contain historical context. Only newly
    * received, unconsumed originals become triggers; the context remains subject

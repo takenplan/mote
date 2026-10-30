@@ -9,12 +9,7 @@ internal object SyncHealth {
         val inventory = context.queue().syncInventory()
         val pending = SyncSchedule.pending(context)
         val blocked = inventory.getInt("blocked")
-        val sources = context.localSources()
-        val sourceErrors = sources.sources().count { source ->
-            val metadata = sources.state(source.id)
-            val pendingVersions = if (source.binaryFiles()) context.fileArchives().pendingCount(source.id) else metadata.optJSONArray("pending")?.length() ?: 0
-            sourceRequiresAttention(source, metadata, pendingVersions)
-        }
+        val sourceErrors = sourceAttentionCount(context)
         val state: String
         val message: String
         when {
@@ -25,6 +20,16 @@ internal object SyncHealth {
         }
         Settings(context).syncStatus(state, message)
     }
+    internal fun sourceAttentionCount(context: Context): Int =
+        sourceAttentionCount(context.localSources()) { source -> context.fileArchives().pendingCount(source.id) }
+
+    internal fun sourceAttentionCount(sources: LocalSourceStore, filePending: (LocalSource) -> Int): Int =
+        sources.sources().count { source ->
+            if (!source.enabled) return@count false
+            val metadata = sources.state(source.id)
+            val pendingVersions = if (source.binaryFiles()) filePending(source) else metadata.optJSONArray("pending")?.length() ?: 0
+            sourceRequiresAttention(source, metadata, pendingVersions)
+        }
     internal fun sourceRequiresAttention(source: LocalSource, metadata: org.json.JSONObject, pendingVersions: Int): Boolean {
         if (!source.enabled) return false
         if (source.kind == "local-files" && source.retention == "snapshot" && !source.centralProcessingConsent) return true

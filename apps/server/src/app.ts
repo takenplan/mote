@@ -474,6 +474,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     return modelAuthorizationHost.automatic('automatic-media:'+request.captureId,'file',[original],execute,signal);
   };
   mediaModelAuthority.ownerIntent=id=>modelAuthorization.ownerIntent(captureModelIdentity(id));
+  mediaModelAuthority.deniedOriginal=id=>modelAuthorization.deniedOriginal(captureModelIdentity(id));
   const withMediaOwnerIntent=<T>(id:string,task:()=>Promise<T>|T)=>modelAuthorizationHost.manual('owner-media:'+randomUUID(),availableModelConnections(),async()=>task(),undefined,'manual',[captureModelIdentity(id)]);
   const processing:FileProcessing=new FileProcessing(files,dependencies?.transcriptionProvider,undefined,{modelAuthority:mediaModelAuthority,configService,executor,modules:[...new Set([...(config.backendPluginModules??[]),...(config.fileProcessorModules??[])])],analyze:analyzeFile,analysisSnapshot:resolveFileModel,analysisRevision:()=>modelSettings.view().revision,diagnostics,contextProcessors:workflows.registry,pluginContext:backendContext,mediaAssets,media:config.media,contextForEvidence:record=>materials.contextForEvidence(record)});
   const previousSourceContextChanged=materials.onSourceContextChanged;
@@ -770,6 +771,11 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   }));
   const imports=new ImportStore(store,archivedFiles,sources,{executor,intake:processing.runtime.intake,fileStore:files,
     sourcePacks,
+    bindPhaseAuthority:step=>{
+      // Only this import's explicit owner action may fill a missing binding.
+      // An already-bound step keeps its original durable authority on retries.
+      if(modelAuthorization.ownerIntent(step.operationId)&&!modelAuthorization.stepAuthority(step.id))modelAuthorization.bindCurrentStep(step);
+    },
     prepare:dependencies?.prepareImport??(async input=>{
       if(!agent.configured)throw new AgentNotConfiguredError();
       const selected=modelSettings.select('import');if(!agent.configuredFor(selected.id))throw new AgentNotConfiguredError();

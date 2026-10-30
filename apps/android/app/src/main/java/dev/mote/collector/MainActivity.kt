@@ -184,6 +184,9 @@ class MainActivity : MoteActivity() {
     private var statusLoading = false
     private var statusRefreshPending = false
     private var resumed = false
+    private val settingsSummaries = SettingsSummaryTracker()
+    private var settingsSendRow: LinearLayout? = null
+    private var settingsConnectionRow: LinearLayout? = null
     private var localStateJob: kotlinx.coroutines.Job? = null
     private data class StatusSnapshot(val title: String, val action: String, val status: String, val sync: String,
         val totals: String, val technical: String, val connectionTitle: String, val connection: String,
@@ -222,6 +225,7 @@ class MainActivity : MoteActivity() {
         // A process restore or changed node/credential starts with the default disclosure.
         connectionSettingsExpanded = connectionSettingsExpanded && retained?.config?.let { it.server == config.server && it.connectionToken() == config.connectionToken() } == true
         loadedServer = config.server; loadedConfig = config
+        settingsSummaries.committed(config.settingsSummary())
         val root = NativeAppShell(this).apply { moteInsets() }
         val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(MoteTheme.spacePage), 0, dp(MoteTheme.spacePage), 0) }
         headerHeading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -463,7 +467,7 @@ class MainActivity : MoteActivity() {
             SendPauseControl.set(applicationContext, !Settings(applicationContext).read().syncPaused)
             Settings(applicationContext).read()
         }) { result ->
-            result.onSuccess { current -> loadedConfig = current; refreshStatus() }
+            result.onSuccess { current -> loadedConfig = current; commitSettingsSummaries(current); refreshStatus() }
                 .onFailure { toast(it.message ?: MoteI18n.text("保存或调度失败，请重试；已保存内容不会丢失")) }
         }
     }
@@ -473,7 +477,7 @@ class MainActivity : MoteActivity() {
         applyingSettings = true
         RuntimeSettings.apply(this, next, expected = loadedConfig) { result ->
             applyingSettings = false
-            result.onSuccess { loadedConfig = next; refreshStatus(); loadHomeContent(); onApplied() }
+            result.onSuccess { loadedConfig = next; commitSettingsSummaries(next); refreshStatus(); loadHomeContent(); onApplied() }
                 .onFailure { toast(it.message ?: MoteI18n.text("保存或调度失败，请重试；已保存内容不会丢失")) }
         }
     }
@@ -607,14 +611,40 @@ class MainActivity : MoteActivity() {
         content.setPadding(dp(20),dp(24),dp(20),dp(28))
         settingsRow(MoteI18n.text("采集范围"),MoteI18n.text("应用、截图和结构化内容"),"·") { showPage(Page.PRIVACY) }
         settingsRow(MoteI18n.text("系统权限"),MoteI18n.text("按当前使用的功能授权"),"·") { showPage(Page.PERMISSIONS) }
-        settingsRow(MoteI18n.text("同步与上传"),MoteI18n.text(if (loadedConfig.syncPaused) "发送已暂停" else "按设置发送"),"·") { startActivity(Intent(this,SyncQueueActivity::class.java)) }
-        settingsRow(MoteI18n.text("连接与设备"),loadedConfig.server.ifBlank { MoteI18n.text("尚未连接") },"·") { showPage(Page.CONNECTION) }
+        settingsSendRow = settingsRow(MoteI18n.text("同步与上传"),MoteI18n.text(if (loadedConfig.syncPaused) "发送已暂停" else "按设置发送"),"·") { startActivity(Intent(this,SyncQueueActivity::class.java)) }
+        settingsConnectionRow = settingsRow(MoteI18n.text("连接与设备"),loadedConfig.server.ifBlank { MoteI18n.text("尚未连接") },"·") { showPage(Page.CONNECTION) }
+        renderSettingsSummaries()
         settingsRow(MoteI18n.text("中央设置"),MoteI18n.text("模型、识别服务与自动处理"),"↗") { openCentral("about") }
         settingsRow(MoteI18n.text("本机存储"),MoteI18n.text("上传后保留多久"),"▤") { showPage(Page.STORAGE) }
         settingsRow(MoteI18n.text("备份与恢复"),MoteI18n.text("本机记录与客户端配置")) { startActivity(Intent(this,BackupActivity::class.java)) }
         settingsRow(MoteI18n.text("本机存储位置"),MoteI18n.text("选择应用存储空间并迁移已有记录")) { startActivity(Intent(this,StorageActivity::class.java)) }
         section(MoteI18n.text("此手机"))
         settingsRow(MoteI18n.text("偏好与本机维护"),MoteI18n.text("画质、后台运行、诊断与更新")) { showPage(Page.DEVICE_OPTIONS) }
+    }
+
+    private fun CollectorConfig.settingsSummary() = SettingsSummaryConfig(server, syncPaused)
+
+    private fun renderSettingsSummaries() {
+        val state = settingsSummaries.state
+        val fallback = when (state) {
+            SettingsSummaryState.Loading -> MoteI18n.text("正在读取本机设置…")
+            SettingsSummaryState.Unavailable -> MoteI18n.text("暂不可读取")
+            is SettingsSummaryState.Current -> null
+        }
+        val config = (state as? SettingsSummaryState.Current)?.config
+        val send = fallback ?: MoteI18n.text(if (config!!.syncPaused) "发送已暂停" else "按设置发送")
+        val connection = fallback ?: config!!.server.ifBlank { MoteI18n.text("尚未连接") }
+        fun update(row: LinearLayout?, label: String, value: String) {
+            row?.findViewWithTag<TextView>("row-detail")?.text = value
+            row?.contentDescription = "$label，$value"
+        }
+        update(settingsSendRow, MoteI18n.text("同步与上传"), send)
+        update(settingsConnectionRow, MoteI18n.text("连接与设备"), connection)
+    }
+
+    private fun commitSettingsSummaries(config: CollectorConfig) {
+        settingsSummaries.committed(config.settingsSummary())
+        renderSettingsSummaries()
     }
 
     private fun buildDeviceOptions() {
@@ -1368,10 +1398,11 @@ class MainActivity : MoteActivity() {
                 // Keep edits made after this save started, including edits on a newly opened page.
                 val comparison = if (generation == draftGeneration) submitted else baseline
                 val laterEdits = pageControlValues().filter { (key, value) -> comparison[key] != value }
-                reloadSettings(RuntimeSettings.currentConfiguration ?: loadedConfig); restoreControlValues(laterEdits)
+                val current = RuntimeSettings.currentConfiguration ?: loadedConfig
+                reloadSettings(current); commitSettingsSummaries(current); restoreControlValues(laterEdits)
                 saved(); toast(MoteI18n.text("设置已保存")); resumeProjectionAfterSettings()
             }.onFailure {
-                RuntimeSettings.currentConfiguration?.let { if (it != loadedConfig) reloadSettings(it) }
+                RuntimeSettings.currentConfiguration?.let { if (it != loadedConfig) { reloadSettings(it); commitSettingsSummaries(it) } }
                 toast(it.message ?: MoteI18n.text("设置未保存，请重试"))
             }
             updateSaveBar(); refreshStatus()
@@ -1577,6 +1608,7 @@ class MainActivity : MoteActivity() {
         if (isDestroyed) return
         if (statusLoading) { statusRefreshPending = true; return }
         statusLoading = true
+        val summaryToken = settingsSummaries.token()
         // Queue recovery, Keystore reads and diagnostic writes may wait for a worker.
         // Keep one request in flight; a slow scan must never accumulate refresh jobs.
         statusExecutor.execute {
@@ -1584,9 +1616,13 @@ class MainActivity : MoteActivity() {
             handler.post {
                 statusLoading = false
                 if (!resumed || isDestroyed || isFinishing) return@post
+                if (!settingsSummaries.isCurrent(summaryToken)) {
+                    statusRefreshPending = false; refreshStatus(); return@post
+                }
                 if (QueueStorage.recovering || ConnectionGuard.reconfiguring()) { refreshStatus(); return@post }
                 result.onSuccess { snapshot ->
                     snapshot.config?.let { if (!applyingSettings && it != loadedConfig) reloadSettings(it) }
+                    if (!applyingSettings && settingsSummaries.readResult(summaryToken, snapshot.config?.settingsSummary())) renderSettingsSummaries()
                     if (::homeSyncStatus.isInitialized) {
                         homeCaptureStatus.text = if (!settings.enabled && !snapshot.captureAttention) MoteI18n.text("已暂停") else snapshot.title
                         homeSyncStatus.text = if (loadedConfig.syncPaused) MoteI18n.text("已暂停") else snapshot.syncPolicy
@@ -1608,7 +1644,10 @@ class MainActivity : MoteActivity() {
                     if (::connectionSummary.isInitialized) connectionSummary.text = snapshot.connectionTitle + "\n" + snapshot.connection
                     if (::mediaStatus.isInitialized) mediaStatus.text = snapshot.media
                     updateSaveBar()
-                }.onFailure { captureProgress.visibility = View.GONE; status.text = MoteI18n.text("状态暂不可读取，已有记录保留在本机；稍后自动重试") }
+                }.onFailure {
+                    if (!applyingSettings && settingsSummaries.readResult(summaryToken, null)) renderSettingsSummaries()
+                    captureProgress.visibility = View.GONE; status.text = MoteI18n.text("状态暂不可读取，已有记录保留在本机；稍后自动重试")
+                }
                 if (statusRefreshPending) { statusRefreshPending = false; refreshStatus() }
             }
         }
@@ -1709,6 +1748,7 @@ class MainActivity : MoteActivity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        settingsSummaries.beginRead(); renderSettingsSummaries()
         if (!::settings.isInitialized) return
         resumeUi()
     }
@@ -1721,7 +1761,9 @@ class MainActivity : MoteActivity() {
         updatePermissionStatuses()
         RuntimeSettings.observeProjectionConsent { if (::server.isInitialized) resumeProjectionAfterSettings() }
         RuntimeSettings.observeConfiguration {
-            if (!applyingSettings && !isDestroyed) refreshStatus()
+            if (!applyingSettings && !isDestroyed) {
+                settingsSummaries.beginRead(); renderSettingsSummaries(); refreshStatus()
+            }
         }
         localStateJob = observeLocalState { snapshot ->
             refreshStatus()
@@ -2012,7 +2054,8 @@ class MainActivity : MoteActivity() {
             editablePages.forEach { buildSettingsPage(it, config) }
             baseline = controlValues()
         } finally { applyingConnectionFields = false; initializing = false }
-        showPage(currentPage)
+        // The overview is already cached; revisiting it would reset its scroll and focus.
+        if (currentPage != Page.SETTINGS) showPage(currentPage)
     }
 
     private fun controlValues(views: List<View> = controls) = views.associate { view ->

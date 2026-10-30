@@ -27,6 +27,12 @@ object MoteI18n {
         } catch (_: Exception) { emptyMap() }
     }
     private fun catalog(language: String): Map<String, String> = catalogs.getOrPut(language) { load("i18n-$language.json") }
+    /** Match an authored status persisted before a language change without treating other messages as status codes. */
+    internal fun translations(sources: Collection<String>): Map<String, Set<String>> {
+        val catalogs = supported.filter { it != "zh-CN" }.map(::catalog)
+        check(catalogs.all { catalog -> sources.all(catalog::containsKey) }) { "Sync status translations are unavailable" }
+        return sources.associateWith { source -> setOf(source) + catalogs.mapNotNull { it[source] } }
+    }
     fun preference() = selected
     fun language(): String {
         if (selected in supported) return selected
