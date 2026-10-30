@@ -153,9 +153,9 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   useEffect(()=>{if(detail.data&&!detail.loading&&!detail.error)setPageRevoked(false);},[detail.data,detail.loading,detail.error]);
   useEffect(()=>{if(reference.key){selectionMade.current=true;setSelectedId(null);setRun(null);setOlder(null);setSelectedOwnerQuestion(null);}},[api,reference.key]);
   useEffect(()=>{if(history.data){setItems(history.data.items);setCursor(history.data.nextCursor??null);}else if(history.error){setItems([]);setCursor(null);}},[history.data,history.error]);
-  useEffect(()=>{if(!recentRuns.data||selectionMade.current||queryRecovery.get(api))return;selectionMade.current=true;
+  useEffect(()=>{if(!recentRuns.data||selectionMade.current||queryRecovery.get(api))return;
     const recent=recentRuns.data.items.find(r=>r.status==='running')??recentRuns.data.items[0];
-    if(recent){if(recent.status==='running')queryRecovery.set(api,{kind:'adopted',id:recent.id,contextVersion:queryRecovery.versions(api).contextVersion,conversationId:recent.conversationId,run:recent,unknown:false});setRun(recent);setBusy(recent.status==='running');setSelectedId(recent.conversationId??null);}
+    if(recent){selectionMade.current=true;if(recent.status==='running')queryRecovery.set(api,{kind:'adopted',id:recent.id,contextVersion:queryRecovery.versions(api).contextVersion,conversationId:recent.conversationId,run:recent,unknown:false});setRun(recent);setBusy(recent.status==='running');setSelectedId(recent.conversationId??null);}
   },[recentRuns.data]);
   useEffect(() => {if (!targetTurn&&conversation?.turns.length) end.current?.scrollIntoView({block: 'nearest'});}, [conversation?.id, conversation?.turns.length,targetTurn]);
   useEffect(()=>{
