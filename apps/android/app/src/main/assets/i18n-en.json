@@ -10088,5 +10088,6 @@
   "每次最多处理": "Maximum items per run",
   "使用 {0}。有足够新增资料且达到周期时生成。": "Uses {0}. Generates when enough new material is available and the interval has elapsed.",
   "当前显示本机副本；中央接收仍待确认。正文最多预览 100000 个字符。": "The local copy is shown; Central receipt is still unconfirmed. The preview shows up to 100000 characters.",
-  "一次最多选择 4,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Select up to 4,000 files at a time. For larger collections, use a ZIP archive or import in batches."
+  "一次最多选择 4,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Select up to 4,000 files at a time. For larger collections, use a ZIP archive or import in batches.",
+  "当前默认": "Current default"
 }

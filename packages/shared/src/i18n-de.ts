@@ -10089,5 +10089,6 @@ export const german: Readonly<Record<string, string>> = {
   "每次最多处理": "Maximale Anzahl pro Durchlauf",
   "使用 {0}。有足够新增资料且达到周期时生成。": "Verwendet {0}. Die Erstellung beginnt, wenn genügend neue Daten vorliegen und das Intervall abgelaufen ist.",
   "当前显示本机副本；中央接收仍待确认。正文最多预览 100000 个字符。": "Die lokale Kopie wird angezeigt; der Empfang durch Central ist noch unbestätigt. Die Vorschau zeigt bis zu 100000 Zeichen.",
-  "一次最多选择 4,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Wählen Sie bis zu 4.000 Dateien gleichzeitig aus. Verwenden Sie für größere Sammlungen ein ZIP-Archiv oder importieren Sie sie in mehreren Chargen."
+  "一次最多选择 4,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Wählen Sie bis zu 4.000 Dateien gleichzeitig aus. Verwenden Sie für größere Sammlungen ein ZIP-Archiv oder importieren Sie sie in mehreren Chargen.",
+  "当前默认": "Aktueller Standard"
 };
