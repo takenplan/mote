@@ -35,6 +35,21 @@ function expectCleared(){
   expect(el('content-detail-image').getAttribute('src')).toBeNull();
 }
 
+it('withdraws an old empty claim while a new complete archive read is still pending',async()=>{
+  page={items:[],total:0};await library.refresh();
+  expect(el('content-feed').textContent).toContain('还没有内容');
+  let finish!:(value:CentralContentPage)=>void;
+  vi.mocked(api.centralContent).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+  const pending=library.refresh();await flush();
+  expect(el('content-status').getAttribute('aria-busy')).toBe('true');
+  expect(el('content-status').classList.contains('visually-hidden')).toBe(false);
+  expect(el('content-status').textContent).toBe('正在读取内容…');
+  expect(el('content-feed').textContent).not.toContain('还没有内容');
+  finish({items:[],total:0});await pending;
+  expect(el('content-status').getAttribute('aria-busy')).toBe('false');
+  expect(el('content-feed').textContent).toContain('还没有内容');
+});
+
 it.each([401,403])('closes an open central reader on a feed HTTP %s, invalidating a late detail response',async code=>{
   await open();expect(el('content-detail-body').textContent).toBe(remote.text);expect(el('content-detail-image').getAttribute('src')).toBe(remote.image);
   let finish!:(value:SyncContent)=>void;

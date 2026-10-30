@@ -73,6 +73,11 @@ export function createContentLibraryUi(api:DesktopApi,openMemories?:()=>void,hom
     if(!append){localOffset=0;remoteCursor=undefined;localMore=false;remoteMore=false;items=[];}
     el('content-status').textContent=moteText('正在读取内容…');
     el('content-status').setAttribute('aria-busy','true');
+    if(!append&&!previous.length){
+      // No complete result exists for this read yet; an old empty result is not proof.
+      el('content-feed').replaceChildren();
+      el('content-status').classList.remove('visually-hidden');
+    }
     const local=scope==='received'||append&&!localMore?undefined:api.localContent(localOffset,query);
     const remote=scope==='local'||!status?.config.tokenConfigured||append&&!remoteMore?undefined:api.centralContent(remoteCursor,query);
     const [l,r]=await Promise.allSettled([local,remote]);if(version!==generation)return;

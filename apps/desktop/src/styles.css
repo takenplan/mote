@@ -962,6 +962,9 @@ input,select,textarea { accent-color:var(--mote-accent); }
 /* The independent Mac note keeps owner context separate from the recorded text. */
 .quick-note-window #main-content { padding: 0; }
 .quick-note-window .workspace-note { max-width: none; }
+.quick-note-window #background-progress { display: none; }
+/* Save failures belong to this draft, without a second banner covering its title. */
+.quick-note-window.note-save-failed .note-composer #note-text { min-height: 160px; height: 160px; }
 .workspace-note .page-header { padding: 22px 25px; margin: 0; border-bottom: 1px solid var(--mote-divider); align-items: center; }
 .workspace-note .page-header h1 { margin: 0; font-size: 17px; font-weight: 600; }
 #note-dismiss { font-size: 22px; line-height: 1; padding: 0; }

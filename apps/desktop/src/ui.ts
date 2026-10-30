@@ -505,12 +505,12 @@ function render(status: import('./contracts').Status): void {
   byId('collection-statistics').replaceChildren(...statistics.map(text => { const p = document.createElement('p'); p.textContent = text; return p; }));
   if (!initialized) { fillConfig(status.config); initialized = true;void refreshContent();restoreLanguageAskDraft(); }
 }
-async function perform(action: () => Promise<unknown>): Promise<void> {
+async function perform(action: () => Promise<unknown>,localFailure=false): Promise<void> {
   if (busy) return;
-  statusReadEpoch++; busy = true; feedback(moteText("正在处理，请稍候…")); byId('feedback').setAttribute('aria-busy', 'true'); if (currentStatus) render(currentStatus);
+  statusReadEpoch++; busy = true; if(!localFailure)feedback(moteText("正在处理，请稍候…")); byId('feedback').setAttribute('aria-busy', 'true'); if (currentStatus) render(currentStatus);
   try { await action(); } catch (error) {
     const message = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作失败");
-    renderReadableFailure(byId('feedback'),moteText('操作未完成，请检查权限与配置后重试'),message);
+    if(!localFailure)renderReadableFailure(byId('feedback'),moteText('操作未完成，请检查权限与配置后重试'),message);
   } finally {
     // Read the operation's settled state before enabling a subsequent mutation.
     let settled: import('./contracts').Status | undefined;
@@ -654,6 +654,8 @@ byId('note-form').addEventListener('submit', event => {
   event.preventDefault(); if (!draft || noteSaving || noteComposing || busy) return;
   const input = { ...draft, text: readInput('note-text'), description:readInput('note-description'), mood: draft?.mood??'', revision: draft.revision + 1 };
   noteSaving = true; lockNote(true);
+  document.body.classList.remove('note-save-failed');
+  byId('note-feedback').replaceChildren();byId('note-feedback').classList.add('visually-hidden');
   void perform(async () => {
     try {
       const result = await desktopApi.saveNote(input); renderDraft(result.draft);void refreshContent();
@@ -662,13 +664,14 @@ byId('note-form').addEventListener('submit', event => {
     } catch (error) {
       const message = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("保存未完成，请重试");
       renderReadableFailure(byId('note-feedback'),moteText('保存未完成，请重试'),message);
+      document.body.classList.add('note-save-failed');
       const persisted = await desktopApi.noteDraft();
       if (persisted.prepared || persisted.id !== input.id) renderDraft(persisted);
       else draft = { ...input, revision: Math.max(input.revision, persisted.revision) }; // Keep unsaved text visible if disk persistence failed.
       throw error;
     }
     finally { noteSaving = false; lockNote(false); }
-  });
+  },true);
 });
 
 byId('open-feedback').addEventListener('click', () => void perform(() => desktopApi.openFeedback()));
