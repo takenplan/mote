@@ -154,3 +154,41 @@ it('keeps receipt confirmation from the exact current-device remote row when the
   ui.setHomeRows([{key:'capture:'+conversation.id,source:'note',title:'Current-device received row',preview:'',observedAt:new Date().toISOString()}]);await flush();
   expect(el('home-first-record-state').textContent).toBe('中央已收到');expect(el('home-first-copy').textContent).toBe('资料已收到，原文暂不可用。');expect(el('home-first-record-preview').textContent).toBe('');
 });
+
+it('withdraws central first-note text on same-node denial and rejects its late body while retaining the exact receipt',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});document.querySelector<HTMLElement>('[data-page=overview]')!.hidden=false;
+  api.noteDraft=vi.fn(async()=>({id:conversation.id,text:'',description:'',mood:'',revision:0}));
+  api.localContentDetail=vi.fn(async()=>({location:'central',captureId:conversation.id,text:'Generated authorized original',metadata:'',sourceName:'Generated Mac'}));
+  ui.update(status);ui.setHasContent(false);await flush();el('note-action').click();await flush();ui.setHasContent(true);
+  const row={key:'capture:'+conversation.id,source:'note' as const,title:'Generated original',preview:'',observedAt:new Date().toISOString()};ui.setHomeRows([row]);await flush();
+  let finish!:(value:unknown)=>void;vi.mocked(api.localContentDetail).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));ui.setHomeRows([row]);
+  ui.setArchiveAuthorizationDenied(true);ui.setHomeRows([]);
+  expect(el('home-first-record-preview').textContent).toBe('');expect(el('home-first-record-state').textContent).toBe('中央已收到');expect((el('home-first-read') as HTMLButtonElement).disabled).toBe(true);
+  finish({location:'central',captureId:conversation.id,text:'Generated late denied original',metadata:'',sourceName:'Generated Mac'});await flush();
+  expect(el('home-first-record-preview').textContent).toBe('');expect(el('home-first-copy').textContent).toBe('资料已收到，原文暂不可用。');
+  ui.setHomeRows([row]);await flush();expect(el('home-first-record-preview').textContent).toBe('');
+  ui.setArchiveAuthorizationDenied(false);ui.setHomeRows([row]);await flush();expect(el('home-first-record-preview').textContent).toBe('Generated authorized original');expect((el('home-first-read') as HTMLButtonElement).disabled).toBe(false);
+});
+
+it('keeps the independent local first-note original when central archive access is denied',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});document.querySelector<HTMLElement>('[data-page=overview]')!.hidden=false;
+  api.noteDraft=vi.fn(async()=>({id:conversation.id,text:'',description:'',mood:'',revision:0}));
+  api.localContentDetail=vi.fn(async()=>({text:'Generated independent local original',metadata:'',sourceName:'Generated Mac'}));
+  ui.update(status);ui.setHasContent(false);await flush();el('note-action').click();await flush();ui.setHasContent(true);
+  ui.setHomeRows([{key:'queue:'+conversation.id,source:'note',title:'Generated local',preview:'',observedAt:new Date().toISOString()}]);await flush();
+  ui.setArchiveAuthorizationDenied(true);ui.setHomeRows([]);
+  expect(el('home-first-record-preview').textContent).toBe('Generated independent local original');expect(el('home-first-record-state').textContent).toBe('本机已保存');expect((el('home-first-read') as HTMLButtonElement).disabled).toBe(false);
+});
+
+it('does not transfer a local read grant to a new capture row while its first remote read is held',async()=>{
+  vi.mocked(api.ask).mockResolvedValue({items:[]});document.querySelector<HTMLElement>('[data-page=overview]')!.hidden=false;
+  api.noteDraft=vi.fn(async()=>({id:conversation.id,text:'',description:'',mood:'',revision:0}));api.localContentDetail=vi.fn(async()=>({text:'Generated prior local original',metadata:'',sourceName:'Generated Mac'}));
+  const opened=vi.fn();ui=createWorkbenchUi(api,{...actions,content:opened});ui.update(status);ui.setHasContent(false);await flush();el('note-action').click();await flush();ui.setHasContent(true);
+  const local={key:'queue:'+conversation.id,source:'note' as const,title:'Generated local',preview:'',observedAt:new Date().toISOString()};ui.setHomeRows([local]);await flush();
+  expect(el('home-first-record-preview').textContent).toBe('Generated prior local original');
+  let finish!:(value:unknown)=>void;vi.mocked(api.localContentDetail).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));ui.setHomeRows([{...local,key:'capture:'+conversation.id,title:'Generated central title'}]);
+  ui.setArchiveAuthorizationDenied(true);expect(el('home-first-record-preview').textContent).toBe('');expect((el('home-first-read') as HTMLButtonElement).disabled).toBe(true);el('home-first-read').click();expect(opened).not.toHaveBeenCalled();expect(el('home-first-record-state').textContent).toBe('中央已收到');
+  finish({location:'central',captureId:conversation.id,text:'Generated late remote original',metadata:'',sourceName:'Generated Mac'});await flush();expect(el('home-first-record-preview').textContent).toBe('');
+  ui.setArchiveAuthorizationDenied(false);expect((el('home-first-read') as HTMLButtonElement).disabled).toBe(false);
+  vi.mocked(api.localContentDetail).mockResolvedValue({text:'Generated current local original',metadata:'',sourceName:'Generated Mac'});ui.setHomeRows([local]);await flush();ui.setArchiveAuthorizationDenied(true);expect((el('home-first-read') as HTMLButtonElement).disabled).toBe(false);el('home-first-read').click();expect(opened).toHaveBeenCalledWith(local);expect(el('home-first-record-preview').textContent).toBe('Generated current local original');
+});
