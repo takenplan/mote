@@ -70,7 +70,7 @@ class FinalEditorActionsInstrumentedTest {
         require(InstrumentationRegistry.getArguments().getString("hostMicrophoneDisabled")=="true")
         val settings=Settings(context);val store=context.recordDraftStore();require(!store.hasPrepared()&&store.pendingMedia().length()==0)
         // Temporarily expose actual first-use state; every original queue/draft byte is restored by the outer fixture.
-        DurableQueue.exclusive{File(QueueStorage(context).current().path).listFiles().orEmpty().forEach{check(it.delete())}}
+        DurableQueue.exclusive{File(QueueStorage(context).current().path).listFiles().orEmpty().filter{it.extension in setOf("event","blob","thumb")}.forEach{check(it.delete())}}
         store.edit("",JSONArray(),JSONObject().put("kind","manual"));settings.save(settings.read().copy(server="",token="",syncMode="manual",syncPaused=true),confirmCentralEndpoint=true);context.getSharedPreferences("mote",0).edit().remove("lastCapture").commit();NativeRecordReceipt.recordId=null;LocalStateChanges.changed(records=true,immediate=true)
         instrumentation.uiAutomation.grantRuntimePermission(context.packageName,Manifest.permission.CAMERA);instrumentation.uiAutomation.grantRuntimePermission(context.packageName,Manifest.permission.RECORD_AUDIO)
         val cameraCalls=AtomicInteger();val camera=object:Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:Intent):Instrumentation.ActivityResult?=if(intent.action==MediaStore.ACTION_IMAGE_CAPTURE){assertNotNull(intent.getParcelableExtra<android.net.Uri>(MediaStore.EXTRA_OUTPUT));cameraCalls.incrementAndGet();Instrumentation.ActivityResult(Activity.RESULT_CANCELED,null)}else null}
