@@ -10081,5 +10081,10 @@
   "尚未核对全部原件，请检查文件解析情况。": "Nicht alle Originale wurden berücksichtigt. Prüfe die Analysedetails der Dateien.",
   "部分原件未作为证据解析，请核对原件与预览。": "Einige Originale wurden nicht als Belege analysiert. Prüfe die Originale und die Vorschau.",
   "解析记录已通过校验，置信度高且无歧义。": "Die analysierten Aufzeichnungen haben die Validierung mit hoher Konfidenz und ohne Unklarheiten bestanden.",
-  "缺少逐文件解析情况；未列出的原件不能视为已解析。": "Die Analysedetails pro Datei fehlen. Nicht aufgeführte Originale dürfen nicht als analysiert gelten."
+  "缺少逐文件解析情况；未列出的原件不能视为已解析。": "Die Analysedetails pro Datei fehlen. Nicht aufgeführte Originale dürfen nicht als analysiert gelten.",
+  "生成周期与资料门槛": "Erstellungsintervall und Datenschwelle",
+  "最短间隔（小时）": "Mindestintervall (Stunden)",
+  "最少新增变化": "Mindestanzahl neuer Änderungen",
+  "每次最多处理": "Maximale Anzahl pro Durchlauf",
+  "使用 {0}。有足够新增资料且达到周期时生成。": "Verwendet {0}. Die Erstellung beginnt, wenn genügend neue Daten vorliegen und das Intervall abgelaufen ist."
 }

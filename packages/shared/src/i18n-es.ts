@@ -10082,5 +10082,10 @@ export const spanish: Readonly<Record<string, string>> = {
   "尚未核对全部原件，请检查文件解析情况。": "No se han tenido en cuenta todos los originales. Consulta los detalles del análisis de archivos.",
   "部分原件未作为证据解析，请核对原件与预览。": "Algunos originales no se analizaron como evidencia. Revisa los originales y la vista previa.",
   "解析记录已通过校验，置信度高且无歧义。": "Los registros analizados superaron la validación con alta confianza y sin ambigüedades.",
-  "缺少逐文件解析情况；未列出的原件不能视为已解析。": "Faltan los detalles del análisis por archivo. Los originales no enumerados no se pueden considerar analizados."
+  "缺少逐文件解析情况；未列出的原件不能视为已解析。": "Faltan los detalles del análisis por archivo. Los originales no enumerados no se pueden considerar analizados.",
+  "生成周期与资料门槛": "Intervalo de generación y umbral de datos",
+  "最短间隔（小时）": "Intervalo mínimo (horas)",
+  "最少新增变化": "Mínimo de cambios nuevos",
+  "每次最多处理": "Máximo de elementos por ejecución",
+  "使用 {0}。有足够新增资料且达到周期时生成。": "Usa {0}. Se genera cuando hay suficientes datos nuevos y ha transcurrido el intervalo."
 };
