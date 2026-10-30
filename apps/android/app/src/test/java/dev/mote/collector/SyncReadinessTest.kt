@@ -18,8 +18,8 @@ class SyncReadinessTest {
         JSONObject(File("src/main/assets/i18n-$language.json").readText())
     }
     private fun matches(source: String, text: String) = source == text || translations.any { it.optString(source) == text }
-    private fun visible(config: CollectorConfig, status: StoredSyncStatus, inventory: QueueInventory? = empty, waiting: String? = null, sourceIssues: Int? = 0) =
-        SyncReadiness.visible(config, status, waiting, inventory, sourceIssues, matches = ::matches)
+    private fun visible(config: CollectorConfig, status: StoredSyncStatus, inventory: QueueInventory? = empty, waiting: String? = null, sourceIssues: Int? = 0, totalPending: Int? = inventory?.pending) =
+        SyncReadiness.visible(config, status, waiting, inventory, sourceIssues, totalPending, matches = ::matches)
     private fun heartbeat(config: CollectorConfig, status: StoredSyncStatus, blocked: Int = 0, pending: PendingSync = PendingSync(0, null), sourceIssues: Int? = 0) =
         SyncReadiness.heartbeatState(config, status, blocked, pending, sourceIssues, ::matches)
 
@@ -81,7 +81,7 @@ class SyncReadinessTest {
 
     @Test fun blockedRecordsAndPendingWorkAreNotPresentedAsCompleted() {
         assertEquals(VisibleSyncStatus.Loading, visible(connected, old, inventory = null))
-        assertEquals(VisibleSyncStatus.Unavailable, SyncReadiness.visible(connected, old, null, empty, 0, inventoryUnavailable = true, matches = ::matches))
+        assertEquals(VisibleSyncStatus.Unavailable, SyncReadiness.visible(connected, old, null, empty, 0, 0, inventoryUnavailable = true, matches = ::matches))
         assertEquals(VisibleSyncStatus.NeedsAttention(2, 3), visible(connected, old, empty.copy(blocked = 2, pending = 3)))
         assertEquals("error", heartbeat(connected, old, blocked = 2))
         assertEquals("waiting", heartbeat(connected, old, pending = PendingSync(1, 100)))
@@ -100,6 +100,7 @@ class SyncReadinessTest {
         val count = SyncHealth.sourceAttentionCount(store) { 0 }
         assertEquals(1, count) // No central processing consent, even with no pending versions.
         assertEquals(VisibleSyncStatus.NeedsSourceAttention(1, 0), visible(connected, paused, sourceIssues = count))
+        assertEquals(VisibleSyncStatus.NeedsSourceAttention(1, 1), visible(connected, paused, sourceIssues = count, totalPending = 1))
         assertEquals("error", heartbeat(connected, paused, sourceIssues = count))
         val custom = StoredSyncStatus("unconfigured", "Generated retained scheduling error")
         assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.NeedsSourceAttention(1, 0), VisibleSyncStatus.Message(custom.message))), visible(connected, custom, sourceIssues = count))
@@ -119,20 +120,60 @@ class SyncReadinessTest {
         assertEquals(0, SyncHealth.sourceAttentionCount(store) { 0 })
         assertTrue(runCatching { SyncHealth.sourceAttentionCount(store) { throw IllegalStateException("generated unreadable source") } }.isFailure)
         assertEquals("error", heartbeat(connected, paused, sourceIssues = null))
-        assertEquals(VisibleSyncStatus.Unavailable, SyncReadiness.visible(connected, paused, null, empty, null, inventoryUnavailable = true, matches = ::matches))
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Unavailable, VisibleSyncStatus.Loading)), SyncReadiness.visible(connected, paused, null, empty, null, null, inventoryUnavailable = true, matches = ::matches))
     }
 
     @Test fun waitingAndKnownProblemsRemainVisibleTogether() {
         val waiting = StoredSyncStatus("waiting", "等待充电")
         assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Message("等待充电"), VisibleSyncStatus.NeedsAttention(2, 3), VisibleSyncStatus.NeedsSourceAttention(1, 3))),
             visible(connected, waiting, empty.copy(blocked = 2, pending = 3), waiting = "等待充电", sourceIssues = 1))
-        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Message("等待充电"), VisibleSyncStatus.Unavailable)),
-            SyncReadiness.visible(connected, waiting, "等待充电", empty, null, inventoryUnavailable = true, matches = ::matches))
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Message("等待充电"), VisibleSyncStatus.Unavailable, VisibleSyncStatus.SourceUnavailable)),
+            SyncReadiness.visible(connected, waiting, "等待充电", empty, null, null, inventoryUnavailable = true, sourceUnavailable = true, matches = ::matches))
+    }
+
+    @Test fun onePendingCalendarVersionIsCountedWhileItsHttpFailureSurvivesWaiting() {
+        val cipher = object : ByteCipher {
+            override fun seal(bytes: ByteArray) = bytes.map { (it.toInt() xor 91).toByte() }.toByteArray()
+            override fun open(bytes: ByteArray) = seal(bytes)
+        }
+        val store = LocalSourceStore(folder.newFolder(), cipher)
+        val calendar = LocalSource(name = "Generated calendar", kind = "local-calendar", calendarId = 17)
+        store.save(calendar); store.selectTarget(calendar.id, "generated-target")
+        val at = "2026-10-30T00:00:00Z"
+        val event = JSONObject().put("externalId", "calendar:17:1").put("observedAt", at).put("title", "Generated event")
+            .put("text", "Generated evidence").put("kind", "calendar").put("layer", "snapshot")
+        store.scan(calendar, SourceScan(listOf(event), true, at)); store.status(calendar.id, "http")
+        val state = LocalStateSnapshot(active = empty, quarantine = empty).withSources {
+            store.pendingSync().count to SyncHealth.sourceAttentionCount(store) { 0 }
+        }
+        assertEquals(1, state.pending); assertEquals(1, state.sourceIssues)
+        val waiting = StoredSyncStatus("waiting", "等待约定同步时间")
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Message(waiting.message), VisibleSyncStatus.NeedsSourceAttention(1, 1))),
+            visible(connected, waiting, state.active, waiting.message, state.sourceIssues, state.pending))
+        assertEquals("error", heartbeat(connected, waiting, pending = store.pendingSync(), sourceIssues = state.sourceIssues))
+        assertEquals(1, store.pendingSync().count)
+    }
+
+    @Test fun disabledCorruptSourceDoesNotRequireAHealthReadButEnabledCorruptionIsReported() {
+        val cipher = object : ByteCipher {
+            override fun seal(bytes: ByteArray) = bytes.map { (it.toInt() xor 91).toByte() }.toByteArray()
+            override fun open(bytes: ByteArray) = seal(bytes)
+        }
+        val dir = folder.newFolder(); val store = LocalSourceStore(dir, cipher)
+        val source = LocalSource(name = "Generated disabled source", kind = "local-files", uri = "content://fixture/document/root", enabled = false)
+        store.save(source)
+        File(dir, "source-${source.id}.enc").writeBytes(byteArrayOf(0))
+        assertEquals(0, SyncHealth.sourceAttentionCount(store) { error("disabled source must not read pending files") })
+        store.save(source.copy(enabled = true))
+        assertTrue(runCatching { SyncHealth.sourceAttentionCount(store) { 0 } }.isFailure)
+        val status = StoredSyncStatus("waiting", "等待充电")
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Message("等待充电"), VisibleSyncStatus.SourceUnavailable)),
+            SyncReadiness.visible(connected, status, "等待充电", empty, null, null, sourceUnavailable = true, matches = ::matches))
     }
 
     @Test fun languageCatalogLoadingAndFailureDoNotShowAnUnverifiedOldStatus() {
-        assertEquals(VisibleSyncStatus.Loading, SyncReadiness.visible(connected, old, null, empty, 0, labelsReady = false, matches = ::matches))
-        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Unavailable, VisibleSyncStatus.Message(old.message))), SyncReadiness.visible(connected, old, null, empty, 0, labelsReady = false, labelsFailed = true, matches = ::matches))
+        assertEquals(VisibleSyncStatus.Loading, SyncReadiness.visible(connected, old, null, empty, 0, 0, labelsReady = false, matches = ::matches))
+        assertEquals(VisibleSyncStatus.Many(listOf(VisibleSyncStatus.Unavailable, VisibleSyncStatus.Message(old.message))), SyncReadiness.visible(connected, old, null, empty, 0, 0, labelsReady = false, labelsFailed = true, matches = ::matches))
     }
 
     @Test fun persistedLabelsFromAnySupportedLanguageAreProjectedWithoutRewritingThem() {

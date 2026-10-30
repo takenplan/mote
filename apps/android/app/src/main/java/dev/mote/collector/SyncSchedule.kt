@@ -28,11 +28,7 @@ object SyncSchedule {
             }
     }
     internal fun reportChanged(context: Context) {
-        val settings = Settings(context); val previous = settings.storedSyncStatus()
-        val changed = MoteI18n.text("配置已发生变化，请刷新后重试。")
-        val message = if (previous.state == "error" && changed in previous.message) previous.message
-            else if (previous.state == "error") previous.message + "\n" + changed else changed
-        settings.syncStatus("error", message)
+        Settings(context).syncRequestRejected(true)
     }
     internal fun reportBusy(context: Context) {
         Settings(context).syncStatus("waiting", MoteI18n.text("正在应用设置，请完成后重试本次扫描或立即同步"))
@@ -83,6 +79,11 @@ object SyncSchedule {
         }
         scheduleNow(context, requestedStamp, explicit)
     }
+    /** A completed scan must stay complete if sending is paused before its derived upload. */
+    internal fun scheduleAfterSourceScan(context: Context, config: CollectorConfig, explicit: Boolean) {
+        check(Looper.myLooper() != Looper.getMainLooper())
+        scheduleNow(context, stamp(config), explicit, afterScan = true)
+    }
     fun invalidate() { synchronized(this) { registeredStamp = null }; HeartbeatWorker.invalidate() }
     internal fun continueUpload(context: Context, config: CollectorConfig, explicit: Boolean) {
         val request = OneTimeWorkRequestBuilder<UploadWorker>().setConstraints(constraints(config, explicit))
@@ -107,10 +108,11 @@ object SyncSchedule {
         manager.enqueueUniqueWork("mote-upload", policy, request).result.get()
     }
     private var registeredStamp: String? = null
-    @Synchronized private fun scheduleNow(context: Context, requestedStamp: String, explicit: Boolean) {
+    @Synchronized private fun scheduleNow(context: Context, requestedStamp: String, explicit: Boolean, afterScan: Boolean = false) {
         val settings = Settings(context); val config = settings.read()
         if (stamp(config) != requestedStamp || (explicit && (config.syncPaused || !config.hasSyncConnection()))) {
-            if (explicit) { reportChanged(context); throw SettingsChangedFailure() }
+            if (explicit && !afterScan) { reportChanged(context); throw SettingsChangedFailure() }
+            if (explicit && afterScan && !config.syncPaused && config.hasSyncConnection()) reportChanged(context)
             return
         }
         val manager = WorkManager.getInstance(context)
@@ -151,6 +153,7 @@ object SyncSchedule {
         if (wait == 0L) {
             manager.cancelUniqueWork("mote-upload-timer")
             enqueueImmediate(context, request, replace = explicit)
+            if (explicit) settings.syncRequestRejected(false)
         } else {
             if (settings.syncState() != "uploading") settings.syncStatus("waiting", MoteI18n.text("等待约定同步时间 · 系统省电可能推迟后台运行"))
             manager.enqueueUniqueWork("mote-upload-timer", ExistingWorkPolicy.KEEP, request)

@@ -97,13 +97,13 @@ class SyncQueueActivity : MoteActivity() {
         val settings = Settings(this); val config = settings.read()
         if (!actionTask.busy) {
             val status = settings.storedSyncStatus()
-            val visible = SyncReadiness.visible(config, status, SyncSchedule.waitingReason(this, config), state.active, state.sourceIssues,
-                inventoryUnavailable = state.error != null, labelsReady = statusTranslations != null, labelsFailed = statusTranslationFailed) { source, value ->
+            val visible = SyncReadiness.visible(config, status, SyncSchedule.waitingReason(this, config), state.active, state.sourceIssues, state.pending,
+                inventoryUnavailable = state.error != null, sourceUnavailable = state.sourceError, labelsReady = statusTranslations != null, labelsFailed = statusTranslationFailed) { source, value ->
                 source == value || statusTranslations?.get(source)?.contains(value) == true
             }
-            sendStatus.text = SyncReadiness.text(visible)
+            sendStatus.text = SyncReadiness.text(visible) + if (settings.syncRequestRejected()) "\n" + MoteI18n.text("配置已发生变化，请刷新后重试。") else ""
         }
-        sendCount.text = state.active?.let { MoteI18n.text("本机保留 {0} 条 · 待发 {1} 条", it.records, it.pending) } ?: state.imageLabel()
+        sendCount.text = state.active?.let { MoteI18n.text("本机保留 {0} 条 · 待发 {1} 条", it.records, state.pending ?: "—") } ?: state.imageLabel()
         sendingPaused = config.syncPaused
         pauseSend.text = MoteI18n.text(if (config.syncPaused) "恢复全部发送" else "暂停全部发送")
         pauseSend.isEnabled = !actionTask.busy

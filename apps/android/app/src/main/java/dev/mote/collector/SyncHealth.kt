@@ -25,6 +25,7 @@ internal object SyncHealth {
 
     internal fun sourceAttentionCount(sources: LocalSourceStore, filePending: (LocalSource) -> Int): Int =
         sources.sources().count { source ->
+            if (!source.enabled) return@count false
             val metadata = sources.state(source.id)
             val pendingVersions = if (source.binaryFiles()) filePending(source) else metadata.optJSONArray("pending")?.length() ?: 0
             sourceRequiresAttention(source, metadata, pendingVersions)

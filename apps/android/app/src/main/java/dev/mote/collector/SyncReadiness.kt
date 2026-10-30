@@ -6,6 +6,7 @@ internal sealed interface VisibleSyncStatus {
     data class Message(val text: String) : VisibleSyncStatus
     data object Loading : VisibleSyncStatus
     data object Unavailable : VisibleSyncStatus
+    data object SourceUnavailable : VisibleSyncStatus
     data object Disconnected : VisibleSyncStatus
     data object SendAsConfigured : VisibleSyncStatus
     data class NeedsAttention(val blocked: Int, val pending: Int) : VisibleSyncStatus
@@ -28,19 +29,17 @@ internal object SyncReadiness {
         }
 
     fun visible(config: CollectorConfig, status: StoredSyncStatus, waitingReason: String?,
-        inventory: QueueInventory?, sourceIssues: Int?, inventoryUnavailable: Boolean = false,
+        inventory: QueueInventory?, sourceIssues: Int?, totalPending: Int?, inventoryUnavailable: Boolean = false, sourceUnavailable: Boolean = false,
         labelsReady: Boolean = true, labelsFailed: Boolean = false, matches: (String, String) -> Boolean): VisibleSyncStatus {
         val connected = config.hasSyncConnection()
         val parts = mutableListOf<VisibleSyncStatus>()
         if (!connected) parts += VisibleSyncStatus.Disconnected
         if (waitingReason != null) parts += VisibleSyncStatus.Message(waitingReason)
         if (inventoryUnavailable) parts += VisibleSyncStatus.Unavailable
-        else {
-            if (inventory != null && inventory.blocked > 0) parts += VisibleSyncStatus.NeedsAttention(inventory.blocked, inventory.pending)
-            if (inventory != null && sourceIssues != null && sourceIssues > 0) parts += VisibleSyncStatus.NeedsSourceAttention(sourceIssues, inventory.pending)
-            if (inventory == null && sourceIssues != null && sourceIssues > 0) parts += VisibleSyncStatus.Message(MoteI18n.text("来源需要处理"))
-            if (inventory == null || sourceIssues == null) parts += VisibleSyncStatus.Loading
-        }
+        else if (inventory != null && inventory.blocked > 0) parts += if (totalPending != null) VisibleSyncStatus.NeedsAttention(inventory.blocked, totalPending) else VisibleSyncStatus.Message(MoteI18n.text("部分记录需要处理"))
+        if (sourceUnavailable) parts += VisibleSyncStatus.SourceUnavailable
+        else if (sourceIssues != null && sourceIssues > 0) parts += if (totalPending != null) VisibleSyncStatus.NeedsSourceAttention(sourceIssues, totalPending) else VisibleSyncStatus.Message(MoteI18n.text("来源需要处理"))
+        if ((!inventoryUnavailable && inventory == null) || (!sourceUnavailable && sourceIssues == null) || (!inventoryUnavailable && !sourceUnavailable && totalPending == null)) parts += VisibleSyncStatus.Loading
         val ambiguous = status.state in setOf("unconfigured", "paused") && !labelsReady
         if (ambiguous) {
             if (labelsFailed) { parts += VisibleSyncStatus.Unavailable; parts += VisibleSyncStatus.Message(status.message) }
@@ -67,6 +66,7 @@ internal object SyncReadiness {
         is VisibleSyncStatus.Message -> status.text
         VisibleSyncStatus.Loading -> MoteI18n.text("正在读取本机同步状态…")
         VisibleSyncStatus.Unavailable -> MoteI18n.text("本机状态暂不可读取")
+        VisibleSyncStatus.SourceUnavailable -> MoteI18n.text("来源需要处理") + " · " + MoteI18n.text("本机状态暂不可读取")
         VisibleSyncStatus.Disconnected -> MoteI18n.text("未连接中央节点")
         VisibleSyncStatus.SendAsConfigured -> MoteI18n.text("按设置发送")
         is VisibleSyncStatus.NeedsAttention -> MoteI18n.text("{0} 条记录需要处理（冲突或中央不可用） · 待发 {1} 条；请打开同步与恢复", status.blocked, status.pending)

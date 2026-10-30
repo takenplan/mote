@@ -34,7 +34,8 @@ data class LocalStateSnapshot(
     val syncMessage: String = MoteI18n.text("尚未上传"),
     val error: String? = null,
     val checkedAt: Long = 0,
-    val sourceIssues: Int? = null
+    val sourceIssues: Int? = null,
+    val sourceError: Boolean = false
 ) {
     val captureLabel: String get() = if (captureState == "capturing") MoteI18n.text("正在采集") else captureMessage
     val totalImages: Int? get() = active?.let { a -> quarantine?.let { a.images + it.images } }
@@ -47,6 +48,12 @@ data class LocalStateSnapshot(
             MoteI18n.text("\n采集区图片文件 {0} 个 · 待决定区图片文件 {1} 个", active.imageFiles, quarantine.imageFiles) +
             MoteI18n.text("\n本机队列 {0} · 待决定区 {1}", size(active.diskBytes), size(quarantine.diskBytes))
     private fun size(bytes: Long) = "%.1f MiB".format(bytes / 1048576.0)
+}
+
+/** Source read failures do not replace the independently read local queue snapshot. */
+internal fun LocalStateSnapshot.withSources(load: () -> Pair<Int, Int>): LocalStateSnapshot {
+    val result = runCatching(load)
+    return copy(sourcePending = result.getOrNull()?.first, sourceIssues = result.getOrNull()?.second, sourceError = result.isFailure)
 }
 
 /** One application-owned producer. No images, credentials or captured text enter this stream. */
@@ -84,9 +91,12 @@ class LocalStateRepository private constructor(context: Context) {
                         else Triple(version, activeQueue.inventory(), quarantineQueue.inventory())
                     }
                     val settings = Settings(app)
-                    val sourceIssues = SyncHealth.sourceAttentionCount(app)
-                    LocalStateSnapshot(revision, active, pending, app.localSources().pendingSync().count,
-                        settings.state(), settings.message(), settings.uploadStatus(), checkedAt = System.currentTimeMillis(), sourceIssues = sourceIssues)
+                    LocalStateSnapshot(revision, active, pending, captureState = settings.state(), captureMessage = settings.message(),
+                        syncMessage = settings.uploadStatus(), checkedAt = System.currentTimeMillis()).withSources {
+                        val issues = SyncHealth.sourceAttentionCount(app)
+                        val count = app.localSources().pendingSync().count + app.fileArchives().pendingSync().count
+                        count to issues
+                    }
                 } catch (error: Exception) {
                     previous.copy(revision = LocalStateChanges.revisions.value, error = error.message ?: MoteI18n.text("本机状态暂不可读取"))
                 }

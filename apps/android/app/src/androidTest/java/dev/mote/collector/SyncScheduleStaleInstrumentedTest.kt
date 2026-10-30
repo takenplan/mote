@@ -48,14 +48,15 @@ class SyncScheduleStaleInstrumentedTest {
             assertTrue(runCatching { SyncSchedule.schedule(context, old, explicit = true) }.exceptionOrNull() is SettingsChangedFailure)
             assertEquals(WorkInfo.State.ENQUEUED, manager.getWorkInfoById(marker.id).get(10, TimeUnit.SECONDS)?.state)
 
+            settings.syncRequestRejected(false)
             settings.syncStatus("error", "Generated retained error")
             instrumentation.runOnMainSync { SyncSchedule.schedule(context, old, explicit = true) }
             val deadline = android.os.SystemClock.elapsedRealtime() + 15_000
-            while (!settings.uploadStatus().contains(MoteI18n.text("配置已发生变化，请刷新后重试。"))) {
+            while (!settings.syncRequestRejected()) {
                 check(android.os.SystemClock.elapsedRealtime() < deadline) { "Explicit stale request did not report its rejection" }
                 Thread.sleep(50)
             }
-            assertTrue(settings.uploadStatus().contains("Generated retained error"))
+            assertEquals("error", settings.syncState()); assertEquals("Generated retained error", settings.uploadStatus())
             assertEquals(WorkInfo.State.ENQUEUED, manager.getWorkInfoById(marker.id).get(10, TimeUnit.SECONDS)?.state)
         } finally {
             cancel(); SyncSchedule.invalidate()

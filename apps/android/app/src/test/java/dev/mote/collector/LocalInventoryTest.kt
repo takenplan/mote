@@ -14,6 +14,17 @@ class LocalInventoryTest {
     private fun event(source: String = "screen") = JSONObject().put("id", UUID.randomUUID().toString()).put("source", source)
         .put("capturedAt", "2026-09-15T00:00:00Z").put("privacy", JSONObject().put("excluded", false))
 
+    @Test fun unreadableSourceDoesNotReplaceFreshLocalAndQuarantineInventories() {
+        val dir = Files.createTempDirectory("inventory-source-failure").toFile()
+        try {
+            val queue = DurableQueue(dir, cipher); queue.enqueue(event("note"), null, 1000000)
+            val current = queue.inventory(); val quarantine = current.copy(records = 0, pending = 0)
+            val result = LocalStateSnapshot(active = current, quarantine = quarantine).withSources { error("generated unreadable source") }
+            assertEquals(current, result.active); assertEquals(quarantine, result.quarantine)
+            assertNull(result.error); assertTrue(result.sourceError); assertNull(result.sourcePending); assertNull(result.sourceIssues)
+        } finally { dir.deleteRecursively() }
+    }
+
     @Test fun everyCommittedMutationInvalidatesButCapacityRejectionDoesNot() {
         val dir = Files.createTempDirectory("inventory-events").toFile()
         try {
