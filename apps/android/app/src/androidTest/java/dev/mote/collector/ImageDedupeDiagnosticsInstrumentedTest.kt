@@ -143,7 +143,7 @@ class ImageDedupeDiagnosticsInstrumentedTest {
                 }
                 waitUntil("single deletion") { store.list().size == 1 && shown("本机保留 1 组") }
                 assertNull(store.read(pairs[0].getString("id")))
-                scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "清空全部诊断图片" }.performClick() }
+                scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "清空诊断副本" }.performClick() }
                 waitUntil("clear all") { store.list().isEmpty() && shown("本机保留 0 组") }
                 assertTrue(directory.listFiles().orEmpty().isEmpty())
             }

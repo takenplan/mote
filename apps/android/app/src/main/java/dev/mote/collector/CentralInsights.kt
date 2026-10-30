@@ -5,6 +5,18 @@ import android.text.Editable
 import android.text.InputFilter
 import android.text.TextWatcher
 import android.widget.LinearLayout
+import android.widget.TextView
+import android.view.View
+import android.view.Gravity
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.method.LinkMovementMethod
+import android.text.style.ClickableSpan
+import android.text.TextPaint
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -12,6 +24,8 @@ import org.json.JSONObject
 internal class CentralInsights(private val screens: CentralScreens) {
     private val ui get() = screens.ui
     private val body get() = screens.body
+    private var activeDialog: android.app.AlertDialog? = null
+    private fun showOwnedDialog(builder: android.app.AlertDialog.Builder): android.app.AlertDialog { activeDialog?.dismiss(); return builder.show().also { activeDialog = it } }
     private var mode = "history"
     private var selected: String? = null
     private var runId: String? = null
@@ -20,12 +34,13 @@ internal class CentralInsights(private val screens: CentralScreens) {
     private var detailScroll = 0
     private var prompt = ""
     private var report: JSONObject? = null
+    private var formatted = true
     private var lastRun = ""
     private var evidenceRef: String? = null
     private var resumeValidation = false
-    fun select(id: String) { require(InsightPresentation.validId(id)); selected = id; mode = "detail"; detailScroll = 0; report = null }
-    fun clear() { selected = null; runId = null; report = null; prompt = ""; evidenceRef = null; mode = "history"; cursors = mutableListOf(null); lastRun = ""; historyScroll = 0; detailScroll = 0; resumeValidation = false }
-    fun pause() { resumeValidation = true }
+    fun select(id: String) { require(InsightPresentation.validId(id)); selected = id; mode = "detail"; detailScroll = 0; report = null; formatted = true }
+    fun clear() { activeDialog?.dismiss(); activeDialog = null; selected = null; runId = null; report = null; prompt = ""; evidenceRef = null; mode = "history"; cursors = mutableListOf(null); lastRun = ""; historyScroll = 0; detailScroll = 0; resumeValidation = false }
+    fun pause() { activeDialog?.dismiss(); activeDialog = null; resumeValidation = true }
     fun resume() { if (resumeValidation) {
         resumeValidation = false
         when (mode) {
@@ -39,13 +54,14 @@ internal class CentralInsights(private val screens: CentralScreens) {
     fun save(out: Bundle) {
         if (mode == "detail") detailScroll = ui.contentScroll() else if (mode == "history") historyScroll = ui.contentScroll()
         out.putString("mode", mode); out.putString("selected", selected); out.putString("runId", runId); out.putString("prompt", prompt)
-        out.putString("evidence", evidenceRef)
+        out.putString("evidence", evidenceRef); out.putBoolean("formatted",formatted)
         out.putStringArrayList("cursors", ArrayList(cursors.map { it.orEmpty() })); out.putInt("historyScroll", historyScroll); out.putInt("detailScroll", detailScroll)
     }
     fun restore(value: Bundle) {
         selected = value.getString("selected")?.takeIf(InsightPresentation::validId); runId = value.getString("runId")?.takeIf(InsightPresentation::validId)
         mode = value.getString("mode").takeIf { it in setOf("history", "detail", "create", "run", "evidence") } ?: "history"
         evidenceRef = value.getString("evidence")?.takeIf { CentralEvidenceReference.captureId(it) != null }
+        formatted = value.getBoolean("formatted",true)
         prompt = value.getString("prompt").orEmpty().take(8000)
         cursors = value.getStringArrayList("cursors")?.map { it.takeIf(String::isNotBlank) }?.toMutableList()?.takeIf { it.isNotEmpty() } ?: mutableListOf(null)
         historyScroll = value.getInt("historyScroll"); detailScroll = value.getInt("detailScroll")
@@ -59,24 +75,43 @@ internal class CentralInsights(private val screens: CentralScreens) {
     } }
     private fun backToHistory() { selected = null; report = null; mode = "history"; screens.refresh() }
     private fun history() {
-        ui.text(MoteI18n.text("发现历史"), NativeFontRole.TITLE_MOBILE)
-        ui.button(MoteI18n.text("新建洞察")) { historyScroll = ui.contentScroll(); mode = "create"; screens.refresh() }
-        val target = ui.card()
-        ui.button(MoteI18n.text("刷新")) { loadHistory(target) }
+        ui.insightChrome("发现历史") { historyMore() }
+        val target = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL }.also(body::addView)
         loadHistory(target)
-        ui.disclosure(MoteI18n.text("生成任务")) { jobs ->
-            val api = screens.client
-            ui.work(MoteI18n.text("正在读取…"), { runCatching { api.get("/api/insight-runs") } }) { outcome ->
-                outcome.onSuccess { page ->
-                    val items = page.optJSONArray("items") ?: JSONArray()
-                    for (i in 0 until items.length()) {
-                        val item = items.getJSONObject(i)
-                        ui.button(InsightPresentation.runLabel(item.optString("status")) + " · " + item.optString("createdAt"), parent = jobs) { runId = item.getString("id"); mode = "run"; lastRun = ""; screens.refresh() }
+    }
+    private fun historyMore() {
+        val labels = listOf("新建洞察", "生成任务", "刷新", "资料与记忆")
+        showOwnedDialog(MoteDialogBuilder(ui).setTitle(MoteI18n.text("更多")).setItems(labels.map { MoteI18n.text(it) }.toTypedArray()) { _, index -> when(index) {
+            0 -> { historyScroll = ui.contentScroll(); mode = "create"; screens.refresh() }
+            1 -> showJobs()
+            2 -> screens.refresh()
+            else -> ui.insightNavigation()
+        } })
+    }
+    private fun showJobs() {
+        val target = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL; setPadding(ui.moteDp(20),0,ui.moteDp(20),0) }
+        val dialog = showOwnedDialog(MoteDialogBuilder(ui).setTitle(MoteI18n.text("生成任务")).setView(android.widget.ScrollView(ui).apply { addView(target) }).setNegativeButton(MoteI18n.text("关闭"),null))
+        val api = screens.client
+        ui.work(MoteI18n.text("正在读取…"), { runCatching { api.get("/api/insight-runs") } }) { outcome ->
+            outcome.onSuccess { page ->
+                val items = page.optJSONArray("items") ?: JSONArray()
+                for (i in 0 until items.length()) {
+                    val item = items.getJSONObject(i)
+                    ui.button(InsightPresentation.runLabel(item.optString("status")) + " · " + date(item.optString("createdAt")), parent = target) {
+                        dialog.dismiss(); runId = item.getString("id"); mode = "run"; lastRun = ""; screens.refresh()
                     }
-                }.onFailure { failure(it, jobs) }
-            }
+                }
+            }.onFailure { failure(it,target) }
         }
     }
+    private fun date(value: String) = runCatching { Instant.parse(value).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM,FormatStyle.SHORT).withLocale(MoteI18n.locale())) }.getOrDefault(value)
+    private fun citations(value: JSONObject): List<JSONObject> {
+        val rows = value.optJSONArray("citations") ?: JSONArray()
+        return (0 until rows.length()).map { rows.getJSONObject(it) }.distinctBy { it.getString("id") }
+    }
+    private fun preview(value: JSONObject): String = InsightPresentation.preview(JSONObject().put("answer",NativeAnswerPresentation.format(value.optString("answer"),emptyList()).text).put("citations",value.optJSONArray("citations")?:JSONArray()))
+    private fun meta(value: JSONObject): String = listOf(MoteI18n.text("发现"),date(value.optString("createdAt").ifBlank { value.optJSONObject("artifact")?.optString("createdAt").orEmpty() }),MoteI18n.text("{0} 份依据",citations(value).size)).filter(String::isNotBlank).joinToString(" · ")
+    private fun divider(parent: LinearLayout) { parent.addView(View(ui).apply { MoteUi.backgroundColor(this,NativeColorRole.DIVIDER) },LinearLayout.LayoutParams(-1,ui.moteDp(1))) }
     private fun loadHistory(target: LinearLayout) {
         val cursor = cursors.last(); val api = screens.client
         ui.work(MoteI18n.text("正在读取…"), { runCatching { api.get("/api/insights?limit=30" + (cursor?.let { "&cursor=" + CentralScreens.encode(it) } ?: "")) } }) { outcome ->
@@ -86,10 +121,14 @@ internal class CentralInsights(private val screens: CentralScreens) {
                 if (items.length() == 0) ui.text(MoteI18n.text("第一份洞察会保存在这里，之后可以随时回看。"), parent = target)
                 for (i in 0 until items.length()) {
                     val item = items.getJSONObject(i); val id = InsightPresentation.id(item) ?: continue
-                    val card = ui.card(target)
-                    ui.text(InsightPresentation.title(item), NativeFontRole.SECTION, card); ui.text(InsightPresentation.preview(item), parent = card)
-                    ui.text(item.optString("createdAt") + " · " + (item.optJSONArray("citations")?.length() ?: 0) + " " + MoteI18n.text("条证据"), NativeFontRole.SUPPORT, card)
-                    ui.button(MoteI18n.text("查看发现"), parent = card) { historyScroll = ui.contentScroll(); select(id); screens.refresh() }.tag = "insight:$id"
+                    val row = LinearLayout(ui).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0,ui.moteDp(18),0,ui.moteDp(18)); minimumHeight = ui.moteDp(64); isFocusable = true; tag = "insight:$id"; background = MoteUi.clickable(ui,NativeColorRole.BACKGROUND,0,false)
+                        setOnClickListener { if (!ui.isWorking) { historyScroll = ui.contentScroll(); select(id); screens.refresh() } } }
+                    val labels = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL }.also { row.addView(it,LinearLayout.LayoutParams(0,-2,1f)) }
+                    ui.text(InsightPresentation.title(item), NativeFontRole.ROW, labels)
+                    ui.text(preview(item),NativeFontRole.SUPPORT,labels).also { MoteUi.textColor(it,NativeColorRole.MUTED) }
+                    ui.text(meta(item),NativeFontRole.META,labels).also { MoteUi.textColor(it,NativeColorRole.MUTED) }
+                    row.addView(TextView(ui).apply { text = "›"; MoteUi.type(this,NativeFontRole.SUPPORT); MoteUi.textColor(this,NativeColorRole.MUTED); gravity = Gravity.CENTER },LinearLayout.LayoutParams(ui.moteDp(24),-2))
+                    target.addView(row,LinearLayout.LayoutParams(-1,-2)); divider(target)
                 }
                 if (cursors.size > 1) ui.button(MoteI18n.text("上一页"), parent = target) { cursors.removeAt(cursors.lastIndex); historyScroll = 0; screens.refresh() }
                 CentralScreens.next(page)?.let { next -> ui.button(MoteI18n.text("下一页"), parent = target) { cursors.add(next); historyScroll = 0; screens.refresh() } }
@@ -123,30 +162,64 @@ internal class CentralInsights(private val screens: CentralScreens) {
         }
     }
     private fun drawReport(value: JSONObject) {
+        ui.insightChrome("发现") { reportMore(value) }
         ui.text(InsightPresentation.title(value), NativeFontRole.TITLE_MOBILE)
-        ui.text(value.optString("createdAt"), NativeFontRole.SUPPORT)
-        ui.text(InsightPresentation.answer(value))
-        value.optJSONObject("snapshot")?.let { snapshot ->
-            ui.disclosure(MoteI18n.text("资料范围与覆盖")) { target ->
-                ui.text(MoteI18n.text("资料截止时间") + " · " + snapshot.optString("asOf"), parent = target)
-                ui.text(MoteI18n.text("采样不能证明实际工作时长。"), parent = target)
-                CentralAdmin(screens).values(snapshot, target)
-            }
+        ui.text(meta(value),NativeFontRole.SUPPORT).apply { tag = "insight-meta"; MoteUi.textColor(this,NativeColorRole.MUTED) }
+        val rows = citations(value); val answer = value.optString("answer")
+        val content = ui.text("").apply { tag = "insight-content"; setTextIsSelectable(true); setLineSpacing(0f,1.3f); movementMethod = LinkMovementMethod.getInstance() }
+        val display = NativeAnswerPresentation.format(answer,rows.map { it.getString("id") })
+        content.text = SpannableString(display.text).apply {
+            if (formatted) display.emphasis.forEach { mark -> setSpan(android.text.style.StyleSpan(if (mark.bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.ITALIC),mark.start,mark.end,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+            display.citations.forEach { mark -> setSpan(object : ClickableSpan() {
+                override fun onClick(widget: View) { if (!ui.isWorking) openCitation(value.getString("runId"),mark.id) }
+                override fun updateDrawState(paint: TextPaint) { paint.color = MoteUi.accent; paint.isUnderlineText = false }
+            },mark.start,mark.end,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
         }
-        ui.text(MoteI18n.text("查看依据"), NativeFontRole.SECTION)
-        val citations = value.optJSONArray("citations") ?: JSONArray()
-        if (citations.length() == 0) ui.text(MoteI18n.text("这份报告没有可引用的记录；内容需要进一步核实。"))
-        for (i in 0 until citations.length()) {
-            val citation = citations.getJSONObject(i); val id = citation.optString("id")
-            val card = ui.card(); ui.text(citation.optString("appName") + " · " + citation.optString("contentAt", citation.optString("capturedAt")), parent = card)
-            ui.text(citation.optString("excerpt"), parent = card)
-            ui.button(MoteI18n.text("查看原文依据"), parent = card) { detailScroll = ui.contentScroll(); evidenceRef = CentralEvidenceReference.capture(id); mode = "evidence"; screens.openWorkEvidence(evidenceRef!!) }
+        ui.text(MoteI18n.text("原文依据"),NativeFontRole.SECTION)
+        if (rows.isEmpty()) ui.text(MoteI18n.text("这份报告没有可引用的记录；内容需要进一步核实。"))
+        rows.forEachIndexed { index, citation ->
+            val row = LinearLayout(ui).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = ui.moteDp(52); setPadding(0,ui.moteDp(12),0,ui.moteDp(12)); isFocusable = true; tag = "insight-citation:"+citation.getString("id"); contentDescription = MoteI18n.text("查看引用 {0}",index+1)+" · "+citation.optString("appName"); background = MoteUi.clickable(ui,NativeColorRole.BACKGROUND,0,false)
+                setOnClickListener { if (!ui.isWorking) openCitation(value.getString("runId"),citation.getString("id")) } }
+            row.addView(TextView(ui).apply { text = (index+1).toString(); MoteUi.type(this,NativeFontRole.META); MoteUi.textColor(this,NativeColorRole.MUTED) },LinearLayout.LayoutParams(ui.moteDp(28),-2))
+            val labels = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL }.also { row.addView(it,LinearLayout.LayoutParams(0,-2,1f)) }
+            ui.text(citation.optString("title").ifBlank { citation.optString("appName").ifBlank { MoteI18n.text("原始记录") } },NativeFontRole.SUPPORT,labels)
+            ui.text(date(citation.optString("contentAt",citation.optString("capturedAt"))),NativeFontRole.META,labels).also { MoteUi.textColor(it,NativeColorRole.MUTED) }
+            row.addView(TextView(ui).apply { text = "›"; MoteUi.type(this,NativeFontRole.SUPPORT); MoteUi.textColor(this,NativeColorRole.MUTED) },LinearLayout.LayoutParams(ui.moteDp(24),-2))
+            body.addView(row,LinearLayout.LayoutParams(-1,-2)); divider(body)
         }
-        ui.button(MoteI18n.text("刷新")) { readReport() }
-        ui.disclosure(MoteI18n.text("生成信息与检索过程")) { target -> CentralAdmin(screens).values(JSONObject().put("runId", value.optString("runId")).put("trace", value.optJSONArray("trace") ?: JSONArray()), target) }
         ui.restoreContentScroll(detailScroll)
     }
+    private fun openCitation(reportId: String, evidenceId: String) {
+        val api = screens.client; detailScroll = ui.contentScroll()
+        ui.work(MoteI18n.text("正在读取…"), { runCatching { api.get("/api/insights/"+CentralScreens.encode(reportId)) } }) { outcome ->
+            outcome.onSuccess { fresh ->
+                require(InsightPresentation.id(fresh) == reportId && citations(fresh).any { it.getString("id") == evidenceId })
+                if (selected != reportId || mode != "detail") return@onSuccess
+                report = fresh; evidenceRef = null
+                screens.openWorkEvidence(CentralEvidenceReference.capture(evidenceId))
+            }.onFailure { error ->
+                if (error is CentralFailure && error.status in setOf(401,403,404,410)) { report = null; body.removeAllViews(); ui.text(MoteI18n.text("这份洞察当前不可用，请从历史选择其他洞察。")); ui.button(MoteI18n.text("发现历史")) { backToHistory() } }
+                failure(error)
+            }
+        }
+    }
+    private fun reportMore(value: JSONObject) {
+        val labels = listOf("排版结果", "标准阅读", "资料范围与覆盖", "生成信息与检索过程", "刷新", "资料与记忆")
+        showOwnedDialog(MoteDialogBuilder(ui).setTitle(MoteI18n.text("显示方式")).setSingleChoiceItems(labels.map { MoteI18n.text(it) }.toTypedArray(),if(formatted)0 else 1) { dialog, index ->
+            dialog.dismiss()
+            when(index) {
+                0,1 -> { detailScroll = ui.contentScroll(); formatted = index == 0; body.removeAllViews(); drawReport(value) }
+                2,3 -> { val content = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL; setPadding(ui.moteDp(20),0,ui.moteDp(20),0) }
+                    if(index==2) value.optJSONObject("snapshot")?.let { CentralAdmin(screens).values(it,content) }
+                    else CentralAdmin(screens).values(JSONObject().put("runId",value.optString("runId")).put("trace",value.optJSONArray("trace")?:JSONArray()),content)
+                    showOwnedDialog(MoteDialogBuilder(ui).setTitle(MoteI18n.text(labels[index])).setView(android.widget.ScrollView(ui).apply { addView(content) }).setPositiveButton(MoteI18n.text("关闭"),null)) }
+                4 -> readReport()
+                else -> ui.insightNavigation()
+            }
+        })
+    }
     private fun compose() {
+        ui.insightChrome("生成回顾") { ui.insightNavigation() }
         screens.setBack { backToHistory() }
         val field = ui.field(MoteI18n.text("洞察要求（可选）"), prompt, multiline = true).apply { filters = arrayOf(InputFilter.LengthFilter(8000)) }
         field.addTextChangedListener(object : TextWatcher {
@@ -172,6 +245,7 @@ internal class CentralInsights(private val screens: CentralScreens) {
             } }) { outcome -> outcome.onSuccess { job -> runId = job.getString("id"); mode = "run"; lastRun = ""; screens.refresh() }.onFailure { failure(it) } }
     }
     private fun run() {
+        ui.insightChrome("生成任务") { ui.insightNavigation() }
         screens.setBack { backToHistory() }; lastRun = ""; readRun()
     }
     private fun readRun() {
@@ -197,6 +271,7 @@ internal class CentralInsights(private val screens: CentralScreens) {
     fun poll() { if (mode == "detail") readReport() else if (mode == "run") readRun() }
     private fun failure(error: Throwable, target: LinearLayout? = null) {
         if (error is CentralFailure && error.status in setOf(401, 403, 404, 410)) {
+            activeDialog?.dismiss(); activeDialog = null
             if (error.status in setOf(401, 403)) body.removeAllViews() else target?.removeAllViews()
             report = null
         }

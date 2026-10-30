@@ -3,6 +3,7 @@ import {useMemo} from 'react';
 import { moteText } from '@mote/shared/i18n';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {remarkCjkStrong} from './remark-cjk-strong';
 import type { Answer } from './api';
 
 interface MarkdownNode { type:string; value?:string; url?:string; children?:MarkdownNode[] }
@@ -21,7 +22,7 @@ export function answerPreview(answer:Answer,limit=100) {
 }
 
 /** Format only verified citation IDs in prose; preserve code and authored links. */
-export function citationLinks(citations:Answer['citations']) {
+export function citationLinks(citations:Answer['citations'],numeric=false) {
   const indexes=new Map(citations.map((citation,index)=>[citation.id,index+1]));
   return () => (tree:MarkdownNode) => {
     function visit(parent:MarkdownNode) {
@@ -32,7 +33,7 @@ export function citationLinks(citations:Answer['citations']) {
         for (const match of node.value.matchAll(/\[([^\]\n]{1,300})\]/g)) {
           const index=indexes.get(match[1]);if(index===undefined)continue;
           if (match.index>start) result.push({type:'text',value:node.value.slice(start,match.index)});
-          result.push({type:'link',url:citationHref(match[1]),children:[{type:'text',value:moteText("来源 {0}", index)}]});
+          result.push({type:'link',url:citationHref(match[1]),children:[{type:'text',value:numeric?String(index):moteText("来源 {0}", index)}]});
           start=match.index+match[0].length;
         }
         if (!start) return [node];
@@ -44,7 +45,7 @@ export function citationLinks(citations:Answer['citations']) {
   };
 }
 
-export function AnswerMarkdown({answer,onOpen}:{answer:Answer;onOpen:(id:string)=>void}) {
+export function AnswerMarkdown({answer,onOpen,numericCitations=false,readOnly=false}:{answer:Answer;onOpen:(id:string)=>void;numericCitations?:boolean;readOnly?:boolean}) {
   const citationIds=JSON.stringify(answer.citations.map(citation=>citation.id));
   const verified=useMemo(()=>new Map((JSON.parse(citationIds) as string[]).map(id=>[citationHref(id),id])),[citationIds]);
   // Stable renderer types keep the focused citation mounted when the shared
@@ -54,9 +55,10 @@ export function AnswerMarkdown({answer,onOpen}:{answer:Answer;onOpen:(id:string)
     table:({children})=><div className="answer-table-scroll" role="region" aria-label={moteText("回答中的表格")} tabIndex={0}><table>{children}</table></div>,
     a:({href,children})=>{
       const id=href?verified.get(href):undefined;
+      if(readOnly)return id?<sup className="quoted-citation">{children}</sup>:<span>{children}</span>;
       return id ? <button type="button" className="inline-citation" onClick={()=>onOpen(formatEvidenceRef('capture',id))} aria-label={moteText("查看证据：{0}", children)}>{children}</button>
         : <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>;
     },
-  }),[verified,onOpen]);
-  return <ReactMarkdown skipHtml remarkPlugins={[remarkGfm,citationLinks(answer.citations)]} components={components}>{answer.answer}</ReactMarkdown>;
+  }),[verified,onOpen,readOnly]);
+  return <ReactMarkdown skipHtml remarkPlugins={[remarkGfm,remarkCjkStrong,citationLinks(answer.citations,numericCitations)]} components={components}>{answer.answer}</ReactMarkdown>;
 }

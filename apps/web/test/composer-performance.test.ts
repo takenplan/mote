@@ -99,8 +99,8 @@ test('failed admission, failed run and cancellation preserve the existing draft 
   return {items:[]};
  },'A');
  await f.render(api);await f.type('  Generated retry draft  ');await act(async()=>f.d.querySelector('form.ask-form')!.dispatchEvent(new f.dom.window.Event('submit',{bubbles:true,cancelable:true})));
- assert.equal(posts.length,2);assert.equal(posts[0].id,posts[1].id);assert.equal(f.input().value,'Generated retry draft');assert.equal(f.input().disabled,false);
- mode='run-failure';await f.press('Enter');assert.equal(posts.length,3);await act(async()=>poll.resolve({...run,status:'failed',conversationId:'A'}));assert.equal(f.input().value,'Generated retry draft');assert.equal(f.input().disabled,false);
+ assert.equal(posts.length,2);assert.equal(posts[0].id,posts[1].id);assert.equal(f.input().value,'  Generated retry draft  ');assert.equal(f.input().disabled,false);assert.equal(f.d.querySelector<HTMLButtonElement>('.send-button')!.disabled,true);
+ mode='run-failure';await f.click('重试同一请求');assert.equal(posts.length,3);assert.deepEqual(posts[2],posts[0]);await act(async()=>poll.resolve({...run,status:'failed',conversationId:'A'}));assert.equal(f.input().value,'Generated retry draft');assert.equal(f.input().disabled,false);
  // A separate deferred run lets the actual cancel command race its in-flight poll.
  const cancelPoll=deferred();let cancelRun:any;const cancelApi=apiWith((path,init)=>{
   if(path==='/api/query-runs'&&init?.method==='POST'){cancelRun={id:JSON.parse(String(init.body)).id,status:'running',createdAt:when,updatedAt:when,events:[]};return cancelRun;}
@@ -138,8 +138,8 @@ test('draft survives background/locale refresh and supplemental routing, while n
  await act(async()=>{f.dom.window.history.replaceState(null,'','#/ask?question=generated-question');f.dom.window.dispatchEvent(new f.dom.window.HashChangeEvent('hashchange'));});
  assert.equal(f.input(),null);await act(async()=>{f.dom.window.history.replaceState(null,'','#/ask');f.dom.window.dispatchEvent(new f.dom.window.HashChangeEvent('hashchange'));});assert.equal(f.input().value,'Generated preserved draft');
  revision=2;await act(async()=>resources(api).invalidate(path=>path==='/api/conversations/A'));assert.equal(f.d.querySelectorAll('.conversation-turn').length,1);assert.equal(f.d.querySelectorAll('.inline-citation').length,0);assert.match(f.d.body.textContent!,/相关证据已删除/);assert.equal(f.input().value,'Generated preserved draft');
- await f.click('新对话');assert.equal(f.input().value,'');await f.type('Generated new draft');await act(async()=>f.d.querySelector<HTMLButtonElement>('.conversation-item')!.click());assert.equal(f.input().value,'');
- await f.type('Generated deleted draft');await act(async()=>f.d.querySelector<HTMLButtonElement>('[aria-label="删除此对话"]')!.click());await f.click('确认删除对话');assert.equal(f.input().value,'');
+ await f.click('新对话');assert.equal(f.input().value,'Generated preserved draft');await f.click('舍弃并切换');assert.equal(f.input().value,'');await f.type('Generated new draft');await act(async()=>f.d.querySelector<HTMLButtonElement>('.conversation-item')!.click());assert.equal(f.input().value,'Generated new draft');await f.click('舍弃并切换');assert.equal(f.input().value,'');
+ await f.type('Generated deleted draft');await act(async()=>f.d.querySelector<HTMLButtonElement>('[aria-label="对话更多"]')!.click());await f.click('删除这段对话');await f.click('删除对话');assert.equal(f.input().value,'');
  await f.type('Generated old API draft');await f.render(apiWith(read,'A'));assert.equal(f.input().value,'');await f.type('Generated old connection draft');await f.render(apiWith(read,'B'));assert.equal(f.input().value,'');assert.doesNotMatch(f.d.body.textContent!,/Generated old connection draft/);
 });
 

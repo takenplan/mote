@@ -15,12 +15,15 @@ export function evidenceRoute(hash:string,id:string|null):string {
  return (base||'#/today')+(query.size?'?'+query:'');
 }
 /** One reversible detail entry retains its origin route and other query filters. */
-export function changeEvidenceRoute(browser:Pick<Window,'location'|'history'>,id:string|null):string|null {
+export function changeEvidenceRoute(browser:Pick<Window,'location'|'history'>,id:string|null,options?:{returnToCurrent?:boolean}):string|null {
  const current=browser.location.hash,next=evidenceRoute(current,id),state=browser.history.state;
  if(next===current)return readEvidenceRoute(next);
  if(id){
-  if(readEvidenceRoute(current))browser.history.replaceState(state,'',next);
+  if(readEvidenceRoute(current)&&options?.returnToCurrent)browser.history.pushState({...state,moteEvidenceParent:current},'',next);
+  else if(readEvidenceRoute(current))browser.history.replaceState(state,'',next);
   else browser.history.pushState({...state,moteEvidenceReturn:current},'',next);
+ }else if(typeof state?.moteEvidenceParent==='string'&&readEvidenceRoute(state.moteEvidenceParent)&&evidenceRoute(current,null)===evidenceRoute(state.moteEvidenceParent,null)){
+  browser.history.back();return readEvidenceRoute(state.moteEvidenceParent);
  }else if(typeof state?.moteEvidenceReturn==='string'&&evidenceRoute(current,null)===state.moteEvidenceReturn){browser.history.back();}
  else browser.history.replaceState(state,'',next);
  return readEvidenceRoute(next);

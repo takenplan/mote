@@ -1,6 +1,20 @@
+import {createUpdateInstallUi} from './update-install-ui';
+import {renderStorageLocation} from './storage-location-ui';
+import {appendDiagnostic,renderReadableFailure} from './ui-diagnostic';
+import {sourceSelectionResult} from './source-selection-result';
+import {keepLanguageAskDraft,takeLanguageAskDraft,dropLanguageAskDraft} from './language-draft';
+import {AskDraftScopes} from './ask-draft-scope';
+import {createWorkPendingUi} from './work-pending-ui';
+import {queueImportPresentation} from './queue-import-presentation';
+import {createChromeCaptureUi} from './chrome-capture-ui';
+import {createCaptureContextUi} from './capture-context-ui';
+import {renderSettingsWorkspace,beginDiagnosticFactsRefresh} from './settings-workspace';
+import {createBackupOperationUi} from './backup-operation-ui';
 import {createMemoryTopicsUi} from './memory-topics-ui';
 import {desktopAppearance} from './appearance';
 import {createContentLibraryUi} from './content-library-ui';
+import {createSourceWorkspaceUi} from './source-workspace-ui';
+import {normalizeSourceOptions} from './source-types';
 import {createWorkbenchUi, type RecentConversation} from './workbench-ui';
 import {createSyncHistoryUi} from './sync-history-ui';
 import {createDesktopPresentation} from './presentation';
@@ -8,18 +22,20 @@ import {createWorkActivityUi} from './work-activity-ui';
 import {createPermissionsUi} from './permissions-ui';
 import {nativeStatusSummary} from './native-status';
 import { renderAskAnswer, renderAskCitation, renderAskScope } from './ask-presentation';
-import {prependConversationTurns} from './ask-conversation';
+import {currentTurnCites,prependConversationTurns} from './ask-conversation';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import {builtinUiRules} from '@mote/shared';
-import {createAppCaptureUi} from './app-capture-ui';
+import {createAppCaptureUi,describeCaptureSelection} from './app-capture-ui';
 import {normalizeAppCollectionRules} from './app-collection';
 import { DesktopNavigation, desktopPages, needsCollectionSetup, type DesktopPage } from './navigation';
 const desktopApi = window.mote;
+const captureContextUi=createCaptureContextUi(desktopApi,document,markSettingsDirty);
 document.getElementById('ui-page-builtins')!.addEventListener('click',()=>{byId<HTMLTextAreaElement>('ui-page-rules').value=JSON.stringify(builtinUiRules,null,2);appCaptureUi.refreshRules();markSettingsDirty();});
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 let currentStatus: import('./contracts').Status;
 let initialized = false;
 let busy = false;
+let statusReadEpoch = 0;
 const fields = byId<HTMLFieldSetElement>('settings-fields');
 const settingsForm = byId<HTMLFormElement>('settings');
 const appCaptureUi=createAppCaptureUi({root:byId('app-collection-rules'),defaultRoot:byId('default-collection'),rulesEditor:byId<HTMLTextAreaElement>('ui-page-rules'),
@@ -39,11 +55,20 @@ let wasRunningBeforeSave = false;
 let pageRevision = 0;
 let pageEnteredAt = Date.now();
 const pageScroll = new Map<Page, number>();
-const settingsPages = new Set<Page>(['connection', 'sync', 'capture', 'privacy', 'developer']);
+let skipNextAskRefresh=false;
+let askReadingOnLeave:AskReadingPosition|undefined;
+const settingsPages = new Set<Page>(['screen','connection', 'sync', 'capture', 'privacy', 'developer','storage','chrome']);
 const memoryTopicsUi=createMemoryTopicsUi(desktopApi,document.getElementById('memory-topics-dialog') as HTMLDialogElement);
-const workbenchUi=createWorkbenchUi(desktopApi,{question:openWorkbenchQuestion,conversation:openWorkbenchConversation});
-const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),hasContent=>workbenchUi.setHasContent(hasContent));
+const workbenchUi=createWorkbenchUi(desktopApi,{question:openWorkbenchQuestion,conversation:openWorkbenchConversation,content:item=>void libraryUi.open(item),contents:()=>showPage('records')});
+let contentOrigin:Page='records';
+const libraryUi=createContentLibraryUi(desktopApi,()=>memoryTopicsUi.open(),(hasContent,rows,archiveDenied)=>{workbenchUi.setArchiveAuthorizationDenied(archiveDenied);workbenchUi.setHasContent(hasContent);workbenchUi.setHomeRows(rows);},{
+  open(){contentOrigin=currentPage;const title=document.querySelector<HTMLElement>(`[data-page="${currentPage}"] [data-page-title]`)?.textContent?.trim()??moteText('内容');byId('content-detail-close').textContent='← '+title;showPage('content-reader');},
+  close(){if(currentPage==='content-reader')showPage(contentOrigin,true,false,true,true);},
+});
 function refreshContent():Promise<void>{return libraryUi.refresh();}
+const sourceWorkspace=createSourceWorkspaceUi(desktopApi,{openDetail:()=>showPage('source-detail'),edit:id=>void editSource(id),toggle:row=>sourceAction(()=>desktopApi.updateSource(row.source.id,{...row.source,enabled:!row.source.enabled})),content:()=>{byId<HTMLSelectElement>('content-scope').value='local';showPage('records');},read:item=>libraryUi.open(item)});
+const workPendingUi=createWorkPendingUi(desktopApi,item=>void libraryUi.open(item),()=>showPage('uploads'));
+const chromeCaptureUi=createChromeCaptureUi(desktopApi);
 const syncHistoryUi = createSyncHistoryUi(desktopApi, page => showPage(page));
 const workActivityUi=createWorkActivityUi(desktopApi,page=>showPage(page));
 const permissionsUi=createPermissionsUi(desktopApi);
@@ -52,10 +77,13 @@ window.addEventListener('beforeunload',()=>{workActivityUi.dispose();permissions
 let setupReviewed = false;
 try { setupReviewed = localStorage.getItem('mote-desktop-collection-reviewed') === '1'; } catch { /* Collection remains usable without local storage. */ }
 
-function showPage(page: Page, focus = true, preserveSettingsDraft = false, refreshAskOnEntry = true): boolean {
+function showPage(page: Page, focus = true, preserveSettingsDraft = false, refreshAskOnEntry = true, preserveContentPosition = false): boolean {
+  if(page==='compression'&&currentPage==='capture')preserveSettingsDraft=true;
   if (page === 'notes' && !quickNote && desktopApi.openQuickNote) { void desktopApi.openQuickNote(); return false; }
   if (quickNote && page !== 'notes') return false;
+  if(page!==currentPage&&currentPage==='preferences'&&document.querySelector<HTMLElement>('[data-page=preferences]')?.dataset.dirty==='true'){if(!window.confirm(moteText('有未保存的修改。离开并丢弃修改？')))return false;byId('preferences-reset').click();}
   if (!navigation.navigate(page, () => preserveSettingsDraft || !settingsDirty || !settingsPages.has(currentPage) || window.confirm(moteText("有未保存的修改。离开并丢弃修改？")))) return false;
+  if(currentPage==='ask'&&page!=='ask')askReadingOnLeave=captureAskReading();
   if (settingsPages.has(currentPage)) pageScroll.delete(currentPage);
   else pageScroll.set(currentPage, window.scrollY);
   if (page !== currentPage) {
@@ -70,13 +98,18 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
       if (!settingsApplying) void desktopApi.cancelConnection().catch(() => {});
     }
   }
+  if(currentPage==='chrome'&&page!=='chrome')chromeCaptureUi.hide();
+  if(currentPage==='source-editor'&&page!=='source-editor')invalidateSourceEditor();
   if (currentPage === 'uploads' && page !== 'uploads') syncHistoryUi.hide();
-  if (currentPage === 'work' && page !== 'work') workActivityUi.hide();
+  if (currentPage === 'work' && page !== 'work') {workActivityUi.hide();workPendingUi.hide();}
   if (currentPage === 'permissions' && page !== 'permissions') permissionsUi.hide();
+  if (currentPage === 'content-reader' && page !== 'content-reader') libraryUi.close(false);
+  workbenchUi.leave(page);
   currentPage = page;
   if(initialized) renderOperations(currentStatus.operations??[]);
+  if(page==='chrome')chromeCaptureUi.refresh();
   if (page === 'uploads') syncHistoryUi.show();
-  if (page === 'work') workActivityUi.show();
+  if (page === 'work') {workActivityUi.show();workPendingUi.show();}
   const selected = navigation.section;
   presentation.update({section:selected});
   for (const element of Array.from(document.querySelectorAll<HTMLElement>('[data-page]'))) element.hidden = element.dataset.page !== page;
@@ -87,28 +120,32 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false, refre
   }
   const heading = (target: Page) => document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
   const title = heading(page), sectionTitle = heading(page==='connection'&&navigation.backTarget==='ask'?'ask':selected);
-  byId('workspace-location').textContent = page === selected ? title : `${sectionTitle} / ${title}`;
-  byId('workspace-back').hidden = !navigation.canGoBack;
+  byId('workspace-location').textContent = page==='ask'?moteText('问一问'):page==='content-reader'?moteText('内容详情'):page === selected ? title : `${sectionTitle} / ${title}`;
+  byId('workspace-back').hidden = !navigation.canGoBack||['content-reader','source-detail','source-editor','source-connect'].includes(page);
+  byId('source-feedback').hidden=!['sources','source-detail','source-editor','source-connect'].includes(page)||!byId('source-feedback').textContent;
   updateNoteAction();
   byId('workspace-back').setAttribute('aria-label', moteText("返回{0}", heading(navigation.backTarget)));
   updateSettingsHint();
   if (focus) document.querySelector<HTMLElement>(`[data-page="${page}"] [data-page-title]`)?.focus({ preventScroll: true });
   window.scrollTo({ top: pageScroll.get(page) || 0, behavior: 'instant' });
-  if (page === 'compression') { byId<HTMLInputElement>('compression-quality').value=String(currentStatus.config.jpegQuality); const side=byId<HTMLSelectElement>('compression-side');if(!Array.from(side.options).some(o=>o.value===String(currentStatus.config.captureMaxSide)))side.add(new Option(String(currentStatus.config.captureMaxSide),String(currentStatus.config.captureMaxSide)));side.value=String(currentStatus.config.captureMaxSide); void refreshCompression(); }
-  if (page === 'ask' && refreshAskOnEntry) void refreshAsk();
+  if (page === 'compression') {for(const [id,value] of [['compression-quality',currentStatus.config.jpegQuality],['compression-side',currentStatus.config.captureMaxSide]] as const){const select=byId<HTMLSelectElement>(id);if(!Array.from(select.options).some(option=>option.value===String(value)))select.add(new Option(String(value),String(value)));select.value=String(value);}invalidateCompression();}
+  if (page === 'ask' && refreshAskOnEntry) {if(skipNextAskRefresh){skipNextAskRefresh=false;if(askConversation&&askReadingOnLeave)restoreAskReadingPosition(askReadingOnLeave,askConversation,askGeneration);}else void refreshAsk();}
   if (page === 'permissions') permissionsUi.show();
-  if (page === 'privacy') void appCaptureUi.refreshApplications();
+  if (page === 'privacy'||page==='screen') void appCaptureUi.refreshApplications();
   if (page === 'statistics') void loadStorageStatistics();
-  if (page === 'records') { void loadRecords(); void refreshContent(); }
-  if (page === 'overview' && initialized) { void libraryUi.refreshHome(); void refreshSources(); void workbenchUi.refresh(); }
+  if (page === 'records' && !preserveContentPosition) { void loadRecords(); void refreshContent(); }
+  if (page === 'overview' && initialized && !preserveContentPosition) { void libraryUi.refreshHome(); void refreshSources(); void workbenchUi.refresh(); }
   if (page === 'sources') void refreshSources();
-  if (page === 'overview' && initialized) void desktopApi.status().then(render).catch(() => feedback(moteText("状态读取失败，请重试。")));
+  if (page === 'overview' && initialized) { const epoch=statusReadEpoch; void desktopApi.status().then(status=>{if(epoch===statusReadEpoch&&!busy)render(status);}).catch(() => {if(epoch===statusReadEpoch&&!busy)feedback(moteText("状态读取失败，请重试。"));}); }
   return true;
 }
 for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-nav]:not([data-presentation-nav])'))) button.addEventListener('click', () => {
   const page = button.dataset.nav as Page;
   if (pageNames.includes(page)) showPage(page);
 });
+byId('connection-central-content').addEventListener('click',()=>{byId<HTMLSelectElement>('content-scope').value='received';showPage('records');});
+byId('settings-central-models').addEventListener('click',()=>void perform(()=>desktopApi.openCentral('models')));
+byId('chrome-back').addEventListener('click',()=>showPage(navigation.backTarget));
 byId('workspace-back').addEventListener('click', () => showPage(navigation.backTarget));
 function updateNoteAction(): void {
   const action = byId('note-action');
@@ -124,7 +161,7 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-ad
   if(action==='note')showPage('notes');
   else if(action==='screen')showPage('screen');
   else if(action==='source')showPage('sources');
-  else if(action==='folder'||action==='file')void beginSourceSelection(action==='folder'?'directory':'files');
+  else if(action==='folder'||action==='file')void beginSourceSelection(action==='folder'?'directory':'files',Boolean(button.closest('#home-onboarding')));
   else if(action==='lark'){
     if(!currentStatus?.config.serverUrl){showPage('connection');feedback(moteText('先连接你的中央节点，即可打开中央仓库。'));return;}
     void perform(()=>desktopApi.openCentral('lark'));
@@ -135,11 +172,11 @@ function reviewCollectionSetup(): void {
   try { localStorage.setItem('mote-desktop-collection-reviewed', '1'); } catch { /* This preference is not required for capture. */ }
   if (currentStatus) render(currentStatus);
 }
-byId('setup-primary').addEventListener('click', () => { if (showPage('privacy')) reviewCollectionSetup(); });
+byId('setup-primary').addEventListener('click', () => {if(showPage('screen')){reviewCollectionSetup();byId('default-collection').closest<HTMLDetailsElement>('details')!.open=true;byId('default-collection').querySelector<HTMLInputElement>('input')?.focus();}});
 byId('setup-current').addEventListener('click', () => { reviewCollectionSetup(); byId('start').focus(); });
 byId('pause-sending').addEventListener('click',()=>void perform(async()=>{ const updated=await desktopApi.setSyncPaused(!currentStatus.config.syncPaused); render(updated); }));
 function updateSettingsHint(): void {
-  byId('settings-save-bar').hidden = !settingsPages.has(currentPage);
+  byId('settings-save-bar').hidden = currentPage==='sync'||!settingsPages.has(currentPage)||currentPage==='chrome'||currentPage==='developer'||currentPage==='screen'&&!settingsDirty;
   byId('settings-pending').hidden = !settingsDirty;
   byId('save-hint').textContent = settingsDirty ? moteText("有未保存的修改，离开前会提醒。保存后立即生效。") : currentStatus?.running ? moteText("保存后立即应用；必要时会短暂暂停并自动恢复采集。") : moteText("设置保存后立即生效；采集保持当前开停状态。");
   byId<HTMLButtonElement>('settings-reset').disabled = !settingsDirty || busy;
@@ -154,7 +191,7 @@ function reserveSettingsFooter(): void {
 }
 new ResizeObserver(reserveSettingsFooter).observe(settingsSaveBar);
 window.addEventListener('resize', reserveSettingsFooter);
-function markSettingsDirty(): void { settingsDirty = true; updateSettingsHint(); }
+function markSettingsDirty(): void { settingsDirty = true;byId('capture-default-summary').textContent=describeCaptureSelection(readChannels(byId('default-collection')));updateSettingsHint(); }
 settingsForm.addEventListener('input', markSettingsDirty);
 settingsForm.addEventListener('change', markSettingsDirty);
 byId('settings-reset').addEventListener('click', () => {
@@ -173,13 +210,16 @@ function revealField(element: HTMLElement): void {
   element.focus(); element.scrollIntoView({ block: 'center', behavior: 'instant' });
 }
 document.addEventListener('keydown', event => {
+  if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'&&!quickNote&&!document.querySelector('dialog[open]')){event.preventDefault();if(showPage('records'))byId('content-search').focus();}
   if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); showPage('settings'); }
+  if(event.key==='Escape'&&currentPage==='content-reader'){event.preventDefault();libraryUi.close();return;}
   if (event.key === 'Escape' && document.querySelector('dialog[open]')) return;
   if (event.key === 'Escape' && currentPage === 'records' && !byId('record-detail').hidden) closeRecordDetail();
   else if (event.key === 'Escape' && navigation.canGoBack) showPage(navigation.backTarget);
 });
 desktopApi.onNavigate?.(page => {
-  if (page === 'central') byId('central').click();
+  if(page==='capture-start'){if(showPage('screen',true,true))byId('start').click();}
+  else if (page === 'central') byId('central').click();
   else if (pageNames.includes(page)) showPage(page);
 });
 showPage(quickNote ? 'notes' : 'overview', false);
@@ -269,7 +309,7 @@ async function loadRecords(): Promise<void> {
       const time = document.createElement('time'); time.dateTime = item.capturedAt; time.textContent = new Date(item.capturedAt).toLocaleTimeString(getLocale());
       const state = document.createElement('small'); state.textContent = item.syncError ? moteText("同步需处理 · {0}", ocrLabel(item, location)) : `${location === 'local' ? moteText("本机待同步 · ") : ''}${ocrLabel(item, location)}`;
       if(item.sizeBytes!==undefined)state.textContent+=` · ${(item.sizeBytes/1024).toFixed(1)} KiB`;
-      caption.append(title, time, state); card.append(image, caption); card.addEventListener('click', () => {
+      caption.append(title, time, state); if(item.hasImage)card.append(image);card.append(caption); card.addEventListener('click', () => {
         selectedRecordButton?.classList.remove('selected'); selectedRecordButton?.setAttribute('aria-pressed', 'false');
         selectedRecordButton = card; card.classList.add('selected'); card.setAttribute('aria-pressed', 'true');
         void openRecord(item, location, revision);
@@ -310,6 +350,7 @@ byId('record-detail-close').addEventListener('click', closeRecordDetail);
 function readInput(id: string): string { return byId<HTMLInputElement>(id).value; }
 function numberInput(id: string): number { return Number(readInput(id)); }
 function fillConfig(config: import('./contracts').PublicConfig): void {
+  captureContextUi.reset();
   byId<HTMLInputElement>('packed-upload').checked = config.packedUpload ?? false;
   writeChannels(byId('default-collection'),config.defaultCollection);
   byId<HTMLInputElement>('structured-ocr').checked=config.structuredOcrEnabled;
@@ -322,9 +363,9 @@ function fillConfig(config: import('./contracts').PublicConfig): void {
     'diagnostic-interval': config.diagnosticIntervalSeconds, 'image-dedupe': config.imageDedupeMode ?? 'off', 'jpeg-quality': config.jpegQuality, 'capture-max-side': config.captureMaxSide, 'battery-pause-below': config.batteryPauseBelowPct,
     'server-url': config.serverUrl, 'device-name': config.deviceName, interval: config.intervalMs / 1000,
     'queue-mb': config.maxQueueBytes / 1024 / 1024, 'queue-events': config.maxQueueEvents,
+    idle: config.idlePauseSeconds,
     'sync-interval': config.syncIntervalMinutes, 'sync-batch': config.syncBatchSize,
     masks: JSON.stringify(config.masks, null, 2),
-    idle: config.idlePauseSeconds,
   };
   for (const [id, value] of Object.entries(values)) byId<HTMLInputElement>(id).value = String(value);
   byId<HTMLInputElement>('metadata-enabled').checked = config.metadataEnabled;
@@ -337,17 +378,13 @@ function fillConfig(config: import('./contracts').PublicConfig): void {
   byId<HTMLSelectElement>('gate-failure').value = config.uploadGate?.failureAction ?? 'hold';
   byId<HTMLInputElement>('token').value = '';
   byId<HTMLInputElement>('token').placeholder = config.tokenConfigured ? moteText("已安全保存；留空保留已有令牌") : moteText("输入中央节点访问令牌");
-  for (const input of Array.from(document.querySelectorAll<HTMLInputElement>('[name=sync-mode]'))) input.checked = input.value === config.syncMode;
+  byId<HTMLSelectElement>('sync-mode').value=config.syncMode;
   byId<HTMLInputElement>('confirm-local-backlog').checked = false;
   refreshPresets(); updateSyncOptions(); renderMaskEditor(); updateLocalBacklog();
   updateTokenField();
-  settingsDirty = false; updateSettingsHint();
+  settingsDirty = false; updateSettingsHint();chromeCaptureUi.refresh();
 }
-function renderStorage(): void {
-  byId('storage-restart').hidden = !currentStatus?.storage?.recoveryRequired;
-  byId<HTMLInputElement>('capture-directory').value = captureStorageDirectory || currentStatus?.storage?.defaultDirectory || moteText("默认位置（当前环境目录）");
-  byId('capture-directory-state').textContent = currentStatus?.storage?.cleanupPending ? moteText("新目录已生效；旧副本尚未清理，请连接原磁盘后重新打开 Mote。") : captureStorageDirectory !== (currentStatus?.config.captureStorageDirectory || '') ? moteText("保存设置后迁移本机已有记录，过程中会自动暂停并恢复。") : moteText("这里保存本机待同步的截图。完整内容识别与已归档图片保存在中央节点。");
-}
+function renderStorage(): void { renderStorageLocation(document,currentStatus,captureStorageDirectory); }
 byId('storage-restart').addEventListener('click', () => void desktopApi.restartForStorageRecovery());
 byId('capture-directory-choose').addEventListener('click', () => void perform(async () => {
   const revision = pageRevision;
@@ -357,20 +394,24 @@ byId('capture-directory-choose').addEventListener('click', () => void perform(as
 byId('capture-directory-default').addEventListener('click', () => { captureStorageDirectory = ''; markSettingsDirty(); renderStorage(); });
 byId('capture-directory-open').addEventListener('click', () => void perform(() => desktopApi.openCaptureDirectory()));
 let connectionPreview: import('./connection').ConnectionPreview | undefined;
+const backupOperationUi=createBackupOperationUi();
 function renderOperations(jobs:NonNullable<import('./contracts').Status['operations']>):void {
+  backupOperationUi.update(jobs);
   // Completed work belongs to the page where it began; active work and failures remain global.
   const operations=jobs.filter(job=>job.state!=='completed'||currentPage!=='overview'&&job.startedAt>=pageEnteredAt);
   byId('background-progress').hidden = !operations.length;
-  byId('background-progress').textContent = operations.map(job => `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${job.state === 'running' ? moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000)) : ''}`).join('；');
+  byId('background-progress').textContent = operations.map(job => job.state === 'running' ? `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000))}` : job.state === 'failed' ? moteText('操作未完成，请检查权限与配置后重试') : moteText('处理结束')).join('；');
 }
 function render(status: import('./contracts').Status): void {
   syncHistoryUi.update(status);libraryUi.update(status);memoryTopicsUi.update(status);workActivityUi.update(status);
   if(currentStatus&&(currentStatus.authorizationGeneration!==status.authorizationGeneration||currentStatus.config.serverUrl!==status.config.serverUrl||currentStatus.config.tokenConfigured!==status.config.tokenConfigured||currentStatus.config.authSignedOut!==status.config.authSignedOut||currentStatus.config.authExpiresAt!==status.config.authExpiresAt)){
-    recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
-    askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
+    sourceWorkspace.clear();localSourceRows=[];invalidateSourceEditor();byId<HTMLTextAreaElement>('source-initial-description').value='';byId<HTMLTextAreaElement>('source-initial-description').disabled=true;sourceReadGeneration++;recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
+    const retained=askDraftScopes.switch(currentStatus,status,snapshotAskDraft());
+    askGeneration++;clearTimeout(askTimer);askConversation=undefined;askCursor=undefined;skipNextAskRefresh=false;byId('ask-more').hidden=true;byId('ask-history').replaceChildren();restoreScopedAskDraft(retained);renderAsk();setText('ask-login-status','');setText('ask-error','');
   }
-  currentStatus = status; renderStorage();appCaptureUi.setStatus(status);if(!quickNote)workbenchUi.update(status);
+  currentStatus = status;workPendingUi.update(status);chromeCaptureUi.update(status);captureContextUi.update(status);renderSettingsWorkspace(status);sourceWorkspace.status(status); renderStorage();appCaptureUi.setStatus(status);if(!quickNote)workbenchUi.update(status);
   askConnectionState();
+  maybeRestoreAskConversation();
   updateTokenField();
   renderOperations(status.operations??[]);
   byId('connection-device').textContent = moteText("设备：{0} · ID {1}。迁移已有设备时，请在中央邀请中选择此 ID。", status.config.deviceName, status.config.deviceId);
@@ -424,9 +465,9 @@ function render(status: import('./contracts').Status): void {
   byId('stop').hidden = !status.running && !(settingsApplying && wasRunningBeforeSave);
   // A source registration or settings update can need a flush even with no pending bodies.
   byId('retry').hidden = false;
-  byId<HTMLButtonElement>('retry').disabled = busy || (status.facts ? !status.facts.sync.allowedActions.includes('retry_sync') : status.sync.state === 'uploading' || status.sync.state === 'unconfigured');
-  byId('retry').textContent = status.sync.state === 'error' ? moteText("重试上传") : moteText("立即上传");
-  fields.disabled = busy;
+  byId<HTMLButtonElement>('retry').disabled = busy || Boolean(status.config.syncPaused) || (status.facts ? !status.facts.sync.allowedActions.includes('retry_sync') : status.sync.state === 'uploading' || status.sync.state === 'unconfigured');
+  byId('retry').textContent = status.sync.state === 'error' ? moteText("重试上传") : moteText("立即发送");
+  fields.disabled = busy;for(const control of Array.from(document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>('[form=settings]')))control.disabled=busy;
   byId<HTMLInputElement>('device-name').disabled = busy;
   for (const id of ['connection-preview', 'connection-json', 'connection-qr', 'connection-test']) byId<HTMLButtonElement>(id).disabled = busy;
   byId<HTMLButtonElement>('connection-cancel').disabled = busy;
@@ -436,7 +477,7 @@ function render(status: import('./contracts').Status): void {
   updateSettingsHint();
   const syncNames = { unconfigured: moteText("仅保存在本机"), idle: moteText("已同步"), waiting: moteText("等待同步条件"), uploading: moteText("正在上传"), error: moteText("上传需要处理"), manual: moteText("等待手动上传") };
   const syncStateLabel = status.sync.state === 'idle' && status.sync.pendingRecords > 0 ? moteText("记录已保存 · 准备上传") : syncNames[status.sync.state];
-  setText('sync-state', syncStateLabel);
+  setText('sync-state',status.config.syncPaused?moteText('发送已暂停'):syncStateLabel);
   setText('sync-policy-label', syncModeLabels[status.sync.mode]);
   setText('upload-speed', status.sync.state === 'uploading' ? `${((status.sync.uploadBytesPerSecond ?? 0) / 1024).toFixed(1)} KiB/s` : '0 KiB/s');
   setText('sync-upload-speed', byId('upload-speed').textContent ?? '0 KiB/s');
@@ -452,6 +493,7 @@ function render(status: import('./contracts').Status): void {
     ? moteText("开发环境使用权限受限的本机 JSON 保存凭据，不使用系统密钥存储。")
     : status.encryptedTokenStorage ? moteText("使用系统密钥存储加密；不会展示已有令牌。") : moteText("系统加密存储不可用，无法保存令牌。");
 
+  byId<HTMLButtonElement>('diagnostics-sample').disabled=busy||!status.diagnostics?.enabled;
   if (status.diagnostics) {
     const d = status.diagnostics, latest = d.latest;
     const rows = [d.enabled ? moteText("诊断开启 · {0} 条数值样本", d.sampleCount) : moteText("诊断关闭"), moteText("保存 {0} · 过滤 {1} · 失败 {2}", d.counters.saved, d.counters.blocked, d.counters.failed), moteText("图像累计 {0} MiB · 已上传请求体约 {1} MiB", (d.counters.imageBytes / 1048576).toFixed(2), (d.counters.uploadedBytes / 1048576).toFixed(2))];
@@ -467,15 +509,23 @@ function render(status: import('./contracts').Status): void {
   if (status.diagnostics?.enabled) { const c = status.diagnostics.counters; statistics.push(moteText("诊断累计：保存 {0} · 过滤 {1} · 失败 {2} · 截图文字隐私审查 {3} s", c.saved, c.blocked, c.failed, (c.ocrMs / 1000).toFixed(1)), moteText("累计上传请求体约 {0} MiB；不代表远端存储量。", (c.uploadedBytes / 1048576).toFixed(2))); }
   else statistics.push(moteText("数值诊断未开启；如需持续处理计数、资源与耗时，请在开发者设置中启用。"));
   byId('collection-statistics').replaceChildren(...statistics.map(text => { const p = document.createElement('p'); p.textContent = text; return p; }));
-  if (!initialized) { fillConfig(status.config); initialized = true;void refreshContent(); }
+  if (!initialized) { fillConfig(status.config); initialized = true;void refreshContent();restoreLanguageAskDraft(); }
 }
-async function perform(action: () => Promise<unknown>): Promise<void> {
+async function perform(action: () => Promise<unknown>,localFailure=false): Promise<void> {
   if (busy) return;
-  busy = true; feedback(moteText("正在处理，请稍候…")); byId('feedback').setAttribute('aria-busy', 'true'); if (currentStatus) render(currentStatus);
+  statusReadEpoch++; busy = true; if(!localFailure)feedback(moteText("正在处理，请稍候…")); byId('feedback').setAttribute('aria-busy', 'true'); if (currentStatus) render(currentStatus);
   try { await action(); } catch (error) {
     const message = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作失败");
-    feedback(message);
-  } finally { busy = false; byId('feedback').setAttribute('aria-busy', 'false'); if (byId('feedback').textContent === moteText("正在处理，请稍候…")) feedback(''); if (currentStatus) render(currentStatus); }
+    if(!localFailure)renderReadableFailure(byId('feedback'),moteText('操作未完成，请检查权限与配置后重试'),message);
+  } finally {
+    // Read the operation's settled state before enabling a subsequent mutation.
+    let settled: import('./contracts').Status | undefined;
+    try { settled = await desktopApi.status(); } catch { /* Keep the last confirmed status on a read failure. */ }
+    busy = false; byId('feedback').setAttribute('aria-busy', 'false');
+    if (byId('feedback').textContent === moteText("正在处理，请稍候…")) feedback('');
+    statusReadEpoch++;
+    if (settled ?? currentStatus) render(settled ?? currentStatus);
+  }
 }
 byId('settings').addEventListener('submit', event => {
   event.preventDefault();
@@ -485,6 +535,7 @@ byId('settings').addEventListener('submit', event => {
       revealField(element); element.reportValidity(); return;
     }
   }
+  if(captureStorageDirectory!==(currentStatus.config.captureStorageDirectory||'')&&!window.confirm(moteText('复制并验证本机待发送内容后切换保存位置。\n从：{0}\n到：{1}',currentStatus.storage?.directory||'',captureStorageDirectory||currentStatus.storage?.defaultDirectory||'')))return;
   let masks: import('./contracts').Rectangle[];
   let appCollectionRules: Record<string, import('./contracts').CollectionMode>;
   try { masks = masksForEditor(); }
@@ -494,6 +545,8 @@ byId('settings').addEventListener('submit', event => {
   void perform(async () => {
     const token = readInput('token').trim();
     settingsApplying = true; wasRunningBeforeSave = currentStatus.running; render(currentStatus);
+    const captureSave=captureContextUi.prepareSave();
+    try {
     let updated: import('./contracts').Status;
     try { updated = await desktopApi.configure({
       syncPaused:currentStatus.config.syncPaused, captureStorageDirectory,
@@ -514,7 +567,8 @@ byId('settings').addEventListener('submit', event => {
       ...(token ? { token } : {}),
     });
     } finally { settingsApplying = false; wasRunningBeforeSave = false; }
-    render(updated); fillConfig(updated.config); feedback(updated.running ? moteText("设置已保存并立即生效，采集已恢复。") : moteText("设置已保存并立即生效，采集保持停止。"), true);
+    render(updated); await captureSave.persist(); fillConfig(updated.config); feedback(updated.running ? moteText("设置已保存并立即生效，采集已恢复。") : moteText("设置已保存并立即生效，采集保持停止。"), true);
+    } finally {captureSave.release();}
   });
 });
 const captureConfirmation=byId<HTMLDialogElement>('capture-confirm-dialog');
@@ -527,7 +581,7 @@ function showCaptureConfirmation():void {
   captureConfirmation.showModal();
 }
 byId('start').addEventListener('click', () => {
-  if (settingsDirty) { showPage('settings'); feedback(moteText("请先保存或还原修改，再开始采集。")); return; }
+  if (settingsDirty) { feedback(moteText("请先保存或还原修改，再开始采集。")); return; }
   showCaptureConfirmation();
 });
 byId('capture-confirm-cancel').addEventListener('click',()=>{captureConfirmation.close();byId('start').focus();});
@@ -547,8 +601,20 @@ byId('permissions').addEventListener('click', () => showPage('permissions'));
 byId('data-folder').addEventListener('click', () => void perform(() => desktopApi.openDataFolder()));
 byId('export-metadata').addEventListener('click',()=>void perform(()=>desktopApi.exportMetadata()));
 byId('export-central').addEventListener('click',()=>void perform(()=>desktopApi.openCentral('vault')));
-byId('export').addEventListener('click', () => void perform(async () => { const result = await desktopApi.exportQueue(); if (!result.canceled) feedback(moteText("队列备份已保存至 {0}", result.path), true); }));
-byId('import').addEventListener('click', () => void perform(async () => { const result = await desktopApi.importQueue(); if (!result.canceled) feedback(moteText("已导入 {0} 条待上传记录，重复记录自动跳过。", result.imported), true); }));
+byId('restore-pause').addEventListener('click',()=>void perform(async()=>render(await desktopApi.setSyncPaused(true))));
+byId('export').addEventListener('click',()=>void perform(async()=>{
+  showPage('export-result');
+  const visit=backupOperationUi.begin('export',moteText('正在处理，请稍候…'),currentStatus.operations);
+  try {const result=await desktopApi.exportQueue();backupOperationUi.finish(visit,result.canceled?'canceled':'complete',result.canceled?moteText('已取消'):moteText('队列备份已保存至 {0}',result.path),result.canceled?undefined:result.file);}
+  catch(error){backupOperationUi.finish(visit,'error',moteText('导出未完成，请重试'),undefined,error instanceof Error?error.message:String(error));throw error;}
+}));
+byId('import').addEventListener('click',()=>void perform(async()=>{
+  showPage('restore');
+  const visit=backupOperationUi.begin('import',moteText('正在处理，请稍候…'),currentStatus.operations);
+  if(!window.confirm(moteText('恢复到当前本机队列，继续按当前发送设置处理。是否继续？'))){backupOperationUi.finish(visit,'canceled',moteText('已取消'));return;}
+  try {const outcome=await desktopApi.importQueue(),result=queueImportPresentation(outcome);backupOperationUi.finish(visit,result.phase,result.message,outcome.canceled?undefined:outcome.file,!outcome.canceled&&outcome.state==='incomplete'?outcome.error:undefined);}
+  catch(error){backupOperationUi.finish(visit,'error',moteText('导入未完成，可能已有记录保存在本机。请检查本机内容后重试所选备份。'),undefined,error instanceof Error?error.message:String(error));throw error;}
+}));
 desktopApi.onStatus(render);
 void desktopApi.status().then(render).catch(() => feedback(moteText("无法连接采集器进程，请重新打开 Mote。")));
 
@@ -565,28 +631,37 @@ byId('home-feature-guide').addEventListener('click', () => {
 let draft: import('./note-draft').NoteDraft | undefined;
 let noteSaving = false;
 let noteComposing = false;
-const noteFields = ['note-text', 'save-note'];
-function lockNote(locked: boolean): void { for (const id of noteFields) (byId(id) as HTMLInputElement).disabled = locked; }
+const noteFields = ['note-text', 'note-description', 'save-note'];
+byId<HTMLDetailsElement>('note-description-panel').addEventListener('toggle', () => {
+  if (quickNote) void desktopApi.resizeQuickNote?.(byId<HTMLDetailsElement>('note-description-panel').open);
+});
+let noteLocked=true;
+function noteControls():void {byId<HTMLButtonElement>('save-note').disabled=noteLocked||!readInput('note-text').trim();}
+function lockNote(locked: boolean): void {noteLocked=locked;for (const id of noteFields) (byId(id) as HTMLInputElement).disabled = locked;noteControls();}
 lockNote(true);
 function renderDraft(value: import('./note-draft').NoteDraft): void {
-  draft = value; byId<HTMLTextAreaElement>('note-text').value = value.text;
-  byId<HTMLTextAreaElement>('note-text').readOnly = Boolean(value.prepared);
+  draft = value; byId<HTMLTextAreaElement>('note-text').value = value.text;byId<HTMLTextAreaElement>('note-description').value=value.description;byId<HTMLDetailsElement>('note-description-panel').open=Boolean(value.description);
+  for(const id of ['note-text','note-description'])byId<HTMLTextAreaElement>(id).readOnly=Boolean(value.prepared);
 }
-void desktopApi.noteDraft().then(value => { renderDraft(value); lockNote(false); if (value.prepared) byId('note-feedback').textContent = moteText("发现上次未完成的保存，点击保存可用原 ID 重试。"); }).catch(() => feedback(moteText("无法恢复随手记草稿，请重启应用。")));
-for (const id of ['note-text']) {
+void desktopApi.noteDraft().then(value => { renderDraft(value); lockNote(false); if (value.prepared) {byId('note-feedback').classList.remove('visually-hidden');byId('note-feedback').textContent = moteText("发现上次未完成的保存，点击保存可用原 ID 重试。");} }).catch(() => feedback(moteText("无法恢复随手记草稿，请重启应用。")));
+for (const id of ['note-text','note-description']) {
   byId(id).addEventListener('compositionstart', () => { noteComposing = true; });
   byId(id).addEventListener('compositionend', () => { noteComposing = false; });
 }
-for (const id of ['note-text']) byId(id).addEventListener('input', () => {
+for (const id of ['note-text','note-description']) byId(id).addEventListener('input', () => {
+  noteControls();
   if (!draft || noteSaving) return;
-  draft = { ...draft, text: readInput('note-text'), mood: draft?.mood??'', revision: draft.revision + 1 };
+  draft = { ...draft, text: readInput('note-text'), description:readInput('note-description'), mood: draft?.mood??'', revision: draft.revision + 1 };
   const changed = draft;
-  void desktopApi.updateNoteDraft(changed).then(() => { if (draft?.id === changed.id && draft.revision === changed.revision) byId('note-feedback').textContent = moteText("草稿已保存到本机。"); }).catch(() => { byId('note-feedback').textContent = moteText("草稿暂未保存，请保留正文并重试；如上次保存未完成，请重新打开窗口恢复原稿。"); });
+  void desktopApi.updateNoteDraft(changed).then(() => { if (draft?.id === changed.id && draft.revision === changed.revision) {byId('note-feedback').classList.add('visually-hidden');byId('note-feedback').textContent = moteText("草稿已保存到本机。");} }).catch(() => { byId('note-feedback').classList.remove('visually-hidden');byId('note-feedback').textContent = moteText("草稿暂未保存，请保留正文并重试；如上次保存未完成，请重新打开窗口恢复原稿。"); });
 });
+for(const id of ['note-dismiss','note-collapse'])byId(id).addEventListener('click',()=>{if(quickNote)window.close();else showPage(navigation.backTarget);});
 byId('note-form').addEventListener('submit', event => {
   event.preventDefault(); if (!draft || noteSaving || noteComposing || busy) return;
-  const input = { ...draft, text: readInput('note-text'), mood: draft?.mood??'', revision: draft.revision + 1 };
+  const input = { ...draft, text: readInput('note-text'), description:readInput('note-description'), mood: draft?.mood??'', revision: draft.revision + 1 };
   noteSaving = true; lockNote(true);
+  document.body.classList.remove('note-save-failed');
+  byId('note-feedback').replaceChildren();byId('note-feedback').classList.add('visually-hidden');
   void perform(async () => {
     try {
       const result = await desktopApi.saveNote(input); renderDraft(result.draft);void refreshContent();
@@ -594,18 +669,19 @@ byId('note-form').addEventListener('submit', event => {
       byId('note-feedback').textContent = currentStatus.sync.state === 'unconfigured' ? moteText("已保存到本机。连接节点并确认后，再按你的策略同步。") : moteText("已保存到本机 · {0}上传。中央确认后清理待传记录。", syncModeLabels[currentStatus.config.syncMode]);
     } catch (error) {
       const message = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("保存未完成，请重试");
-      byId('note-feedback').textContent = message;
+      renderReadableFailure(byId('note-feedback'),moteText('保存未完成，请重试'),message);
+      document.body.classList.add('note-save-failed');
       const persisted = await desktopApi.noteDraft();
       if (persisted.prepared || persisted.id !== input.id) renderDraft(persisted);
       else draft = { ...input, revision: Math.max(input.revision, persisted.revision) }; // Keep unsaved text visible if disk persistence failed.
       throw error;
     }
     finally { noteSaving = false; lockNote(false); }
-  });
+  },true);
 });
 
 byId('open-feedback').addEventListener('click', () => void perform(() => desktopApi.openFeedback()));
-byId('diagnostics-sample').addEventListener('click', () => void perform(async () => render(await desktopApi.sampleDiagnostics())));
+byId('diagnostics-sample').addEventListener('click', () => void perform(async () => {const accept=beginDiagnosticFactsRefresh();const next=await desktopApi.sampleDiagnostics();render(next);accept(next);}));
 byId('diagnostics-export').addEventListener('click', () => void perform(async () => { const result = await desktopApi.exportDiagnostics(); if (!result.canceled) feedback(moteText("数值诊断已导出。"), true); }));
 let logText = '';
 let logWrap = true;
@@ -649,157 +725,197 @@ byId('support-export').addEventListener('click', () => void perform(async () => 
 
 let localSourceRows: import('./source-types').SourceStatus[] = [];
 let sourceEditingId: string | undefined;
+let sourceEditingEpoch=0;
+function invalidateSourceEditor():void {sourceEditingEpoch++;sourceEditingId=undefined;sourceEditingContext=undefined;}
+function sourceEditorRequest(){return {epoch:sourceEditingEpoch,id:sourceEditingId,scope:sourceReadGeneration};}
+function sourceEditorCurrent(request:ReturnType<typeof sourceEditorRequest>):boolean{return request.epoch===sourceEditingEpoch&&request.id===sourceEditingId&&request.scope===sourceReadGeneration;}
 let sourceBusy = false;
 let sourceSelection:{id:string;mode:'files'|'directory';names:string[]}|undefined;
 const sourceRules=byId<HTMLDetailsElement>('source-rules');
 const sourceRulesHome=sourceRules.parentElement!;
+function restoreSourceRuleFields():void{sourceRules.prepend(byId('source-initial-description-row'));sourceRules.insertBefore(byId('source-destination').closest('label')!,byId('source-advanced'));}
+
 function refreshSourcePolicySummaries():void {
   for(const [fieldId,summaryId] of [['source-initial-sync','source-history-value'],['source-retention','source-retention-value']]) byId(summaryId).textContent=byId<HTMLSelectElement>(fieldId).selectedOptions[0]?.textContent??'';
 }
-function restoreSourceRules():void {sourceRulesHome.append(sourceRules);sourceRules.open=false;byId<HTMLSelectElement>('source-initial-sync').disabled=false;refreshSourcePolicySummaries();}
-function updateSourceHistoryChoice():void {const field=byId<HTMLSelectElement>('source-initial-sync'),once=sourceSelection?.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;field.disabled=Boolean(once);if(once)field.value='all';refreshSourcePolicySummaries();}
+function restoreSourceRules():void {restoreSourceRuleFields();sourceRulesHome.append(sourceRules);sourceRules.open=false;byId<HTMLSelectElement>('source-initial-sync').disabled=false;refreshSourcePolicySummaries();}
+function updateSourceHistoryChoice():void {const field=byId<HTMLSelectElement>('source-initial-sync'),once=sourceMode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;field.disabled=Boolean(once);byId('source-initial-sync-row').hidden=once;byId('source-once-row').hidden=!once;if(once)field.value='all';refreshSourcePolicySummaries();}
 byId('source-initial-sync').addEventListener('change',refreshSourcePolicySummaries);
 refreshSourcePolicySummaries();
 byId('source-continuous').addEventListener('change',updateSourceHistoryChoice);
-async function beginSourceSelection(mode:'files'|'directory'):Promise<void>{
-  if(sourceBusy||!showPage('sources'))return;
-  await sourceAction(async()=>{
-    const result=await desktopApi.selectSourceFiles(mode);if(result.canceled||!result.selectionId)return;
-    if(sourceSelection)await desktopApi.cancelSourceFiles(sourceSelection.id);
-    sourceSelection={id:result.selectionId,mode,names:result.names??[]};sourceEditingId=undefined;
-    byId('source-confirmation').hidden=false;byId('source-selected-names').textContent=sourceSelection.names.join('\n');
-    byId('source-confirm-title').textContent=mode==='directory'?moteText('确认同步文件夹'):moteText('确认导入文件');
-    byId<HTMLInputElement>('source-continuous').checked=mode==='directory';byId<HTMLInputElement>('source-continuous').disabled=mode==='directory';
-    byId('source-destination').textContent=currentStatus?.config.serverUrl?moteText('发送到：{0}',currentStatus.config.serverUrl):moteText('尚未连接中央，先保存在本机');
-    byId<HTMLSelectElement>('source-initial-sync').value='all';byId<HTMLSelectElement>('source-retention').value='snapshot';
-    updateSourceHistoryChoice();
-    byId('source-edit-continuous-row').hidden=true;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;
-    byId('source-confirm-rules').append(sourceRules);sourceRules.open=true;refreshSourceTextOptions();
-    byId('source-confirm-title').scrollIntoView({block:'start'});
-  });
+let sourceMode:'files'|'directory'='directory';
+let sourceEditingContext:import('./source-context-outbox').SourceContextState|undefined;
+const sourceAddDialog=byId<HTMLDialogElement>('source-add-dialog');
+byId('source-add').addEventListener('click',()=>sourceAddDialog.showModal());
+byId('source-add-close').addEventListener('click',()=>sourceAddDialog.close());
+for(const id of ['source-central','source-cloud-choice'])byId(id).addEventListener('click',()=>{sourceAddDialog.close();if(!currentStatus?.config.serverUrl){showPage('connection');feedback(moteText('先连接你的中央节点，即可打开中央仓库。'));return;}void perform(()=>desktopApi.openCentral('sources'));});
+function renderSourceDestination():void {
+  const config=currentStatus?.config;byId('source-destination').textContent=config?.serverUrl||moteText('尚未连接中央，先保存在本机');
+  byId('source-destination-state').textContent=!config?.tokenConfigured?moteText('未连接'):config.syncPaused?moteText('发送已暂停'):moteText('已连接');
 }
-byId('source-selection-cancel').addEventListener('click',()=>{if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();});
+function configureSourceEditor(mode:'files'|'directory'):void{
+  restoreSourceRuleFields();sourceMode=mode;invalidateSourceEditor();byId('source-existing-selection').hidden=true;byId('source-editor-subtitle').hidden=true;byId('source-edit-footer').hidden=true;
+  for(const kind of ['files','directory'])byId('source-mode-'+kind).setAttribute('aria-pressed',String(mode===kind));
+  byId('source-selection-hint').textContent=mode==='directory'?moteText('以后修改，也自动同步'):moteText('保存当前文件一次');byId('source-continuous-row').hidden=mode!=='files';
+  byId('source-confirm').textContent=mode==='directory'?moteText('添加并同步'):moteText('导入文件');byId('source-confirm-policy').textContent=currentStatus?.config.syncPaused?moteText('添加后先保存在本机'):moteText('按当前发送设置同步');
+  byId('source-confirmation').hidden=false;byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').disabled=false;
+  byId('source-editor-heading').textContent=mode==='directory'?moteText('同步文件夹'):moteText('导入文件');byId('source-confirm-title').hidden=true;
+  byId('source-selected-names').textContent=sourceSelection?.names.join('\n')||(mode==='directory'?moteText('选择这台 Mac 上的文件夹'):moteText('选择这台 Mac 上的文件'));
+  byId('source-change-selection').textContent=sourceSelection?moteText('更换'):moteText('选择…');
+  if(mode==='directory')byId<HTMLInputElement>('source-continuous').checked=true;byId<HTMLInputElement>('source-continuous').disabled=mode==='directory';
+  renderSourceDestination();
+  byId('source-description-scope').textContent=mode==='directory'?moteText('适用于这个来源的已有与后续资料。'):moteText('仅适用于这次导入的文件。');
+  byId('source-edit-continuous-row').hidden=true;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;
+  byId('source-confirm-rules').append(sourceRules);sourceRules.open=true;byId<HTMLButtonElement>('source-confirm').disabled=!sourceSelection;updateSourceHistoryChoice();refreshSourceTextOptions();
+}
+async function beginSourceSelection(mode:'files'|'directory',pick=false):Promise<void>{
+  if(sourceBusy)return;sourceAddDialog.close();
+  byId<HTMLTextAreaElement>('source-initial-description').placeholder=moteText('例如：这是我的日记，文件名是日期。');
+  if(mode!==sourceMode||sourceEditingId){byId<HTMLInputElement>('source-continuous').checked=mode==='directory';if(sourceSelection)await desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId<HTMLInputElement>('source-name').value='';byId<HTMLTextAreaElement>('source-initial-description').value='';byId<HTMLSelectElement>('source-initial-sync').value='all';byId<HTMLSelectElement>('source-retention').value='snapshot';}
+  configureSourceEditor(mode);if(!showPage('source-editor'))return;if(!pick)return;
+  await sourceAction(async()=>{const result=await desktopApi.selectSourceFiles(mode);if(result.canceled||!result.selectionId){if(!sourceSelection&&workbenchUi.cancelFirstFile())showPage('overview');return;}sourceSelection={id:result.selectionId,mode,names:result.names??[]};byId<HTMLInputElement>('source-name').value=sourceSelection.names.length===1?sourceSelection.names[0]:'';configureSourceEditor(mode);});
+}
+for(const mode of ['files','directory'] as const)byId('source-mode-'+mode).addEventListener('click',()=>void beginSourceSelection(mode));
+byId('source-change-selection').addEventListener('click',()=>void beginSourceSelection(sourceMode,true));
+byId('source-selection-cancel').addEventListener('click',()=>{if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();showPage(workbenchUi.cancelFirstFile()?'overview':'sources');});
+function sourceSaveScope():string{return JSON.stringify([currentStatus.authorizationGeneration,currentStatus.config.serverUrl,currentStatus.config.deviceId,currentStatus.config.authSourceBinding??null,currentStatus.config.tokenConfigured]);}
 byId('source-confirm').addEventListener('click',()=>void sourceAction(async()=>{
-  if(!sourceSelection)return;const selected=sourceSelection;const oneTime=selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;await desktopApi.confirmSourceFiles(selected.id,{...sourceOptions(),initialSync:selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked?'all':sourceOptions().initialSync,syncContinuously:byId<HTMLInputElement>('source-continuous').checked});
-  sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();await refreshContent();if(oneTime)showPage('records');
+  if(!sourceSelection)return;const selected=sourceSelection,scope={selectionId:selected.id,scope:sourceSaveScope()},oneTime=selected.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;const result=await desktopApi.confirmSourceFiles(selected.id,{...sourceOptions(),initialSync:oneTime?'all':sourceOptions().initialSync,syncContinuously:byId<HTMLInputElement>('source-continuous').checked});
+  const sourceIds=sourceSelectionResult(result,scope,sourceSelection&&currentPage==='source-editor'?{selectionId:sourceSelection.id,scope:sourceSaveScope()}:undefined);if(!sourceIds)return;
+  const firstRoute=oneTime?workbenchUi.sourcesSaved(sourceIds):undefined;
+  sourceSelection=undefined;byId('source-confirmation').hidden=true;restoreSourceRules();byId<HTMLTextAreaElement>('source-initial-description').value='';await refreshContent();showPage(firstRoute??(oneTime?'records':'sources'));
 }));
 function sourceOptions(): import('./source-types').SourceOptions {
-  return { syncContinuously:sourceEditingId?byId<HTMLInputElement>('source-edit-continuous').checked:sourceSelection?byId<HTMLInputElement>('source-continuous').checked:true,centralProcessingConsent:true, initialSync: readInput('source-initial-sync') as 'all' | 'new_only', allowRead:readInput('source-retention')==='snapshot'&&byId<HTMLInputElement>('source-allow-read').checked,retention: readInput('source-retention') as 'snapshot' | 'reference' | 'archive', intervalSeconds: numberInput('source-interval'), trackDeletions: byId<HTMLInputElement>('source-deletions').checked, extensions: readInput('source-extensions').split(',').map(s => s.trim()).filter(Boolean), excludedPaths: readInput('source-excludes').split('\n').map(s => s.trim()).filter(Boolean), redactLiterals: readInput('source-redacts').split('\n').filter(Boolean) };
+  return normalizeSourceOptions({name:readInput('source-name').trim()||undefined, ...(!sourceEditingId?{description:readInput('source-initial-description')}:{}),syncContinuously:sourceEditingId?byId<HTMLInputElement>('source-edit-continuous').checked:sourceSelection?byId<HTMLInputElement>('source-continuous').checked:true,centralProcessingConsent:true, initialSync: readInput('source-initial-sync') as 'all' | 'new_only', allowRead:readInput('source-retention')==='snapshot'&&byId<HTMLInputElement>('source-allow-read').checked,retention: readInput('source-retention') as 'snapshot' | 'reference' | 'archive', intervalSeconds: numberInput('source-interval'), trackDeletions: byId<HTMLInputElement>('source-deletions').checked, extensions: readInput('source-extensions').split(',').map(s => s.trim()).filter(Boolean), excludedPaths: readInput('source-excludes').split('\n').map(s => s.trim()).filter(Boolean), redactLiterals: readInput('source-redacts').split('\n').filter(Boolean) });
 }
-function editSource(id?: string): void {
-  if(sourceSelection){void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId('source-confirmation').hidden=true;}restoreSourceRules();
-  sourceEditingId = id;
+async function editSource(id?: string): Promise<void> {
+  if(sourceSelection){void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;}byId('source-confirmation').hidden=true;restoreSourceRules();
+  invalidateSourceEditor();sourceEditingId = id;const request=sourceEditorRequest();
   const source = localSourceRows.find(s => s.source.id === id)?.source;
   byId('source-editor-title').textContent = source ? moteText("编辑：") + source.name : moteText("新来源的保留与过滤规则");
   byId('source-edit-continuous-row').hidden=!source||source.kind!=='local-files';byId<HTMLInputElement>('source-edit-continuous').checked=source?.syncContinuously!==false;
   byId('source-save-edit').hidden = !source; byId('source-cancel-edit').hidden = !source;
-  if (!source) { refreshSourceTextOptions(); return; }
+  if (!source) { refreshSourceTextOptions();showPage('sources'); return; }
+  byId('source-existing-selection').hidden=false;byId('source-existing-name').textContent=source.name;byId('source-existing-path').textContent=source.path||moteText('所选系统日历');byId('source-editor-subtitle').textContent=source.name;byId('source-editor-subtitle').hidden=false;byId('source-edit-footer').hidden=false;byId('source-continuous-row').hidden=true;byId('source-initial-sync-row').hidden=false;byId('source-once-row').hidden=true;byId<HTMLInputElement>('source-name').value=source.name;renderSourceDestination();
+  byId('source-editor-heading').textContent=moteText('编辑来源');byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').value=sourceWorkspaceDescription(id!);byId<HTMLTextAreaElement>('source-initial-description').disabled=true;showPage('source-editor');
   const editor = byId('source-editor-title').closest('details');
   if (editor) editor.open = true;
-  byId('source-editor-title').scrollIntoView({ block: 'start', behavior: 'instant' });
-  byId('source-retention').focus({ preventScroll: true });
-  byId<HTMLSelectElement>('source-initial-sync').value=source.initialSync??'all'; byId<HTMLSelectElement>('source-retention').value = source.retention;byId<HTMLInputElement>('source-allow-read').checked=source.allowRead??false; byId<HTMLInputElement>('source-interval').value = String(source.intervalSeconds);
+  byId<HTMLDetailsElement>('source-advanced').open=false;
+  byId<HTMLSelectElement>('source-initial-sync').disabled=true;byId<HTMLSelectElement>('source-initial-sync').value=source.initialSync??'all'; byId<HTMLSelectElement>('source-retention').value = source.retention;byId<HTMLInputElement>('source-allow-read').checked=source.allowRead??false; byId<HTMLInputElement>('source-interval').value = String(source.intervalSeconds);
   byId<HTMLInputElement>('source-deletions').checked = source.trackDeletions; byId<HTMLInputElement>('source-extensions').value = source.extensions.join(',');
   byId<HTMLTextAreaElement>('source-excludes').value = source.excludedPaths.join('\n'); byId<HTMLTextAreaElement>('source-redacts').value = source.redactLiterals.join('\n'); refreshPresets();
   refreshSourceTextOptions();
+  try{const value=await desktopApi.sourceContext(id!);if(sourceEditorCurrent(request)){sourceEditingContext=value;byId<HTMLTextAreaElement>('source-initial-description').value=value.pending?.description??value.snapshot.description;byId<HTMLTextAreaElement>('source-initial-description').disabled=value.error==='denied'||Boolean(value.error)&&!value.pending;byId('source-description-scope').textContent=value.error?moteText('暂时无法核对中央说明。输入保留在这里，可稍后重试。'):value.conflict?moteText('中央说明已改变，请核对后保存。'):moteText('适用于这个来源的已有与后续资料。');}}catch{/* Local rules remain editable when Central is unavailable. */}
 }
+function sourceWorkspaceDescription(id:string):string{const row=localSourceRows.find(row=>row.source.id===id);return row?.context?.pending?.description??row?.context?.snapshot.description??'';}
 function refreshSourceTextOptions(): void {
   refreshSourcePolicySummaries();
   const source=localSourceRows.find(row=>row.source.id===sourceEditingId)?.source;
-  const visible=(!source||source.kind==='local-files')&&readInput('source-retention')==='snapshot';
+  const fileSource=currentPage!=='source-connect'&&(!source||source.kind==='local-files'),visible=fileSource&&readInput('source-retention')==='snapshot';
+  const archive=byId<HTMLSelectElement>('source-retention').querySelector<HTMLOptionElement>('option[value=archive]');if(archive){archive.disabled=!fileSource;archive.hidden=!fileSource;}
   byId('source-file-text-options').hidden=!visible;
   byId<HTMLInputElement>('source-allow-read').disabled=!visible;
+  byId('source-retention-hint').hidden=!fileSource;
+  byId('source-retention-hint').textContent=readInput('source-retention')==='snapshot'?moteText('完整文件发往中心解析；处理后删除中心临时原件。'):readInput('source-retention')==='archive'?moteText('完整文件发往中心解析，并保留原件。'):moteText('只记录文件信息，不读取正文，也不上传文件内容。');
+  byId('source-content-transfer-note').hidden=!fileSource;
+  byId('source-content-transfer-note').textContent=readInput('source-retention')==='reference'?moteText('只记录文件信息，不读取正文，也不上传文件内容。'):moteText('完整文件会发送到所示中央节点进行处理；提取正文不代表只上传摘要。未连接时先保存本机任务，首次连接须确认发送范围。');
 }
 byId('source-retention').addEventListener('change',refreshSourceTextOptions);
-let sourcesReading = false;
+let sourcesReading = false;let sourceReadGeneration=0,sourceConnectGeneration=0;
 async function refreshSources(): Promise<void> {
   if (sourcesReading) return;
-  sourcesReading = true;
+  sourcesReading = true;const generation=sourceReadGeneration;
   try {
-  const rows = await desktopApi.sources(); localSourceRows = rows;
-  const list = byId('source-list'); list.replaceChildren();byId('source-attention').replaceChildren();
-  const ongoing = rows.filter(row => row.source.syncContinuously !== false);
-  workbenchUi.setHasSource(ongoing.length>0);
-  if (!ongoing.length) { const p = document.createElement('p'); p.className = 'helper'; p.textContent = moteText("尚未连接本地来源。选择只包含你希望归档资料的目录。"); list.append(p); }
-  const groups = [
-    { title: '需要处理', rows: ongoing.filter(row=>Boolean(row.blocked)) },
-    { title: '文件与文件夹', rows: ongoing.filter(row=>!row.blocked && row.source.kind==='local-files') },
-    { title: 'Coding Agent', rows: ongoing.filter(row=>!row.blocked && row.source.kind==='coding-agent') },
-    { title: '本机日历与其他来源', rows: ongoing.filter(row=>!row.blocked && !['local-files','coding-agent'].includes(row.source.kind)) },
-  ];
-  for (const group of groups) {
-    if (!group.rows.length) continue;
-    const target=group.title==='需要处理'?byId('source-attention'):list;
-    const heading=document.createElement('h2');heading.textContent=moteText(group.title);target.append(heading);
-  for (const row of group.rows) {
-    const card = document.createElement('article'); card.className = 'source-card';
-    const title = document.createElement('strong'); title.textContent = `${row.source.kind === 'local-calendar' ? moteText("日历") : row.source.kind === 'coding-agent' ? moteText("编码对话") : moteText("文件")} · ${row.source.name} · ${row.source.retention === 'reference' ? moteText("仅文件目录") : row.source.retention === 'archive' ? moteText("原件归档") : row.source.kind==='local-files'?moteText("中央提取正文，不保留原件"):moteText("内容快照")}`;
-    const detail = document.createElement('p'); detail.className = 'helper profile-path'; detail.textContent = row.source.path || moteText("所选系统日历");
-    const status = document.createElement('p'); status.className = 'helper'; status.textContent = moteText("{0} · {1} 项 · 待传 {2} · 跳过 {3}{4}", row.source.enabled ? row.message : moteText("本机已暂停"), row.items, row.pending, row.skipped, row.lastSyncAt ? moteText(" · 最近同步 ") + new Date(row.lastSyncAt).toLocaleString(getLocale()) : '') + (row.facts ? `\n${nativeStatusSummary(row.facts)}` : '');
-    const actions = document.createElement('div'); actions.className = 'actions';
-    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary'; edit.textContent = moteText("编辑规则"); edit.addEventListener('click', () => editSource(row.source.id));
-    const pause = document.createElement('button'); pause.type = 'button'; pause.className = 'secondary'; pause.textContent = row.source.enabled ? moteText("暂停这个来源") : moteText("恢复这个来源"); pause.disabled = sourceBusy;
-    pause.addEventListener('click', () => void sourceAction(async () => { await desktopApi.updateSource(row.source.id, { ...row.source, enabled: !row.source.enabled }); }));
-    actions.append(edit, pause); card.append(title, detail, status);
-    if(row.blocked){
-      const failures=document.createElement('details'),summary=document.createElement('summary'),explanation=document.createElement('p');
-      failures.className='source-failures';summary.textContent=moteText('本机待处理 {0} 项',row.blocked);explanation.className='helper';explanation.textContent=moteText('这些文件的本机副本仍保留，其他资料会继续同步。');failures.append(summary,explanation);
-      for(const failure of row.failures??[]){const item=document.createElement('p');item.className='helper profile-path';item.textContent=`${failure.title||failure.externalId} · ${failure.status===410?moteText('中央已删除此文件'):failure.status===409?moteText('文件版本冲突'):moteText('中央拒绝此文件（{0}）',failure.status)}`;failures.append(item);}
-      card.append(failures);
-    }
-    card.append(actions); target.append(card);
-  }
-  }
+  const rows = await desktopApi.sources();if(generation!==sourceReadGeneration)return;localSourceRows = rows;
+  sourceWorkspace.update(rows);workbenchUi.setHasSource(rows.some(row=>row.source.syncContinuously!==false));
   } finally { sourcesReading = false; }
 }
 async function sourceAction(action: () => Promise<void>): Promise<void> {
-  if (sourceBusy) return; sourceBusy = true; byId('source-feedback').textContent = moteText("正在处理，请稍候…");
-  for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = true;
-  try { await action(); byId('source-feedback').textContent = moteText("已处理，下面显示各来源的当前同步状态。"); }
-  catch (error) { byId('source-feedback').textContent = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText("操作未完成，请检查权限与配置后重试"); }
-  finally { sourceBusy = false; for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {}); }
+  if (sourceBusy) return; sourceBusy = true;byId('source-feedback').hidden=false; byId('source-feedback').textContent = moteText("正在处理，请稍候…");
+  for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-calendar-cancel', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = true;
+  try { await action(); byId('source-feedback').textContent='';byId('source-feedback').hidden=true; }
+  catch (error) { renderReadableFailure(byId('source-feedback'),moteText('操作未完成，请检查权限与配置后重试'),error instanceof Error?error.message:String(error)); }
+  finally { sourceBusy = false; for (const id of ['calendar-actions-connect', 'source-agent-discover', 'source-agent-add', 'source-files', 'source-directory', 'source-calendar-connect', 'source-calendar-add', 'source-calendar-cancel', 'source-save-edit', 'source-sync', 'source-confirm']) byId<HTMLButtonElement>(id).disabled = false; await refreshSources().catch(() => {});byId<HTMLButtonElement>('source-confirm').disabled=!sourceSelection;byId<HTMLButtonElement>('source-calendar-add').disabled=!readInput('source-calendar-choice');byId<HTMLButtonElement>('source-agent-add').disabled=!readInput('source-agent-choice'); }
 }
+for(const kind of ['agent','calendar'] as const)byId('source-'+kind+'-choice-open').addEventListener('click',()=>{sourceConnectGeneration++;byId<HTMLSelectElement>('source-agent-choice').replaceChildren();byId<HTMLSelectElement>('source-calendar-choice').replaceChildren();byId('source-agent-choice').hidden=true;byId('source-agent-add').hidden=true;byId('source-calendars').hidden=true;byId<HTMLButtonElement>('source-calendar-add').disabled=true;byId<HTMLButtonElement>('source-agent-add').disabled=true;sourceAddDialog.close();invalidateSourceEditor();if(sourceSelection)void desktopApi.cancelSourceFiles(sourceSelection.id);sourceSelection=undefined;byId<HTMLInputElement>('source-name').value='';byId('source-edit-footer').hidden=true;byId('source-continuous-row').hidden=true;byId('source-edit-continuous-row').hidden=true;byId('source-initial-sync-row').hidden=false;byId('source-once-row').hidden=true;byId<HTMLSelectElement>('source-initial-sync').disabled=false;renderSourceDestination();byId('source-agent-panel').hidden=kind!=='agent';byId('source-calendar-panel').hidden=kind!=='calendar';byId('source-calendar-footer').hidden=kind!=='calendar';byId('source-calendar-connect').hidden=false;byId('source-calendar-permission').textContent=moteText('无法确认，请检查系统设置');byId('source-agent-statuses').replaceChildren();byId<HTMLTextAreaElement>('source-initial-description').placeholder=kind==='calendar'?moteText('例如：这是我的工作日历，日程不代表实际参加。'):moteText('例如：这是我的日记，文件名是日期。');byId('source-connect-title').textContent=kind==='agent'?moteText('本机 Coding Agent'):moteText('本机日历');byId('source-editor-title').textContent=moteText('同步详情');byId('source-connect-rules').append(byId('source-initial-description-row'),byId('source-destination').closest('label')!,sourceRules);sourceRules.open=false;byId('source-initial-description-row').hidden=false;byId<HTMLTextAreaElement>('source-initial-description').disabled=false;byId('source-save-edit').hidden=true;byId('source-cancel-edit').hidden=true;byId<HTMLSelectElement>('source-retention').value='snapshot';showPage('source-connect');refreshSourceTextOptions();});
 for (const mode of ['files','directory'] as const)byId('source-'+mode).addEventListener('click',()=>void beginSourceSelection(mode));
 byId('source-calendar-connect').addEventListener('click', () => void sourceAction(async () => {
-  const permissions = await desktopApi.permissionStatus();
+  const current=sourceConnectRequest();
+  const permissions = await desktopApi.permissionStatus();if(!current())return;
+  byId('source-calendar-permission').textContent=permissions.calendar==='granted'?moteText('已允许'):permissions.calendar==='denied'?moteText('未授权'):moteText('无法确认，请检查系统设置');
   if (permissions.calendar === 'denied') { window.alert(moteText("日历访问尚未授权，请在权限管理中开启。")); showPage('permissions'); return; }
-  const calendars = await desktopApi.authorizeCalendar(); const select = byId<HTMLSelectElement>('source-calendar-choice'); select.replaceChildren();
+  const calendars = await desktopApi.authorizeCalendar();if(!current())return; const select = byId<HTMLSelectElement>('source-calendar-choice'); select.replaceChildren();
   for (const calendar of calendars) { const option = document.createElement('option'); option.value = calendar.id; option.textContent = calendar.title; select.append(option); }
-  byId('source-calendars').hidden = !calendars.length;
+  byId('source-calendars').hidden = !calendars.length;byId('source-calendar-connect').hidden=calendars.length>0;byId('source-calendar-permission').textContent=moteText('已允许');
   if (!calendars.length) throw new Error(moteText("已授权，但系统中没有可选日历；请在系统日历中添加后重试"));
 }));
 byId('source-agent-discover').addEventListener('click', () => void sourceAction(async () => {
-  const agents = await desktopApi.codingAgents(); const select = byId<HTMLSelectElement>('source-agent-choice'); select.replaceChildren();
+  const current=sourceConnectRequest(),agents = await desktopApi.codingAgents();if(!current())return; const select = byId<HTMLSelectElement>('source-agent-choice'); select.replaceChildren();
+  const statuses=byId('source-agent-statuses');statuses.replaceChildren();
+  for(const agent of agents){const row=document.createElement('div');row.className='source-provider-row';const name=document.createElement('strong'),state=document.createElement('span');name.textContent=agent.name;const connected=localSourceRows.find(item=>item.source.agent===agent.provider);state.textContent=connected?moteText('已连接'):agent.available?moteText('发现本机目录'):moteText('未发现本机目录');row.append(name,state);if(connected){const open=document.createElement('button');open.type='button';open.className='text-button';open.textContent=moteText('查看来源');open.addEventListener('click',()=>{if(!sourceBusy)sourceWorkspace.open(connected.source.id);});row.append(open);}statuses.append(row);}
   for (const agent of agents.filter(a => a.available)) { const option = document.createElement('option'); option.value = agent.provider; option.textContent = agent.name; select.append(option); }
   select.hidden = !select.options.length; byId('source-agent-add').hidden = !select.options.length;
   if (!select.options.length) throw new Error(moteText("本机默认目录中尚未发现受支持的 Agent 会话"));
 }));
-byId('source-agent-add').addEventListener('click', () => void sourceAction(() => desktopApi.addCodingAgent(readInput('source-agent-choice') as import('./coding-agents').CodingProvider, sourceOptions())));
-byId('source-calendar-add').addEventListener('click', () => void sourceAction(async () => { await desktopApi.addCalendarSource(readInput('source-calendar-choice'), sourceOptions()); }));
+function sourceConnectRequest():()=>boolean{const generation=sourceConnectGeneration,scope=sourceSaveScope(),revision=pageRevision;return ()=>generation===sourceConnectGeneration&&scope===sourceSaveScope()&&revision===pageRevision&&currentPage==='source-connect';}
+async function connectLocalSource(save:()=>Promise<string>):Promise<void>{
+  const generation=sourceConnectGeneration,scope=sourceSaveScope(),revision=pageRevision,id=await save();
+  if(generation!==sourceConnectGeneration||scope!==sourceSaveScope()||revision!==pageRevision||currentPage!=='source-connect')return;
+  sourceSelectionResult({sourceIds:[id]},{selectionId:'connect',scope},{selectionId:'connect',scope:sourceSaveScope()});
+  await refreshSources();if(generation!==sourceConnectGeneration||scope!==sourceSaveScope()||revision!==pageRevision||currentPage!=='source-connect')return;
+  byId<HTMLTextAreaElement>('source-initial-description').value='';sourceWorkspace.open(id);
+}
+byId('source-agent-add').addEventListener('click', () => void sourceAction(()=>connectLocalSource(()=>desktopApi.addCodingAgent(readInput('source-agent-choice') as import('./coding-agents').CodingProvider,sourceOptions()))));
+byId('source-calendar-add').addEventListener('click', () => void sourceAction(()=>connectLocalSource(()=>desktopApi.addCalendarSource(readInput('source-calendar-choice'),sourceOptions()))));
+byId('source-calendar-cancel').addEventListener('click',()=>{if(sourceBusy)return;sourceConnectGeneration++;byId<HTMLTextAreaElement>('source-initial-description').value='';showPage('sources');});
+byId('source-calendar-choice').addEventListener('change',()=>{byId<HTMLButtonElement>('source-calendar-add').disabled=sourceBusy||!readInput('source-calendar-choice');});
+byId('source-agent-choice').addEventListener('change',()=>{byId<HTMLButtonElement>('source-agent-add').disabled=sourceBusy||!readInput('source-agent-choice');});
 byId('source-sync').addEventListener('click', () => void sourceAction(() => desktopApi.syncSources()));
 byId('calendar-actions-connect').addEventListener('click', () => void sourceAction(async()=>{await desktopApi.connectActionCalendar();await desktopApi.openCentral('actions');}));
 byId('source-calendar-permissions').addEventListener('click', () => void sourceAction(() => desktopApi.openCalendarPermissions()));
-byId('source-cancel-edit').addEventListener('click', () => editSource());
+byId('source-cancel-edit').addEventListener('click',()=>{if(sourceEditingId)sourceWorkspace.open(sourceEditingId);else showPage('sources');});
 byId('source-save-edit').addEventListener('click', () => void sourceAction(async () => {
   const source = localSourceRows.find(s => s.source.id === sourceEditingId)?.source; if (!source) throw new Error(moteText("请先选择要编辑的来源"));
-  await desktopApi.updateSource(source.id, { ...sourceOptions(), enabled: source.enabled }); editSource();
+  const request=sourceEditorRequest(),options=sourceOptions(),description=readInput('source-initial-description');
+  if(sourceEditingContext&&!byId<HTMLTextAreaElement>('source-initial-description').disabled&&description!==(sourceEditingContext.pending?.description??sourceEditingContext.snapshot.description))await desktopApi.saveSourceContext(source.id,{expectedVersion:sourceEditingContext.snapshot.version,description});
+  if(!sourceEditorCurrent(request))return;
+  await desktopApi.updateSource(source.id, { ...options, enabled: source.enabled });if(!sourceEditorCurrent(request))return;await refreshSources();if(!sourceEditorCurrent(request))return;sourceWorkspace.open(source.id);invalidateSourceEditor();
 }));
 void refreshSources().catch(() => { byId('source-feedback').textContent = moteText("来源状态暂不可用，请重新打开应用"); });
 setInterval(() => { void refreshSources().catch(() => {}); }, 3000);
 
 let updateState: import('./updater').UpdateStatus | undefined;
+const updateInstallUi=createUpdateInstallUi(document,{
+  status:()=>desktopApi.updateStatus(),
+  allowed(){
+    if(settingsDirty){feedback(moteText('请先保存或还原设置修改，再安装更新。'));return false;}
+    if(noteSaving||noteComposing){feedback(moteText('请先完成当前随手记输入，再安装更新。'));return false;}
+    return true;
+  },
+  async install(){await perform(async()=>{
+    lockNote(true);byId('local-sources').inert=true;
+    try{
+      if(draft&&!draft.prepared)draft=await desktopApi.updateNoteDraft({...draft,text:readInput('note-text'),description:readInput('note-description'),mood:draft.mood??'',revision:draft.revision+1});
+      await desktopApi.installUpdate();
+    }finally{lockNote(false);byId('local-sources').inert=false;}
+  });},
+  failed(){feedback(moteText('更新未完成，现有 App 与资料保持不变。请检查网络、磁盘空间后重试。'));},
+});
 function renderUpdate(value: import('./updater').UpdateStatus): void {
-  updateState = value;
+  updateState = value;updateInstallUi.update(value);
+  byId('about-client').textContent='Mote for Mac · '+(value.manualDownload?'Dev':'Prod');byId('about-version').textContent=value.currentVersion;byId('about-update-heading').textContent=value.manualDownload?moteText('Dev 构建'):moteText('应用更新');
   for (const id of ['update-channel','update-check','update-download','update-cancel','update-install','update-reveal','update-progress']) byId(id).hidden=!!value.manualDownload;
   byId('update-channel').closest('label')!.hidden=!!value.manualDownload;
   byId('app-updates').querySelector('details')!.hidden=!!value.manualDownload;
+  byId('update-notes').classList.toggle('secondary',!!value.manualDownload);byId('update-notes').classList.toggle('text-button',!value.manualDownload);
   byId('update-notes').textContent=value.manualDownload?moteText('查看 Dev 构建产物'):moteText('查看版本说明与安装包');
   byId('update-version').textContent = moteText("当前 {0}{1}", value.currentVersion, value.availableVersion ? moteText(" · 发布 ") + value.availableVersion : '');
   byId<HTMLSelectElement>('update-channel').value = value.channel;
-  byId('update-message').textContent = value.message; byId('update-install-reason').textContent = value.installReason;
+  byId('update-message').textContent = value.manualDownload?moteText('从构建产物页面手动下载安装包，同包覆盖安装。'):value.message; byId('update-install-reason').textContent = value.installReason;
   byId<HTMLProgressElement>('update-progress').value = value.total ? value.received / value.total : 0;
   byId('update-bytes').textContent = value.total ? `${(value.received / 1048576).toFixed(1)} / ${(value.total / 1048576).toFixed(1)} MiB` : '';
   const working = ['checking', 'downloading', 'verifying', 'installing'].includes(value.state);
+  byId('update-progress').hidden=!!value.manualDownload||!['downloading','verifying'].includes(value.state);byId('update-cancel').hidden=!!value.manualDownload||!working;
   byId<HTMLButtonElement>('update-check').disabled = working;
   byId<HTMLSelectElement>('update-channel').disabled = working;
   byId<HTMLButtonElement>('update-download').disabled = working || !value.availableVersion || value.state === 'up_to_date' || value.state === 'idle';
@@ -814,24 +930,14 @@ byId('update-download').addEventListener('click', () => void perform(async () =>
 byId('update-cancel').addEventListener('click', () => { void desktopApi.cancelUpdate().then(renderUpdate).catch(error => feedback(String(error))); });
 byId('update-reveal').addEventListener('click', () => void perform(() => desktopApi.revealUpdate()));
 byId('update-notes').addEventListener('click', () => void perform(() => desktopApi.releaseNotes()));
-byId('update-install').addEventListener('click', () => {
-  if (settingsDirty) { showPage('settings'); feedback(moteText("请先保存或还原设置修改，再安装更新。")); return; }
-  if (noteSaving || noteComposing) { feedback(moteText("请先完成当前随手记输入，再安装更新。")); return; }
-  void perform(async () => {
-    lockNote(true); byId('local-sources').inert = true;
-    try {
-      if (draft && !draft.prepared) { draft = await desktopApi.updateNoteDraft({ ...draft, text: readInput('note-text'), mood: draft?.mood??'', revision: draft.revision + 1 }); }
-      await desktopApi.installUpdate();
-    } finally { lockNote(false); byId('local-sources').inert = false; }
-  });
-});
+byId('update-install').addEventListener('click',()=>updateInstallUi.open());
 void desktopApi.updateStatus().then(renderUpdate).catch(() => {});
 // One polling request at a time, even if a slow disk or worker delays a reply.
 let statusReading = false;
 setInterval(() => {
-  if (statusReading || document.hidden) return;
-  statusReading = true;
-  void Promise.allSettled([desktopApi.status().then(render), desktopApi.updateStatus().then(renderUpdate)])
+  if (statusReading || document.hidden || busy) return;
+  statusReading = true; const epoch = statusReadEpoch;
+  void Promise.allSettled([desktopApi.status().then(status => { if (epoch === statusReadEpoch && !busy) render(status); }), desktopApi.updateStatus().then(renderUpdate)])
     .finally(() => { statusReading = false; });
 }, 1000);
 
@@ -902,13 +1008,13 @@ byId('chrome-origins').addEventListener('input',()=>appCaptureUi.setOrigins(read
 // Friendly controls write the same validated configuration as the custom fields.
 const syncModeLabels: Record<import('./contracts').SyncMode, string> = { get realtime() { return moteText("实时"); }, get interval() { return moteText("定时"); }, get batch() { return moteText("积攒一批"); }, get manual() { return moteText("仅手动"); } };
 function selectedSyncMode(): import('./contracts').SyncMode {
-  return (document.querySelector<HTMLInputElement>('[name=sync-mode]:checked')?.value || 'realtime') as import('./contracts').SyncMode;
+  return (readInput('sync-mode') || 'realtime') as import('./contracts').SyncMode;
 }
 function updateSyncOptions(): void {
   const mode = selectedSyncMode();
   byId('sync-interval-field').hidden = mode !== 'interval' && mode !== 'batch';
   byId('sync-batch-field').hidden = mode !== 'batch';
-  byId('sync-interval-label').textContent = mode === 'batch' ? moteText("最长等待（分钟）") : moteText("上传间隔（分钟）");
+  byId('sync-interval-label').textContent = mode === 'batch' ? moteText("最长等待（分钟）") : moteText("发送间隔（分钟）");
   const descriptions = {
     realtime: moteText("记录保存后尽快发送。断网或失败时仍留在本机，稍后自动重试。"),
     interval: moteText("每 {0} 分钟检查并上传待传记录。休眠期间顺延，唤醒后继续。", readInput('sync-interval')),
@@ -916,8 +1022,10 @@ function updateSyncOptions(): void {
     manual: moteText("不自动上传记录或发送设备状态。点击概览的“立即上传”或来源页的“立即检查并上传”时发送；下次仍由你手动触发。"),
   };
   byId('sync-policy-help').textContent = descriptions[mode];
+  byId('sync-save-hint').textContent=currentStatus?.config.syncPaused?moteText('保存后仍保持发送暂停'):moteText('保存后应用于后续发送');
 }
-for (const input of Array.from(document.querySelectorAll<HTMLInputElement>('[name=sync-mode], #sync-interval, #sync-batch'))) input.addEventListener('input', updateSyncOptions);
+for (const input of Array.from(document.querySelectorAll<HTMLInputElement|HTMLSelectElement>('#sync-mode, #sync-interval, #sync-batch'))) {input.addEventListener('input', updateSyncOptions);input.addEventListener('change',updateSyncOptions);}
+byId('sync-cancel').addEventListener('click',()=>{if(busy)return;fillConfig(currentStatus.config);showPage('work');});
 function updateLocalBacklog(): void {
   if (!currentStatus) return;
   byId('local-backlog-confirmation').hidden = !currentStatus.sync.localBacklogUnbound;
@@ -932,17 +1040,8 @@ byId('server-url').addEventListener('input', updateTokenField);
 for (const id of ['server-url', 'token']) byId(id).addEventListener('input', () => { byId<HTMLInputElement>('confirm-local-backlog').checked = false; updateLocalBacklog(); });
 
 const presetFields: Record<string, [number, string][]> = {
-  interval: [[10, moteText("每 10 秒 · 更细致")], [15, moteText("每 15 秒 · 默认")], [30, moteText("每 30 秒 · 日常")], [60, moteText("每分钟 · 轻量")], [300, moteText("每 5 分钟 · 低频")]],
-  idle: [[60, moteText("空闲 1 分钟后")], [300, moteText("空闲 5 分钟后")], [900, moteText("空闲 15 分钟后")], [0, moteText("不检测空闲")]],
-  'battery-pause-below': [[0, moteText("不按电量暂停")], [10, moteText("低于 10%")], [20, moteText("低于 20%")], [30, moteText("低于 30%")]],
-  'queue-mb': [[256, moteText("256 MiB · 轻量")], [512, moteText("512 MiB · 默认")], [1024, moteText("1 GiB · 日常")], [5120, moteText("5 GiB · 更多离线记录")], [20480, moteText("20 GiB · 长期离线")]],
-  'queue-events': [[1000, moteText("1,000 条")], [10000, moteText("10,000 条")], [50000, moteText("50,000 条")], [100000, moteText("100,000 条")]],
-  'sync-interval': [[1, '1 min'], [15, moteText("15 分钟")], [30, moteText("30 分钟")], [60, moteText("1 小时")], [360, moteText("6 小时")], [1440, moteText("1 天")]],
-  'sync-batch': [[10, moteText("10 条")], [20, moteText("20 条")], [50, moteText("50 条")], [100, moteText("100 条")], [500, moteText("500 条")]],
   'source-interval': [[60, moteText("每分钟")], [300, moteText("每 5 分钟")], [900, moteText("每 15 分钟")], [3600, moteText("每小时")]],
-  'jpeg-quality': [[65, moteText("65 · 节省空间")], [75, moteText("75 · 默认")], [80, moteText("80 · 均衡")], [90, moteText("90 · 清晰")]],
-  'capture-max-side': [[1280, '1280 px'], [1600, moteText("1600 px · 默认")], [1920, '1920 px'], [2560, '2560 px']],
-  'diagnostic-interval': [[15, moteText("每 15 秒")], [60, moteText("每分钟")], [300, moteText("每 5 分钟")]],
+  'capture-max-side': [[640, '640 px'], [960, '960 px'], [1280, '1280 px'], [1600, '1600 px'], [1920, '1920 px'], [2560, '2560 px']],
 };
 function refreshPresets(): void {
   for (const [id, choices] of Object.entries(presetFields)) {
@@ -1073,23 +1172,26 @@ extensionInput.closest('label')!.before(extensionBox);
 extensionInput.addEventListener('input', refreshExtensionChoices);
 refreshExtensionChoices();
 
-let compressionRevision=0, compressionWidth=2560;
+let compressionRevision=0, compressionWidth=2560, compressionBusy=false;
 function compressionZoom():void {
   const zoom=readInput('compression-zoom');
-  for(const id of ['compression-before','compression-after']){const img=byId<HTMLImageElement>(id);img.style.width=zoom==='fit'?'100%':`${compressionWidth*Number(zoom)}px`;img.style.maxWidth='none';}
+  for(const id of ['compression-before','compression-after']){const img=byId<HTMLImageElement>(id);img.parentElement!.dataset.zoomed=String(zoom!=='fit');img.style.width=zoom==='fit'?'100%':`${compressionWidth*Number(zoom)}px`;img.style.maxWidth='none';}
 }
 async function refreshCompression():Promise<void>{
   const revision=++compressionRevision,quality=numberInput('compression-quality');
-  byId('compression-quality-label').textContent=String(quality);byId('compression-stats').textContent=moteText("正在生成压缩预览…");byId<HTMLButtonElement>('compression-apply').disabled=true;
-  try{const result=await desktopApi.compressionPreview(quality,numberInput('compression-side'));if(revision!==compressionRevision)return;
-    byId<HTMLImageElement>('compression-before').src=result.original;byId<HTMLImageElement>('compression-after').src=result.compressed;compressionWidth=result.originalWidth;compressionZoom();
+  for(const id of ['compression-before','compression-after']){const image=byId<HTMLImageElement>(id);image.hidden=true;image.removeAttribute('src');}
+  compressionBusy=true;byId<HTMLButtonElement>('compression-refresh').disabled=true;byId('compression-stats').textContent=moteText("正在生成压缩预览…");byId<HTMLButtonElement>('compression-apply').disabled=true;
+  try{const result=await desktopApi.compressionPreview(quality,numberInput('compression-side'));if(revision!==compressionRevision||currentPage!=='compression')return;
+    byId<HTMLImageElement>('compression-before').src=result.original;byId<HTMLImageElement>('compression-after').src=result.compressed;byId('compression-before').hidden=false;byId('compression-after').hidden=false;compressionWidth=result.originalWidth;compressionZoom();
     const ratio=result.compressedBytes/result.originalBytes;
-    byId('compression-stats').textContent=moteText("{0} × {1} → {2} × {3} · 边长缩放 {4}% · PNG {5} KB → JPEG {6} KB · 文件大小为原图的 {7}%（{8} {9}%）", result.originalWidth, result.originalHeight, result.width, result.height, (result.width/result.originalWidth*100).toFixed(1), (result.originalBytes/1024).toFixed(1), (result.compressedBytes/1024).toFixed(1), (ratio*100).toFixed(1), ratio<=1?moteText("减少"):moteText("增加"), (Math.abs(1-ratio)*100).toFixed(1));
+    byId('compression-stats').textContent='';byId('compression-result-caption').textContent='JPEG · '+quality+' · '+numberInput('compression-side')+' px · '+result.compressedBytes.toLocaleString(getLocale())+' bytes';byId('compression-metrics').textContent=moteText("{0} × {1} → {2} × {3} · 边长缩放 {4}% · PNG {5} KB → JPEG {6} KB · 文件大小为原图的 {7}%（{8} {9}%）", result.originalWidth, result.originalHeight, result.width, result.height, (result.width/result.originalWidth*100).toFixed(1), (result.originalBytes/1024).toFixed(1), (result.compressedBytes/1024).toFixed(1), (ratio*100).toFixed(1), ratio<=1?moteText("减少"):moteText("增加"), (Math.abs(1-ratio)*100).toFixed(1));
     byId<HTMLButtonElement>('compression-apply').disabled=false;
-  }catch(error){if(revision===compressionRevision)byId('compression-stats').textContent=error instanceof Error?error.message:moteText("预览失败，请调整参数重试");}
+  }catch(error){if(revision===compressionRevision&&currentPage==='compression')renderReadableFailure(byId('compression-stats'),moteText('预览失败，请调整参数重试'),error instanceof Error?error.message:String(error));}
+  finally{compressionBusy=false;byId<HTMLButtonElement>('compression-refresh').disabled=false;}
 }
-let compressionTimer:ReturnType<typeof setTimeout>|undefined;
-for(const id of ['compression-quality','compression-side'])byId(id).addEventListener('input',()=>{clearTimeout(compressionTimer);compressionRevision++;byId<HTMLButtonElement>('compression-apply').disabled=true;compressionTimer=setTimeout(()=>void refreshCompression(),180);});
+function invalidateCompression():void{compressionRevision++;byId('compression-metrics').textContent='';byId('compression-result-caption').textContent='JPEG';byId<HTMLButtonElement>('compression-apply').disabled=true;byId<HTMLButtonElement>('compression-refresh').disabled=compressionBusy;for(const id of ['compression-before','compression-after']){const image=byId<HTMLImageElement>(id);image.hidden=true;image.removeAttribute('src');}byId('compression-stats').textContent=moteText('调整参数后比较清晰度。');}
+for(const id of ['compression-quality','compression-side']){byId(id).addEventListener('input',invalidateCompression);byId(id).addEventListener('change',invalidateCompression);}
+byId('compression-refresh').addEventListener('click',()=>{if(!compressionBusy)void refreshCompression();});
 byId('compression-zoom').addEventListener('change',compressionZoom);
 for(const [source,target] of [['compression-before-pane','compression-after-pane'],['compression-after-pane','compression-before-pane']])byId(source).addEventListener('scroll',()=>{const a=byId(source),b=byId(target);if(b.scrollLeft!==a.scrollLeft)b.scrollLeft=a.scrollLeft;if(b.scrollTop!==a.scrollTop)b.scrollTop=a.scrollTop;});
 byId('compression-apply').addEventListener('click',()=>{const quality=readInput('compression-quality'),side=readInput('compression-side');showPage('capture');byId<HTMLInputElement>('jpeg-quality').value=quality;byId<HTMLInputElement>('capture-max-side').value=side;markSettingsDirty();feedback(moteText("压缩参数已带回设置，请点击保存后应用。"),true);});
@@ -1120,28 +1222,69 @@ byId('review-refresh').addEventListener('click', async()=>{
 let askRun: import('./ask').AskRun | undefined;
 let askConversation: import('./ask').AskConversation | undefined;
 let askScopeUnavailable = false;
+let askView:'history'|'conversation'='history';
+let askSubmittedQuestion='',askStopPending=false,askRunLookupPending=false,askPendingMessage='';
 let askBusy = false, askGeneration = 0, askCursor: string | undefined;
-let askPendingInput: {id: string; question: string; conversationId?: string} | undefined;
+type AskPendingInput = {id: string; question: string; conversationId?: string};
+let askPendingInput: AskPendingInput | undefined;
 let askTimer: ReturnType<typeof setTimeout> | undefined;
+type AskReadingPosition = {oldestTurnId?:string;scrollY:number;anchor?:{turnId:string;top:number}};
+type AskWindowDraft = {question:string;view:'history'|'conversation';conversationId?:string;reading?:AskReadingPosition;pending?:AskPendingInput;running?:{id:string;conversationId?:string;stopPending:boolean};submittedQuestion:string;pendingMessage:string};
+const askDraftScopes=new AskDraftScopes<AskWindowDraft>();
+let askRestoringConversationId:string|undefined,askRestoreAttempt=-1;
+let askRestoringReading:AskReadingPosition|undefined;
+function captureAskReading():AskReadingPosition|undefined {
+  if(!askConversation)return undefined;
+  const visible=Array.from(byId('ask-messages').querySelectorAll<HTMLElement>('[data-ask-turn]')).find(node=>{const rect=node.getBoundingClientRect();return rect.bottom>0&&rect.top<window.innerHeight;});
+  return {oldestTurnId:askConversation.turns[0]?.id,scrollY:window.scrollY,...(visible?.dataset.askTurn?{anchor:{turnId:visible.dataset.askTurn,top:visible.getBoundingClientRect().top}}:{})};
+}
+function restoreAskReadingPosition(reading:AskReadingPosition,conversation:import('./ask').AskConversation,generation:number):void {
+  requestAnimationFrame(()=>{if(generation!==askGeneration||askConversation!==conversation||currentPage!=='ask')return;const anchor=reading.anchor&&Array.from(byId('ask-messages').querySelectorAll<HTMLElement>('[data-ask-turn]')).find(node=>node.dataset.askTurn===reading.anchor!.turnId);if(anchor&&reading.anchor)window.scrollBy({top:anchor.getBoundingClientRect().top-reading.anchor.top,behavior:'instant'});else window.scrollTo({top:reading.scrollY,behavior:'instant'});});
+}
+function snapshotAskDraft():AskWindowDraft|undefined {
+  const question=readInput('ask-question'),conversationId=askConversation?.id??askRestoringConversationId??askPendingInput?.conversationId??askRun?.conversationId;
+  const running=askRun?.status==='running'?{id:askRun.id,...(askRun.conversationId?{conversationId:askRun.conversationId}:{}),stopPending:askStopPending}:undefined;
+  if(!question&&!conversationId&&!askPendingInput&&!running)return undefined;
+  const reading=askConversation?(currentPage==='ask'?captureAskReading():askReadingOnLeave):askRestoringReading;
+  return {question,view:askView,...(conversationId?{conversationId}:{}),...(reading?{reading}:{}),...(askPendingInput?{pending:{...askPendingInput}}:{}),...(running?{running}:{}),submittedQuestion:askSubmittedQuestion,pendingMessage:askPendingMessage};
+}
+function restoreScopedAskDraft(saved:AskWindowDraft|undefined):void {
+  byId<HTMLTextAreaElement>('ask-question').value=saved?.question??'';
+  askView=saved?.view??'history';askPendingInput=saved?.pending;askSubmittedQuestion=saved?.submittedQuestion??'';askPendingMessage=saved?.pendingMessage??'';
+  askRestoringConversationId=saved?.conversationId;askRestoringReading=saved?.reading;askReadingOnLeave=saved?.reading;askRestoreAttempt=-1;askScopeUnavailable=Boolean(askRestoringConversationId);
+  askRun=saved?.running?{id:saved.running.id,status:'running',events:[],...(saved.running.conversationId?{conversationId:saved.running.conversationId}:{})}:undefined;
+  askStopPending=Boolean(saved?.running?.stopPending);askRunLookupPending=Boolean(saved?.running);
+}
+function maybeRestoreAskConversation():void {
+  const id=askRestoringConversationId;
+  if(!id||askBusy||!currentStatus?.config.tokenConfigured||currentStatus.config.authSignedOut||askRestoreAttempt===askGeneration)return;
+  askRestoreAttempt=askGeneration;
+  void askAction(()=>loadAskConversation(id));
+}
+function languageDraftScope():string{return JSON.stringify([currentStatus.config.serverUrl,currentStatus.config.deviceId,currentStatus.config.authSourceBinding??null]);}
+window.addEventListener('mote-language-changing',event=>{const draft=snapshotAskDraft();if(!draft)return;try{keepLanguageAskDraft(sessionStorage,{scope:languageDraftScope(),question:draft.question,view:draft.view,...(draft.conversationId?{conversationId:draft.conversationId}:{}),...(draft.reading?{reading:draft.reading}:{}),...(draft.submittedQuestion?{submittedQuestion:draft.submittedQuestion}:{}),...(draft.running?{unresolvedRun:{id:draft.running.id,...(draft.running.conversationId?{conversationId:draft.running.conversationId}:{}),...(draft.running.stopPending?{stopPending:true as const}:{})}}:{}),...(draft.pending?{pendingRequest:draft.pending}:{})});}catch{event.preventDefault();}});
+window.addEventListener('mote-language-change-failed',()=>{try{dropLanguageAskDraft(sessionStorage);}catch{}});
+function restoreLanguageAskDraft():void{try{const saved=takeLanguageAskDraft(sessionStorage,languageDraftScope());if(!saved)return;restoreScopedAskDraft({question:saved.question,view:saved.pendingRequest||saved.unresolvedRun?'conversation':saved.view,...(saved.conversationId?{conversationId:saved.conversationId}:{}),...(saved.reading?{reading:saved.reading}:{}),...(saved.pendingRequest?{pending:saved.pendingRequest}:{}),...(saved.unresolvedRun?{running:{id:saved.unresolvedRun.id,...(saved.unresolvedRun.conversationId?{conversationId:saved.unresolvedRun.conversationId}:{}),stopPending:Boolean(saved.unresolvedRun.stopPending)}}:{}),submittedQuestion:saved.submittedQuestion??'',pendingMessage:''});renderAsk();maybeRestoreAskConversation();}catch{/* No unrelated session may be restored. */}}
+
 function mayReplaceAskDraft(next:string):boolean {
   const draft=readInput('ask-question');
   return !draft.trim()||draft===next||window.confirm(moteText('还有未发送的问题。舍弃原输入并新建对话？'));
 }
 function openWorkbenchQuestion(question:string):boolean {
-  if(askBusy||askRun?.status==='running'||!mayReplaceAskDraft(question))return false;
+  if(askBusy||askPendingInput||askRun?.status==='running'||!mayReplaceAskDraft(question))return false;
   if(!showPage('ask',true,false,false))return false;
-  askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;
-  byId<HTMLTextAreaElement>('ask-question').value=question;renderAsk();void refreshAsk();
+  askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askRestoringConversationId=undefined;askRestoringReading=undefined;askReadingOnLeave=undefined;skipNextAskRefresh=false;askScopeUnavailable=false;askPendingInput=undefined;
+  askView='conversation';askSubmittedQuestion='';byId<HTMLTextAreaElement>('ask-question').value=question;renderAsk();void refreshAsk();
   byId('ask-question').focus();return true;
 }
 function openWorkbenchConversation(id:string):void {
-  if(askBusy||askRun?.status==='running')return;
-  const switching=askConversation?.id!==id;
+  if(askBusy||askPendingInput||askRun?.status==='running')return;
+  const switching=(askConversation?.id??askRestoringConversationId)!==id;
   if(switching&&!mayReplaceAskDraft(''))return;
   if(!showPage('ask',true,false,false))return;
   if(switching)byId<HTMLTextAreaElement>('ask-question').value='';
-  askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askScopeUnavailable=false;askPendingInput=undefined;
-  renderAsk();void askAction(()=>loadAskConversation(id));
+  askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askRestoringConversationId=id;askRestoringReading=undefined;askReadingOnLeave=undefined;skipNextAskRefresh=false;askScopeUnavailable=true;askPendingInput=undefined;
+  askView='conversation';askSubmittedQuestion='';renderAsk();void askAction(()=>loadAskConversation(id));
 }
 const askCall = async <T>(command: import('./ask').AskCommand, input?: Parameters<typeof desktopApi.ask>[1]): Promise<T> => {
   const generation = askGeneration;
@@ -1151,43 +1294,77 @@ const askCall = async <T>(command: import('./ask').AskCommand, input?: Parameter
     throw error;
   }
 };
+function failedAskQuestion():string|undefined{const last=askConversation?.turns.at(-1);return askRun?.status==='failed'&&askSubmittedQuestion?askSubmittedQuestion:last?.status==='failed'?last.question:undefined;}
 function askControls(): void {
   const running = askRun?.status === 'running';
-  workbenchUi.setBusy(askBusy||Boolean(running));
-  byId<HTMLButtonElement>('ask-send').disabled = askBusy || running;
-  byId<HTMLButtonElement>('ask-new').disabled = askBusy || running;
+  workbenchUi.setBusy(askBusy||Boolean(running)||Boolean(askPendingInput));
+  byId<HTMLButtonElement>('ask-send').disabled = askBusy || running || Boolean(askPendingInput) || Boolean(askRestoringConversationId) || !currentStatus?.config.tokenConfigured || Boolean(currentStatus.config.authSignedOut) || !readInput('ask-question').trim();
+  byId('ask-draft-state').textContent=readInput('ask-question').trim()?moteText('未发送 · 此窗口中的草稿'):'';
+  byId('ask-resume-current').hidden=askView!=='history'||!askPendingInput&&!running;
+  byId('ask-refresh').hidden=askView==='history'&&!byId('ask-error').textContent;
+  byId<HTMLButtonElement>('ask-new').disabled = askBusy || running || Boolean(askPendingInput);
   byId<HTMLButtonElement>('ask-login').disabled = askBusy;
   byId<HTMLButtonElement>('ask-logout').disabled = askBusy;
-  byId('ask-stop').hidden = !running;
+  byId('ask-edit-failed').hidden=askBusy||running||Boolean(askPendingInput)||!failedAskQuestion();
+  byId('ask-stop').hidden = !running;byId<HTMLButtonElement>('ask-stop').disabled=askBusy||askStopPending;
+  byId('ask-pending').hidden=!askPendingInput&&!askStopPending&&!askRunLookupPending;
+  byId('ask-pending-original').textContent=askPendingInput?.question??'';
+  byId('ask-pending-message').textContent=askPendingMessage||(askRunLookupPending?moteText('请刷新检查结果，避免重复发送。'):askStopPending?moteText('停止结果尚未确认。'):moteText('结果尚未确认，请检查或重试原请求。'));
+  byId<HTMLButtonElement>('ask-check-existing').disabled=askBusy;byId<HTMLButtonElement>('ask-retry-existing').disabled=askBusy;byId('ask-retry-existing').hidden=!askPendingInput;
   byId<HTMLButtonElement>('ask-turns-more').disabled = askBusy || running;
   byId('ask-turns-more').hidden = !askConversation?.nextCursor;
-  for (const button of Array.from(byId('ask-history').querySelectorAll('button'))) button.disabled = askBusy || running;
+  for (const button of Array.from(byId('ask-history').querySelectorAll('button'))) button.disabled = askBusy || running || Boolean(askPendingInput);
 }
 function renderAsk(): void {
-  byId('ask-scope').replaceChildren(renderAskScope(document, askConversation?.scope, id => void askAction(() => desktopApi.openCentral('ask', id)), askScopeUnavailable));
+  byId('ask-title').hidden=askView!=='history';byId('ask-back').hidden=askView==='history';
+  byId('ask-history-panel').hidden=askView!=='history';byId('ask-conversation-panel').hidden=askView==='history';
+  byId('ask-conversation-title').textContent=askConversation?.title??'';byId('ask-conversation-title').hidden=!askConversation;
+  byId('ask-fresh').hidden=Boolean(askConversation||askRun);
+  byId<HTMLTextAreaElement>('ask-question').placeholder=askConversation?moteText('接着问…'):moteText('想找回什么？');
+  const renderedConversation=askConversation;
+  const referenceTitles=new Map((renderedConversation?.turns??[]).flatMap(turn=>turn.evidenceDeleted?[]:turn.result?.citations??[]).map(citation=>[citation.id,citation.appName]));
+  byId('ask-scope').replaceChildren(renderAskScope(document, renderedConversation?.scope, id => void askAction(() => openAskEvidence(id,renderedConversation)), askScopeUnavailable,referenceTitles));
   const messages = byId('ask-messages'); messages.replaceChildren();
-  for (const turn of askConversation?.turns ?? []) {
+  for (const [index,turn] of (askConversation?.turns ?? []).entries()) {
     const article = document.createElement('article'), question = document.createElement('h3');
-    question.textContent = turn.question;
-    const openEvidence = (id: string) => void askAction(() => desktopApi.openCentral('ask', id));
-    article.append(question, renderAskAnswer(document, turn.result?.answer ?? turn.error?.message ?? moteText('回答未完成'), turn.result?.citations ?? [], openEvidence));
-    for (const citation of turn.result?.citations ?? []) article.append(renderAskCitation(document, citation, openEvidence));
+    article.dataset.askTurn=turn.id;
+    question.textContent = turn.question;question.hidden=index===0&&askConversation?.title===turn.question;
+    const openEvidence = (id: string) => void askAction(() => openAskEvidence(id,renderedConversation,turn.id));
+    const citations=turn.evidenceDeleted?[]:turn.result?.citations??[];
+    article.append(question, renderAskAnswer(document, turn.evidenceDeleted?moteText('内容已按隐私要求清除。'):turn.result?.answer ?? moteText('回答未完成'),citations,openEvidence));
+    if(!turn.evidenceDeleted&&turn.error)appendDiagnostic(article,JSON.stringify(turn.error,null,2));
+    if(!turn.evidenceDeleted&&(turn.evidenceUnavailable||turn.evidenceStale)){const notice=document.createElement('p');notice.className='ask-history-note';notice.textContent=turn.evidenceUnavailable?moteText('引用原文已删除，历史问答仍保留。'):moteText('这是历史版本，当前资料已更新。');article.append(notice);}
+    if(citations.length){const list=document.createElement('div');list.className='ask-references';const label=document.createElement('p');label.textContent=moteText('依据');list.append(label);citations.forEach((citation,index)=>list.append(renderAskCitation(document,citation,openEvidence,index+1)));article.append(list);}
     messages.append(article);
   }
-  if (askConversation?.turns.some(turn => turn.result?.citations?.length)) {
-    const hint = document.createElement('p'); hint.className = 'helper';
-    hint.textContent = moteText('中央仓库将在浏览器中打开，并接续客户端的登录。');
-    messages.append(hint);
-  }
-  const last = askRun?.events?.at(-1);
-  setText('ask-progress', !askRun ? '' : askRun.status === 'running' ? last?.message ?? (last?.tool ? `${moteText('正在读取资料')} · ${last.tool}` : moteText('中央节点正在回答…')) : askRun.status === 'cancelled' ? moteText('已停止回答') : askRun.status === 'failed' ? askRun.error?.message ?? moteText('回答未完成') : moteText('回答已完成'));
+  if(askRun?.status==='running'&&askSubmittedQuestion){const pending=document.createElement('article'),question=document.createElement('h3');question.textContent=askSubmittedQuestion;pending.append(question);messages.append(pending);}
+  setText('ask-progress', !askRun ? '' : askRun.status === 'running'&&askRunLookupPending?moteText('请刷新检查结果，避免重复发送。'):askRun.status === 'running'&&askStopPending?moteText('正在停止，等待中央确认…'):askRun.status === 'running' ? moteText('正在读取资料') : askRun.status === 'cancelled' ? moteText('已停止回答') : askRun.status === 'failed' ? moteText('回答未完成') : moteText('回答已完成'));
+  if(askRun&&(askRun.error||askRun.events?.length))appendDiagnostic(byId('ask-progress'),JSON.stringify({id:askRun.id,status:askRun.status,error:askRun.error,events:askRun.events},null,2));
   askControls();
 }
+function askFailure(error:unknown):void{const message=askView==='history'?moteText('对话暂不可读取，请稍后重试。'):askPendingInput||askRunLookupPending||askStopPending?moteText('请刷新检查结果，避免重复发送。'):moteText('请求失败，请重试');renderReadableFailure(byId('ask-error'),message,error instanceof Error?error.message:String(error));}
 async function loadAskConversation(id: string): Promise<void> {
   const generation = askGeneration;
-  const conversation = await askCall<import('./ask').AskConversation>('conversation', {id});
+  const reading=askRestoringConversationId===id?askRestoringReading:undefined;
+  let conversation = await askCall<import('./ask').AskConversation>('conversation', {id});
+  if(generation!==askGeneration)return;
+  if(conversation.id!==id)throw Error(moteText('对话状态已变化，请重新读取后继续。'));
+  const seen=new Set<string>();
+  while(reading?.oldestTurnId&&!conversation.turns.some(turn=>turn.id===reading.oldestTurnId)&&conversation.nextCursor){
+    if(generation!==askGeneration)return;
+    const cursor=conversation.nextCursor;if(seen.has(cursor))throw Error(moteText('对话状态已变化，请重新读取后继续。'));seen.add(cursor);
+    const older=await askCall<import('./ask').AskConversation>('conversation',{id,cursor});
+    if(generation!==askGeneration)return;
+    conversation=prependConversationTurns(conversation,older);
+  }
   if (generation !== askGeneration) return;
-  askConversation = conversation; askScopeUnavailable = false; renderAsk();
+  if(reading?.oldestTurnId&&!conversation.turns.some(turn=>turn.id===reading.oldestTurnId))throw Error(moteText('对话状态已变化，请重新读取后继续。'));
+  askConversation = conversation;if(askRestoringConversationId===id){askRestoringConversationId=undefined;askRestoringReading=undefined;}askScopeUnavailable = false; renderAsk();
+  if(reading){
+    pageScroll.set('ask',reading.scrollY);askReadingOnLeave=reading;
+    if(currentPage!=='ask')skipNextAskRefresh=true;
+    else restoreAskReadingPosition(reading,conversation,generation);
+  }
 }
 async function olderAskTurns(): Promise<void> {
   const current = askConversation, generation = askGeneration;
@@ -1205,35 +1382,47 @@ async function askHistory(append = false): Promise<void> {
   if(!append)workbenchUi.setHistory(page.items);
   const history = byId('ask-history'); if (!append) history.replaceChildren();
   for (const item of page.items) {
-    const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary'; button.textContent = item.title;
-    button.addEventListener('click', () => { if (!askBusy && askRun?.status !== 'running') void askAction(async () => { askConversation = undefined; askScopeUnavailable = false; askRun = undefined; renderAsk(); await loadAskConversation(item.id); }); });
+    const button=document.createElement('button');button.type='button';button.className='home-conversation';button.dataset.conversationId=item.id;
+    const icon=document.createElement('span');icon.className='home-conversation-icon';icon.setAttribute('aria-hidden','true');icon.textContent='◌';
+    const copy=document.createElement('span'),title=document.createElement('strong'),meta=document.createElement('small'),arrow=document.createElement('span');title.textContent=item.title;const details:string[]=[];
+    if(item.turnCount!==undefined)details.push(moteText('{0} 轮对话',item.turnCount));if(item.updatedAt&&Number.isFinite(Date.parse(item.updatedAt)))details.push(new Date(item.updatedAt).toLocaleString(getLocale(),{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}));
+    meta.textContent=details.join(' · ');copy.append(title,meta);arrow.className='chevron';arrow.setAttribute('aria-hidden','true');arrow.textContent='›';button.append(icon,copy,arrow);
+    button.addEventListener('click',()=>{if(askBusy||askPendingInput||askRun?.status==='running')return;const switching=(askConversation?.id??askRestoringConversationId)!==item.id;if(switching&&!mayReplaceAskDraft(''))return;if(switching){byId<HTMLTextAreaElement>('ask-question').value='';askPendingInput=undefined;askSubmittedQuestion='';askRestoringReading=undefined;}askView='conversation';void askAction(async()=>{if(switching){askConversation=undefined;askRun=undefined;}askRestoringConversationId=item.id;askScopeUnavailable=true;renderAsk();await loadAskConversation(item.id);});});
     history.append(button);
   }
+  if(!history.children.length){const empty=document.createElement('p');empty.className='home-empty';empty.textContent=moteText('还没有对话');history.append(empty);}
   askCursor = page.nextCursor; byId('ask-more').hidden = !askCursor; askControls();
 }
 async function askAction(action: () => Promise<void>): Promise<void> {
-  if (askBusy) return; askBusy = true; askControls(); setText('ask-error', '');
-  try { await action(); } catch (error) { setText('ask-error', error instanceof Error ? error.message : moteText('请求失败，请重试')); }
-  finally { askBusy = false; askControls(); }
+  if (askBusy) return; const generation=askGeneration;askBusy = true; askControls(); setText('ask-error', '');
+  try { await action(); } catch (error) { if(generation===askGeneration){if(askPendingInput)askPendingMessage='';askFailure(error);} }
+  finally { askBusy = false; askControls();maybeRestoreAskConversation(); }
 }
 async function refreshAsk(): Promise<void> {
+  if(askPendingInput){askView='conversation';renderAsk();await askAction(checkPendingAsk);return;}
   const connected = askConnectionState();
   if (!connected) {
     clearTimeout(askTimer);
     setText('ask-login-status', ''); setText('ask-error', '');
     return;
   }
+  if(askRestoringConversationId){const id=askRestoringConversationId;await askAction(()=>loadAskConversation(id));return;}
   await askAction(async () => {
+    const generation=askGeneration;
     setText('ask-login-status', moteText('正在连接中央节点…'));
-    try { await askHistory(); } catch (error) { setText('ask-login-status', moteText('请求失败，请重试')); throw error; }
+    try { await askHistory(); } catch (error) { if(generation===askGeneration)setText('ask-login-status', moteText('请求失败，请重试')); throw error; }
+    if(generation!==askGeneration)return;
     setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl));
     const page = await askCall<{items: import('./ask').AskRun[]}>('runs');
-    askRun = page.items.find(item => item.status === 'running') ?? askRun;
-    if (askRun?.conversationId) await loadAskConversation(askRun.conversationId);
+    if(generation!==askGeneration)return;
+    if(!askRun)askRun=page.items.find(item=>item.status==='running');
+    if (askRun?.status==='running'&&askRun.conversationId) {askView='conversation';await loadAskConversation(askRun.conversationId);}
     else if (askConversation) await loadAskConversation(askConversation.id);
+    if(generation!==askGeneration)return;
     renderAsk(); if (askRun?.status === 'running') scheduleAskPoll();
   });
 }
+async function refreshAskStatus():Promise<void>{const previous=currentStatus;const next=await desktopApi.status();if(currentStatus===previous)render(next);}
 function askConnectionState(): boolean {
   const connected = Boolean(currentStatus?.config.serverUrl);
   byId('ask-disconnected').hidden = connected;
@@ -1249,34 +1438,71 @@ function scheduleAskPoll(): void {
     if (currentPage !== 'ask' || !askRun || generation !== askGeneration) return;
     try {
       const run = await askCall<import('./ask').AskRun>('run', {id: askRun.id});
-      if (generation !== askGeneration) return; askRun = run;
+      if (generation !== askGeneration) return;if(run.notFound){askRunLookupPending=true;askPendingMessage=moteText('请刷新检查结果，避免重复发送。');renderAsk();return;}askRun = run;askRunLookupPending=false;if(run.status!=='running')askStopPending=false;
       if (run.status !== 'running' && run.conversationId) {
         const conversation = await askCall<import('./ask').AskConversation>('conversation', {id: run.conversationId});
-        if (generation !== askGeneration) return; askConversation = conversation; askScopeUnavailable = false; await askHistory();
+        if (generation !== askGeneration) return; askConversation = conversation; askScopeUnavailable = false; await askHistory();if(generation!==askGeneration)return;
       }
       setText('ask-error', ''); renderAsk();
       if (run.status === 'running') scheduleAskPoll();
-    } catch (error) { if (generation !== askGeneration) return; setText('ask-error', `${error instanceof Error ? error.message : ''} · ${moteText('请刷新检查结果，避免重复发送。')}`); if (askRun?.status === 'running') scheduleAskPoll(); }
+    } catch (error) { if (generation !== askGeneration) return; askFailure(error); if (askRun?.status === 'running') scheduleAskPoll(); }
   }, 1000);
 }
 byId('ask-form').addEventListener('submit', event => {
-  event.preventDefault(); if (askBusy || askRun?.status === 'running') return;
+  event.preventDefault(); if (askBusy || askPendingInput || askRun?.status === 'running' || askRestoringConversationId || !currentStatus?.config.tokenConfigured || currentStatus.config.authSignedOut) return;
   const question = readInput('ask-question').trim(); if (!question) return;
   void askAction(async () => {
+    const generation=askGeneration;
     const input = askPendingInput?.question === question && askPendingInput.conversationId === askConversation?.id ? askPendingInput : {id: crypto.randomUUID(), question, ...(askConversation ? {conversationId: askConversation.id} : {})};
-    askPendingInput = input;
-    try { askRun = await askCall('start', input); }
-    catch { askRun = await askCall('start', input); } // Same admission ID after an ambiguous network response.
-    askPendingInput = undefined; byId<HTMLTextAreaElement>('ask-question').value = ''; renderAsk(); scheduleAskPoll();
+    askPendingInput = input;askPendingMessage=moteText('正在提交问题…');askSubmittedQuestion=question;askRun=undefined;askStopPending=false;askRunLookupPending=false;renderAsk();
+    let admitted:import('./ask').AskRun;try { admitted = await askCall('start', input); }
+    catch (error) { if(generation!==askGeneration)throw error;admitted = await askCall('start', input); } // Same admission ID after an ambiguous network response.
+    if(generation!==askGeneration)return;
+    await acceptPendingAsk(input,admitted);
   });
 });
 byId('ask-refresh').addEventListener('click', () => void refreshAsk());
 byId('ask-more').addEventListener('click', () => void askAction(() => askHistory(true)));
 byId('ask-turns-more').addEventListener('click', () => void askAction(olderAskTurns));
-byId('ask-stop').addEventListener('click', () => void askAction(async () => { if (askRun) { askRun = await askCall('cancel', {id: askRun.id}); renderAsk(); scheduleAskPoll(); } }));
-byId('ask-new').addEventListener('click', () => { if (askBusy || askRun?.status === 'running') return; askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; askScopeUnavailable = false; renderAsk(); });
-byId('ask-login').addEventListener('click', () => { const token = readInput('ask-token'); byId<HTMLInputElement>('ask-token').value = ''; void askAction(async () => { setText('ask-login-status', moteText('正在连接中央节点…')); try { await askCall('login', {token,durationMs:Number(readInput('ask-lifetime'))}); } catch (error) { setText('ask-login-status', moteText('请先登录中央节点，各页面会共用这次登录。')); throw error; } setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl)); askGeneration++; askRun = undefined; askConversation = undefined; askScopeUnavailable = false; renderAsk(); await askHistory(); }); });
-byId('ask-browser-login').addEventListener('click',()=>void askAction(async()=>{await askCall('login-browser',{durationMs:Number(readInput('ask-lifetime'))});await askHistory();setText('ask-login-status',moteText('已登录 · {0}',currentStatus.config.serverUrl));}));
-byId('ask-logout').addEventListener('click', () => void askAction(async () => { await askCall('logout'); setText('ask-login-status', moteText('已退出中央登录')); askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; byId('ask-history').replaceChildren(); askScopeUnavailable = false; renderAsk(); }));
-
-byId('chrome-setup').addEventListener('click',()=>void perform(async()=>{const result=await desktopApi.setupChromeCapture();byId('chrome-setup-result').textContent=moteText('扩展目录：{0}；扩展 ID：{1}',result.extensionDirectory,result.extensionId);feedback(moteText('本机桥接已准备。请在 Chrome 扩展程序中加载该目录，并在扩展中授权所选站点。'),true);}));
+async function acceptPendingAsk(input:NonNullable<typeof askPendingInput>,run:import('./ask').AskRun):Promise<void>{
+  const generation=askGeneration;
+  if(askPendingInput!==input)return;askRun=run;askSubmittedQuestion=input.question;askPendingInput=undefined;askPendingMessage='';askStopPending=false;askRunLookupPending=false;
+  if(readInput('ask-question').trim()===input.question)byId<HTMLTextAreaElement>('ask-question').value='';
+  renderAsk();if(run.conversationId)await loadAskConversation(run.conversationId);if(generation!==askGeneration)return;if(run.status==='running')scheduleAskPoll();else await askHistory();
+}
+async function checkPendingAsk():Promise<void>{
+  const input=askPendingInput,id=input?.id??(askStopPending||askRunLookupPending?askRun?.id:undefined),generation=askGeneration;if(!id)return;
+  askPendingMessage=moteText('正在检查结果…');askControls();const run=await askCall<import('./ask').AskRun>('run',{id});if(generation!==askGeneration||input&&askPendingInput!==input)return;
+  if(run.notFound){askRunLookupPending=!input;askPendingMessage=input?moteText('尚未找到这次提交；可以用原请求重试。'):moteText('请刷新检查结果，避免重复发送。');askControls();return;}
+  if(input)await acceptPendingAsk(input,run);else if(askRun?.id===id){askRun=run;askStopPending=false;askRunLookupPending=false;askPendingMessage='';renderAsk();if(run.conversationId)await loadAskConversation(run.conversationId);if(generation!==askGeneration)return;if(run.status==='running')scheduleAskPoll();}
+}
+byId('ask-edit-failed').addEventListener('click',()=>{const question=failedAskQuestion();if(!question||askBusy||askPendingInput||askRun?.status==='running')return;if(readInput('ask-question').trim()&&readInput('ask-question')!==question&&!window.confirm(moteText('将失败问题带回输入框，会替换当前草稿。继续？')))return;byId<HTMLTextAreaElement>('ask-question').value=question;askControls();byId('ask-question').focus();});
+byId('ask-check-existing').addEventListener('click',()=>void askAction(checkPendingAsk));
+byId('ask-retry-existing').addEventListener('click',()=>void askAction(async()=>{const input=askPendingInput,generation=askGeneration;if(input){const run=await askCall<import('./ask').AskRun>('start',input);if(generation===askGeneration)await acceptPendingAsk(input,run);}}));
+byId('ask-stop').addEventListener('click', () => void askAction(async () => { if(!askRun||askStopPending)return;const id=askRun.id,generation=askGeneration;askStopPending=true;askPendingMessage='';renderAsk();const run=await askCall<import('./ask').AskRun>('cancel',{id});if(generation!==askGeneration||askRun?.id!==id)return;askRun=run;askRunLookupPending=false;askStopPending=run.status==='running';renderAsk();scheduleAskPoll(); }));
+byId('ask-new').addEventListener('click', () => { if (askBusy || askPendingInput || askRun?.status === 'running'||!mayReplaceAskDraft('')) return; askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined;askRestoringConversationId=undefined;askRestoringReading=undefined; askScopeUnavailable = false;askPendingInput=undefined;askSubmittedQuestion='';askView='conversation';byId<HTMLTextAreaElement>('ask-question').value='';renderAsk();byId('ask-question').focus(); });
+byId('ask-resume-current').addEventListener('click',()=>{askView='conversation';renderAsk();});
+byId('ask-back').addEventListener('click',()=>{askView='history';renderAsk();void askAction(()=>askHistory());});
+byId('ask-question').addEventListener('input',askControls);
+const askReferenceDialog=byId<HTMLDialogElement>('ask-reference-dialog');
+byId('ask-reference-back').addEventListener('click',()=>askReferenceDialog.close());
+async function openAskEvidence(id:string,rendered:import('./ask').AskConversation|undefined,turnId?:string):Promise<void>{
+  if(!rendered||askConversation!==rendered||currentPage!=='ask')return;
+  const conversationId=rendered.id,generation=askGeneration;
+  const current=()=>generation===askGeneration&&askConversation===rendered&&currentPage==='ask';
+  if(/^material:mat_[a-f0-9]{64}@[a-f0-9]{64}$/.test(id)){await desktopApi.openCentral('ask',id,conversationId);return;}
+  const unavailable=(message:string)=>{byId('ask-reference-message').textContent=message;if(!askReferenceDialog.open)askReferenceDialog.showModal();};
+  const result=await askCall<{id:string;available:boolean}>('reference',{id,conversationId});
+  if(!current())return;
+  if(result.id!==id)throw Error(moteText('对话状态已变化，请重新读取后继续。'));
+  if(!result.available){unavailable(moteText('引用原文已删除，历史问答仍保留。'));return;}
+  if(turnId){
+    const retained=await currentTurnCites(conversationId,turnId,id,cursor=>askCall('conversation',{id:conversationId,...(cursor?{cursor}:{})}),current);
+    if(!current())return;
+    if(!retained){unavailable(moteText('原始轮次暂不可读。'));return;}
+  }
+  await desktopApi.openCentral('ask',id,conversationId);
+}
+byId('ask-login').addEventListener('click', () => { const token = readInput('ask-token'); byId<HTMLInputElement>('ask-token').value = ''; void askAction(async () => { setText('ask-login-status', moteText('正在连接中央节点…')); try { await askCall('login', {token,durationMs:Number(readInput('ask-lifetime'))}); } catch (error) { setText('ask-login-status', moteText('请先登录中央节点，各页面会共用这次登录。')); throw error; } await refreshAskStatus();setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl));if(!askRestoringConversationId&&!askPendingInput&&!askRun)await askHistory(); }); });
+byId('ask-browser-login').addEventListener('click',()=>void askAction(async()=>{await askCall('login-browser',{durationMs:Number(readInput('ask-lifetime'))});await refreshAskStatus();if(!askRestoringConversationId&&!askPendingInput&&!askRun)await askHistory();setText('ask-login-status',moteText('已登录 · {0}',currentStatus.config.serverUrl));}));
+byId('ask-logout').addEventListener('click', () => void askAction(async () => { await askCall('logout');await refreshAskStatus();setText('ask-login-status', moteText('已退出中央登录')); }));

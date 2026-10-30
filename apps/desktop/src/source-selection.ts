@@ -6,23 +6,24 @@ import type { SourceOptions } from './contracts/sources';
 
 /** Native selections stay privileged; the renderer receives only an opaque confirmation identity. */
 export class SourceSelectionController {
-  private readonly selections = new Map<string, string[]>();
-  constructor(private readonly addFiles: (path: string, options: SourceOptions) => Promise<void>) {}
+  private readonly selections = new Map<string, {paths:string[];sourceIds:string[]}>();
+  constructor(private readonly addFiles: (path: string, options: SourceOptions) => Promise<string>) {}
 
   select(paths: string[]): { canceled: false; selectionId: string; names: string[] } {
     this.selections.clear();
-    const selectionId = randomUUID(); this.selections.set(selectionId, paths);
+    const selectionId = randomUUID(); this.selections.set(selectionId, {paths,sourceIds:[]});
     return { canceled: false, selectionId, names: paths.map(path => basename(path)) };
   }
 
   cancel(id: unknown): void { if (typeof id === 'string') this.selections.delete(id); }
 
-  async confirm(id: unknown, input: unknown): Promise<void> {
-    const paths = typeof id === 'string' ? this.selections.get(id) : undefined;
-    if (!paths) throw new Error(moteText('文件选择已失效，请重新选择'));
+  async confirm(id: unknown, input: unknown): Promise<{sourceIds:string[]}> {
+    const selection = typeof id === 'string' ? this.selections.get(id) : undefined;
+    if (!selection) throw new Error(moteText('文件选择已失效，请重新选择'));
     const options = normalizeSourceOptions(input);
     // Remove each success immediately: retry after a partial failure never duplicates it.
-    while (paths.length) { await this.addFiles(paths[0], options); paths.shift(); }
+    while (selection.paths.length) { const sourceId=await this.addFiles(selection.paths[0], options);selection.sourceIds.push(sourceId);selection.paths.shift(); }
     this.selections.delete(id as string);
+    return {sourceIds:[...selection.sourceIds]};
   }
 }

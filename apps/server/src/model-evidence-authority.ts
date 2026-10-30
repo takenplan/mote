@@ -17,7 +17,7 @@ export const contextFailure=(code:'context_lineage_incomplete'|'context_evidence
 export interface ModelEvidenceAuthorityDependencies {
   resolveLineage:(value:EvidenceDependencies|undefined)=>EvidenceDependencies|undefined;
   assertImageGrants:(materials:Parameters<typeof assertMemoryImageGrants>[1],images:Parameters<typeof assertMemoryImageGrants>[2])=>void;
-  reader:Pick<EvidenceReader,'deletionContextAllowed'|'contextDependenciesAllowed'|'evidence'|'memoryCatalogMetadataAllowed'|'processingEvidenceAllowed'|'memoryCatalogMetadata'>;
+  reader:Pick<EvidenceReader,'deletionContextAllowed'|'contextDependenciesAllowed'|'evidence'|'memoryCatalogMetadataAllowed'|'processingEvidenceAllowed'|'memoryCatalogMetadata'|'queryMaterialReference'>;
   conversations:Pick<Conversations,'assertHistoryContext'|'retiredSelection'>;
   sourceContexts:SourceContextStore;
   authorization:Pick<BackgroundModelAuthorization,'currentId'|'assertDisclosure'>;
@@ -65,7 +65,14 @@ export function createModelEvidenceAuthority(dependencies:ModelEvidenceAuthority
     if(records.length!==ids.length||input.processingEvidence&&records.some(record=>input.processingEvidence![record.id]!==memoryEvidenceFingerprint(record)))throw contextFailure('context_evidence_restricted');
     return records;
   };
+  const selectedQueryMaterial=(input:Pick<QueryInput,'anchorMaterialRef'|'after'|'before'|'deviceId'>,scoped=false)=>{
+    // Admission/preparation check the whole selected range. A delegated child
+    // can narrow that range; its actual reads still enforce the narrower scope,
+    // while every model boundary keeps checking the selected version/exposure.
+    if(input.anchorMaterialRef&&!evidenceReader.queryMaterialReference(input.anchorMaterialRef,scoped?input:{}))throw contextFailure('context_evidence_restricted');
+  };
   const assertModelEvidence=(input:QueryInput|undefined)=>{
+    if(input)selectedQueryMaterial(input);
     if(modelAuthorization.currentId){
       modelAuthorizationHost.assertEvidence([...(input?.evidenceIds??[]),...modelContextGroups(input).flatMap(group=>group.ids)]);
       modelAuthorization.assertDisclosure(sourceContextDependencies(input).map(pin=>({sourceId:pin.sourceId,dataKind:'text'})));
@@ -94,6 +101,7 @@ export function createModelEvidenceAuthority(dependencies:ModelEvidenceAuthority
     ))throw Object.assign(new ProviderFailure({category:'permanent',code:'context_evidence_restricted'}),{statusCode:409,code:'context_evidence_restricted'});
   };
   const assertModelEvidenceAsync=async(input:QueryInput)=>{
+    selectedQueryMaterial(input);
     selectedQueryEvidence(input);
     input.assertContextAuthority?.();
     assertModelContext(input);
@@ -114,5 +122,5 @@ export function createModelEvidenceAuthority(dependencies:ModelEvidenceAuthority
     const missing=input.evidenceIds.filter(id=>!input.processingEvidence?.[id]);
     return missing.length?{...input,processingEvidence:{...Object.fromEntries(readEvidence(missing).map(record=>[record.id,memoryEvidenceFingerprint(record)])),...input.processingEvidence}}:input;
   };
-  return {contextDependencies,sourceContextDependencies,selectedQueryEvidence,pinProcessingEvidence,assert:assertModelEvidence,assertAsync:assertModelEvidenceAsync};
+  return {contextDependencies,sourceContextDependencies,selectedQueryEvidence,selectedQueryMaterial,pinProcessingEvidence,assert:assertModelEvidence,assertAsync:assertModelEvidenceAsync};
 }

@@ -1,3 +1,4 @@
+import {modelView} from './fixtures/model-settings';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React,{act} from 'react';
@@ -49,7 +50,7 @@ test('real owner HTTP history reaches older pages and exact reports, then remove
  await api.request('/api/notes/'+noteId,{method:'DELETE'});
  // Deletion has no execution-event guarantee. The mounted report's bounded
  // revalidation must withdraw it and refresh history without a manual reload.
- await until(()=>!d.querySelector('.insight-report')&&d.body.textContent!.includes('这份洞察当前不可用'));
+ await until(()=>!d.querySelector('.insight-report')&&d.body.textContent!.includes('这份发现当前不可用'));
  await until(()=>d.querySelectorAll('.workspace-list .workspace-select').length===0);
  assert.equal(win.location.hash,'#/library/insights?insight='+ids[66],'a disappeared report never silently selects another result');
 });
@@ -61,7 +62,7 @@ test('late exact reads, unavailable selections and a different owner session can
  await act(async()=>root.render(view(api)));assert.equal(d.querySelector('.insight-report'),null);
  await act(async()=>{win.location.hash='#/library/insights?insight=second';win.dispatchEvent(new win.HashChangeEvent('hashchange'));});await until(()=>!!d.querySelector('.insight-report'));
  await act(async()=>finish(report('first','Generated stale first report')));assert.match(d.querySelector('.insight-report')!.textContent!,/Generated second report/);assert.doesNotMatch(d.body.textContent!,/Generated stale first report/);
- await act(async()=>{win.location.hash='#/library/insights?insight=missing';win.dispatchEvent(new win.HashChangeEvent('hashchange'));});await until(()=>d.body.textContent!.includes('这份洞察当前不可用'));assert.equal(d.querySelector('.insight-report'),null);
+ await act(async()=>{win.location.hash='#/library/insights?insight=missing';win.dispatchEvent(new win.HashChangeEvent('hashchange'));});await until(()=>d.body.textContent!.includes('这份发现当前不可用'));assert.equal(d.querySelector('.insight-report'),null);
  await act(async()=>{win.location.hash='#/library/insights?insight=second';win.dispatchEvent(new win.HashChangeEvent('hashchange'));});await until(()=>!!d.querySelector('.insight-report'));
  const denied=fake(path=>path.startsWith('/api/insights')?Promise.reject(new ApiError('Generated owner session denied',403)):{items:[]});
  await act(async()=>root.render(view(denied)));await tick();assert.equal(d.querySelector('.insight-report'),null);assert.doesNotMatch(d.body.textContent!,/Generated second report/);
@@ -80,7 +81,7 @@ test('a changed history cursor discards older rows and reloads the first page; t
  await act(async()=>button(d,'加载更多').click());assert.match(d.body.textContent!,/连接暂时中断，请检查网络/);assert.equal(d.querySelectorAll('.workspace-list .workspace-select').length,1);
  await act(async()=>button(d,'加载更多').click());assert.equal(d.querySelectorAll('.workspace-list .workspace-select').length,2);
  await act(async()=>button(d,'加载更多').click());await until(()=>d.querySelectorAll('.workspace-list .workspace-select').length===0);assert.ok(firstReads>=2);assert.doesNotMatch(d.querySelector('.workspace-list')!.textContent!,/Generated older finding/);
- await until(()=>!d.querySelector('.insight-report'));assert.match(d.body.textContent!,/这份洞察当前不可用/,'cursor invalidation also revalidates the explicitly selected report');
+ await until(()=>!d.querySelector('.insight-report'));assert.match(d.body.textContent!,/这份发现当前不可用/,'cursor invalidation also revalidates the explicitly selected report');
 });
 
 test('an old owner pagination response cannot enter a different Central session even if transport ignores cancellation',async t=>{
@@ -91,6 +92,29 @@ test('an old owner pagination response cannot enter a different Central session 
  await act(async()=>root.render(view(oldApi)));await until(()=>!!button(d,'加载更多'));
  await act(async()=>button(d,'加载更多').click());await act(async()=>root.render(view(currentApi)));assert.equal(signal?.aborted,true);
  await act(async()=>finish({items:[report('old-private-page','Generated old private page')],nextCursor:null}));
+ await until(()=>d.querySelector('.workspace-select')?.textContent?.includes('Generated current owner finding')??false);
+ await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());
  await until(()=>d.querySelector('.insight-report')?.textContent?.includes('Generated current owner finding')??false);
  assert.doesNotMatch(d.body.textContent!,/Generated old owner finding|Generated old private page/);
+});
+
+test('an unconfirmed generation retains its exact request across history, remount and later range changes',async t=>{
+ const {root,d,win,until}=await fixture(t,'#/library/insights?insight=new'),bodies:any[]=[];let later=false,last:any;
+ const api=fake((path,init)=>{if(path==='/api/model-settings')return modelView();if(path==='/api/insight-runs'&&init?.method==='POST'){const body=JSON.parse(String(init.body));bodies.push(body);if(bodies.length===1)throw Error('Generated lost admission acknowledgement');last={id:body.requestId,status:'failed',createdAt:when,updatedAt:when,scope:{},events:[],error:{code:'provider_unavailable',message:'Generated unavailable'}};return last;}if(path.startsWith('/api/insight-runs/'))return last;return {items:[]};});
+ const view=()=>React.createElement(Insights,{api,range:later?{after:'2026-01-01T00:00:00Z'}:{},configured:true,onOpen:()=>{},onSettings:()=>{},onChanged:()=>{}});
+ await act(async()=>root.render(view()));await act(async()=>d.querySelector<HTMLFormElement>('.insight-compose')!.requestSubmit());
+ await until(()=>d.body.textContent!.includes('上次提交结果尚未确认'));
+ await act(async()=>button(d,'发现历史').click());await act(async()=>root.render(null));later=true;await act(async()=>root.render(view()));
+ await act(async()=>button(d,'生成回顾').click());await until(()=>!!d.querySelector('.insight-compose'));
+ assert.match(d.body.textContent!,/上次提交结果尚未确认/);await act(async()=>d.querySelector<HTMLFormElement>('.insight-compose')!.requestSubmit());
+ await until(()=>bodies.length===2);assert.deepEqual(bodies[1],bodies[0],'A later range cannot change the unconfirmed request body or ID');
+ assert.equal(win.location.hash,'#/library/insights?insight=new');
+});
+
+test('an explicit active discovery A never restores newer B and a denied exact run stays unavailable',async t=>{
+ const {root,d,win,view,until}=await fixture(t,'#/library/insights?insight=run-a'),reads:string[]=[];
+ const running=(id:string)=>({id,status:'running',createdAt:when,updatedAt:when,scope:{},events:[]});
+ let denied=false;const api=fake(path=>{reads.push(path);if(path===INSIGHT_HISTORY_PATH)return {items:[],nextCursor:null};if(path==='/api/insight-runs')return {items:[running('run-b'),running('run-a')]};if(path==='/api/insights/run-a')throw new ApiError('Generated not published',404);if(path==='/api/insight-runs/run-a'){if(denied)throw new ApiError('Generated A forbidden',403);return running('run-a');}return {items:[]};});
+ await act(async()=>root.render(view(api)));await until(()=>!!d.querySelector('.insight-progress'));assert.equal(reads.some(path=>path==='/api/insight-runs/run-b'),false);assert.equal(win.location.hash,'#/library/insights?insight=run-a');
+ denied=true;const {resources}=await import('../src/resource-cache');await act(async()=>resources(api).invalidate(key=>key==='/api/insight-runs/run-a'));await until(()=>!d.querySelector('.insight-progress'));assert.equal(win.location.hash,'#/library/insights?insight=run-a');assert.equal(reads.some(path=>path==='/api/insight-runs/run-b'),false);assert.match(d.body.textContent!,/这份发现当前不可用/);
 });

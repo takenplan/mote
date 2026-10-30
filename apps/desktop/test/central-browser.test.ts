@@ -52,6 +52,19 @@ it('opens explicitly typed local capture IDs directly in the central evidence re
   expect(url.search).toBe('');
   expect(fallback).not.toHaveBeenCalled();
 });
+it('retains exact pinned Material or capture identity and its conversation through both login handoffs',async()=>{
+ const conversationId='11111111-2222-4333-8444-555555555555',material='material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64);
+ for(const reference of [material,'capture:'+conversationId])for(const login of ['ticket','request']){
+  const chrome=vi.fn();await openCentralBrowser('https://central.example','ask','darwin',chrome,vi.fn(),reference,login==='ticket'?'generated-ticket':undefined,login==='request'?'generated-request':undefined,undefined,conversationId);
+  const url=new URL(chrome.mock.calls[0][0]),params=new URLSearchParams(url.hash.split('?')[1]);expect(url.origin).toBe('https://central.example');expect(url.hash.split('?')[0]).toBe('#/ask');expect(params.get('evidence')).toBe(reference);expect(params.get('conversation')).toBe(conversationId);expect(params.get(login==='ticket'?'loginTicket':'loginRequest')).toBe('generated-'+login);expect(url.search).toBe('');expect(params.has('token')).toBe(false);
+ }
+});
+it('rejects malformed Material revisions and conversation destinations before browser launch',async()=>{
+ const chrome=vi.fn(),fallback=vi.fn(),material='material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64);
+ for(const reference of [material.replace(/b$/,'g'),material+'?next=https://elsewhere.example',material.replace('@','@%00')])await expect(openCentralBrowser('https://central.example','ask','darwin',chrome,fallback,reference)).rejects.toThrow('Invalid evidence reference');
+ for(const conversation of ['','not-an-id','11111111-2222-4333-8444-555555555555&token=bad'])await expect(openCentralBrowser('https://central.example','ask','darwin',chrome,fallback,material,undefined,undefined,undefined,conversation)).rejects.toThrow('Invalid conversation destination');
+ await expect(openCentralBrowser('https://central.example','vault','darwin',chrome,fallback,undefined,undefined,undefined,undefined,'11111111-2222-4333-8444-555555555555')).rejects.toThrow('Invalid conversation destination');expect(chrome).not.toHaveBeenCalled();expect(fallback).not.toHaveBeenCalled();
+});
 it('rejects other namespaces and arbitrary citation text before opening the browser',async()=>{
  const chrome=vi.fn(),fallback=vi.fn();for(const reference of ['memory:11111111-2222-4333-8444-555555555555','artifact:generated-record:version%3A2','material:generated-record','https://elsewhere.example/#/settings?token=synthetic'])await expect(openCentralBrowser('https://central.example','ask','darwin',chrome,fallback,reference)).rejects.toThrow('Invalid evidence reference');
  expect(chrome).not.toHaveBeenCalled();expect(fallback).not.toHaveBeenCalled();
@@ -79,4 +92,10 @@ it.each(['overview', 'about', 'guide', 'activity'])('preserves the %s destinatio
     expect(url.search).toBe('');
     expect(fallback).not.toHaveBeenCalled();
   }
+});
+
+it.each([['sources','#/connections'],['actions','#/actions'],['models','#/system/models']])('keeps the existing %s destination through a real login handoff',async(page,route)=>{const chrome=vi.fn();await openCentralBrowser('http://127.0.0.1:47832',page,'darwin',chrome,vi.fn(),undefined,'generated-ticket');const url=new URL(chrome.mock.calls[0][0]);expect(url.hash.split('?')[0]).toBe(route);expect(new URLSearchParams(url.hash.split('?')[1]).get('loginTicket')).toBe('generated-ticket');expect(url.search).toBe('');});
+
+it('opens the retained source-detail Central library action through either login handoff',async()=>{
+ for(const login of ['ticket','request']){const chrome=vi.fn();await openCentralBrowser('https://central.example','library','darwin',chrome,vi.fn(),undefined,login==='ticket'?'generated-ticket':undefined,login==='request'?'generated-request':undefined);const url=new URL(chrome.mock.calls[0][0]);expect(url.hash.split('?')[0]).toBe('#/library');expect(new URLSearchParams(url.hash.split('?')[1]).get(login==='ticket'?'loginTicket':'loginRequest')).toBe('generated-'+login);expect(url.search).toBe('');}
 });

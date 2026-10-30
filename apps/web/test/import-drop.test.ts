@@ -29,7 +29,7 @@ test('empty folders, inaccessible descendants, duplicates and upload limits reje
  const inaccessible={name:'blocked',isDirectory:true,isFile:false,createReader:()=>({readEntries:(_done:unknown,fail:(error:DOMException)=>void)=>fail(new DOMException('Generated denied','NotReadableError'))})} as unknown as FileSystemDirectoryEntry;
  await assert.rejects(readImportDrop(drop([directory('folder',[[fileEntry('good.txt'),inaccessible]])])),/无法读取文件夹中的条目/);
  await assert.rejects(readImportDrop(drop([fileEntry('same.txt'),fileEntry('same.txt')])),/路径不能重复/);
- await assert.rejects(readImportDrop(drop([directory('large',[Array.from({length:2001},(_,i)=>fileEntry(`${i}.txt`))])])),/2,000/);
+ await assert.rejects(readImportDrop(drop([directory('large',[Array.from({length:4001},(_,i)=>fileEntry(`${i}.txt`))])])),/4,000/);
  const huge=new File(['generated'],'huge.txt');Object.defineProperty(huge,'size',{value:65*1024*1024});await assert.rejects(readImportDrop({items:[],files:[huge]} as unknown as DataTransfer),/64 MB/);
 });
 test('cancelling pending enumeration cannot return a partial selection',async()=>{

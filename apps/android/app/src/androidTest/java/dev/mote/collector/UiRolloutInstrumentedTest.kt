@@ -79,7 +79,7 @@ class UiRolloutInstrumentedTest {
                             views(root).filterIsInstance<Button>().single { it.text.toString() == MoteI18n.text("保存设备名称") })
                         "rollout-bulk-dedupe" -> assertControlGap(
                             views(root).filterIsInstance<android.widget.Spinner>().single(),
-                            views(root).filterIsInstance<Button>().single { it.text.toString() == MoteI18n.text("开始全量扫描") })
+                            views(root).filterIsInstance<Button>().single { it.text.toString() == MoteI18n.text("扫描本机图片") })
                         "rollout-queue" -> assertControlGap(
                             views(root).filterIsInstance<android.widget.Spinner>().single(),
                             views(root).filterIsInstance<Button>().single { it.text.toString() == MoteI18n.text("刷新") })
@@ -110,8 +110,8 @@ class UiRolloutInstrumentedTest {
             Triple(AppUpdatesActivity::class.java, "updates", "应用更新"), Triple(BackupActivity::class.java, "backup", "导入与导出"),
             Triple(SyncQueueActivity::class.java, "queue", "待上传队列"), Triple(SyncRecoveryActivity::class.java, "recovery", "同步与恢复"),
             Triple(StorageActivity::class.java, "storage-location", "图片保存位置"), Triple(StorageStatisticsActivity::class.java, "statistics", "统计中心"),
-            Triple(ActivityStatsActivity::class.java, "activity-statistics", "采集与存储详情"), Triple(LogViewerActivity::class.java, "logs", "日志中心"),
-            Triple(ImageDedupeDiagnosticsActivity::class.java, "dedupe", "图片去重诊断"), Triple(CompressionPreviewActivity::class.java, "compression", "图片压缩预览"),
+            Triple(ActivityStatsActivity::class.java, "activity-statistics", "采集与存储详情"), Triple(LogViewerActivity::class.java, "logs", "本地日志"),
+            Triple(ImageDedupeDiagnosticsActivity::class.java, "dedupe", "去重对比诊断"), Triple(CompressionPreviewActivity::class.java, "compression", "图片压缩预览"),
             Triple(BulkDedupeActivity::class.java, "bulk-dedupe", "本机图片批量去重"), Triple(CalendarActionsActivity::class.java, "calendar", "日程建议"), Triple(ConnectionActivity::class.java, "pairing", "连接中央节点"))) {
             render("rollout-$scene", title, Intent(context, activity)) { a ->
                 when (scene) {

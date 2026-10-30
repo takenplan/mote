@@ -83,6 +83,8 @@ class ConnectionInstrumentedTest {
                 }
                 scenario.awaitUiText("https://generated-new.invalid")
                 scenario.onActivity { activity ->
+                    fun disclosure(v: android.view.View): android.view.View? = if(v.tag=="connection-settings-toggle") v else if(v is android.view.ViewGroup) (0 until v.childCount).firstNotNullOfOrNull { disclosure(v.getChildAt(it)) } else null
+                    requireNotNull(disclosure(activity.window.decorView)).performClick()
                     val fields = mutableListOf<android.widget.EditText>()
                     fun walk(v: android.view.View) { if (v is android.widget.EditText) fields += v; if (v is android.view.ViewGroup) repeat(v.childCount) { walk(v.getChildAt(it)) } }
                     walk(activity.window.decorView)

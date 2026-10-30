@@ -157,10 +157,10 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             }
         } else paged("/api/materials?limit=20", ui.card()) { row, card ->
             ui.text(row.optString("title"), NativeFontRole.ROW, card); ui.text(row.optString("kind") + " · " + row.optJSONObject("coverage")?.optString("state"), parent = card)
-            ui.button(MoteI18n.text("查看原文"), parent = card) { material(row.getString("id"), row.getString("revision")) }
+            ui.button(MoteI18n.text("查看原文"), parent = card) { material(row.getString("id"), row.getString("revision")) }.tag="material-open:"+row.getString("id")
         }
     }
-    fun captureEvidence(id: String) = evidence(CentralEvidenceReference.capture(id))
+    fun captureEvidence(id: String, conversationId: String? = null, returnScroll: Int? = null, returnToConversation: (() -> Unit)? = null) { capture(id, conversationId = conversationId, returnScroll = returnScroll, returnToConversation = returnToConversation) }
     fun evidence(reference: String, offset: Int = 0) {
         require(reference.isNotBlank() && reference.length <= 4096)
         val materialRef = Regex("^material:(mat_[a-f0-9]{64})(?:@([a-f0-9]{64}))?$").matchEntire(reference)
@@ -181,26 +181,62 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             for (i in 0 until refs.length()) ui.button(MoteI18n.text("查看原始记录") + " · " + refs.getString(i).takeLast(8)) { evidence(refs.getString(i)) }
         }
     }
-    private fun capture(id: String, topicMemoryId: String? = null, accept: ((JSONObject) -> Boolean)? = null) {
-        val api = client
-        ui.work(MoteI18n.text("正在读取原文…"), {
+    private fun capture(id: String, topicMemoryId: String? = null, accept: ((JSONObject) -> Boolean)? = null, conversationId: String? = null, returnScroll: Int? = null, returnToConversation: (() -> Unit)? = null, workMemory: WorkMemoryReference? = null, returnToWork: (() -> Unit)? = null, memoryFailure: ((Throwable) -> Unit)? = null) {
+        val api = client;val currentVisit=ui.readVisit()
+        ui.work(MoteI18n.text("正在读取原文…"), { runCatching {
+            workMemory?.verify(api,id)
             val row = api.get("/api/capture-browser/" + enc(id))
-            row to topicMemoryId?.let { api.get("/api/memories/" + enc(it)) }
-        }) { (row, memory) ->
+            check(row.getString("id")==id)
+            val projected=NativeDerivedEvidencePresentation.load(row,currentVisit,api::get)
+            if(projected!=null) {
+                val current=api.get("/api/capture-browser/"+enc(id))
+                check(current.getString("id")==id && current.optString("deviceId")==row.optString("deviceId") && current.optString("source")==row.optString("source") && current.optString("libraryVersion")==row.optString("libraryVersion") && current.optString("ocrText")==row.optString("ocrText")) { MoteI18n.text("分页内容已变化或游标无效，请返回第一页重新读取。") }
+            }
+            if(conversationId!=null)check(CentralConversationReference.available(api,conversationId,id)) { MoteI18n.text("引用原文已删除，历史问答仍保留。") }
+            val memory=topicMemoryId?.let { api.get("/api/memories/" + enc(it)) }
+            workMemory?.verify(api,id)
+            Triple(row,memory,projected)
+        } }) { result ->
+            val (row,memory,projected)=result.getOrElse { error->if(memoryFailure!=null)memoryFailure(error) else ui.requestFailure(error);return@work }
             if (memory != null && accept != null && !accept(memory)) return@work
-            body.removeAllViews(); screens.setBack { screens.refresh() }
-            ui.text(row.optString("appName"), NativeFontRole.TITLE_MOBILE); ui.text(row.optString("capturedAt")); ui.text(row.optString("ocrText"))
+            if (CentralCaptureReader.supports(row.optString("source"))) {
+                check(row.getString("id") == id)
+                ui.openCaptureReader(api.server,row,conversationId,returnScroll,workMemory)
+                return@work
+            }
+            val memoryScroll=if(workMemory!=null)ui.contentScroll() else null
+            val memoryViews=if(workMemory!=null) (0 until body.childCount).map{body.getChildAt(it)} else emptyList()
+            if(workMemory!=null)screens.retainWorkMemoryForRecreation(workMemory.work)
+            body.removeAllViews()
+            screens.setBack {
+                if(workMemory!=null && returnToWork!=null) {
+                    body.visibility=android.view.View.INVISIBLE;body.removeAllViews();memoryViews.forEach(body::addView)
+                    screens.setBack(returnToWork);screens.restoreWorkMemoryAfterReader(workMemory.work,requireNotNull(memoryScroll))
+                } else returnToConversation?.invoke() ?: screens.refresh()
+            }
+            ui.text(row.optString("appName"), NativeFontRole.TITLE_MOBILE); ui.text(row.optString("capturedAt"))
+            projected?.speaker?.let { ui.text(MoteI18n.text("说话人 {0}",it),NativeFontRole.SUPPORT) }
+            ui.text(projected?.text ?: row.optString("ocrText")).tag="capture-reference-text"
             ui.button(MoteI18n.text("基于这条记录提问")) { screens.askAbout(id) }
             val metadata = row.optJSONObject("metadata")
-            values(metadata ?: JSONObject(), ui.card())
+            if(projected==null)values(metadata ?: JSONObject(), ui.card())
             val attachments = metadata?.optJSONArray("attachments") ?: JSONArray()
             for (i in 0 until attachments.length()) ui.button(MoteI18n.text("附件") + " " + (i + 1)) { file(attachments.getString(i)) }
             if (row.optBoolean("hasImage") || !row.isNull("blobHash") && row.has("blobHash")) ui.button(MoteI18n.text("查看原图")) {
                 image("/api/capture-browser/" + enc(id) + "/image", body)
             }
-            ui.button(MoteI18n.text("删除记录")) {
-                screens.confirm(MoteI18n.text("删除中央记录"), MoteI18n.text("删除中央保存的这条记录。不会删除本机副本或来源原件，也不会改变来源同步策略。删除后无法恢复。")) {
-                    ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/captures/" + enc(id)) }) { screens.refresh() }
+            val deletionKind=CentralDeletion.kind(row)
+            ui.disclosure(MoteI18n.text("更多")) { more ->
+                if(projected!=null) {
+                    ui.text(MoteI18n.text("原始文本"),NativeFontRole.SECTION,more)
+                    ui.text(projected.canonical,parent=more).tag="capture-reference-canonical"
+                    values(projected.locator,ui.card(more));metadata?.let { values(it,ui.card(more)) }
+                }
+                if (deletionKind == null) ui.text(MoteI18n.text("此引用不能直接删除原始记录。"),parent=more)
+                else ui.button(MoteI18n.text(if(deletionKind == "file") "删除文件" else "删除记录"),parent=more) {
+                    screens.confirm(MoteI18n.text(if(deletionKind == "file") "删除中央文件" else "删除中央记录"), MoteI18n.text(if(deletionKind == "file") "删除中央保存的这份文件。不会删除设备上的原件，也不会改变来源同步策略。删除后无法恢复。" else "删除中央保存的这条记录。不会删除本机副本或来源原件，也不会改变来源同步策略。删除后无法恢复。")) {
+                        ui.work(MoteI18n.text("正在删除…"), { CentralDeletion.evidence(api,id,deletionKind) }) { screens.refresh() }
+                    }
                 }
             }
             if (topicMemoryId != null) ui.scheduleMemoryTopicsPoll()
@@ -229,10 +265,30 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }) { (value, current) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
             val item = value.getJSONObject("material"); ui.text(item.getString("title"), NativeFontRole.TITLE_MOBILE)
-            ui.text(MoteI18n.text("版本 {0}", item.opt("sequence"))); ui.text(value.getString("text"))
-            values(item.getJSONObject("origin"), ui.card())
+            ui.text(MoteI18n.text("版本 {0}", item.opt("sequence")))
+            val spans=value.getJSONArray("spans");val pageText=value.getString("text")
+            val hasBody=(0 until spans.length()).any { index -> val span=spans.getJSONObject(index);span.getString("kind")=="text" && span.getJSONObject("pageRange").let { it.getInt("end")>it.getInt("start") } }
+            if(!hasBody)ui.text(MoteI18n.text(if(item.optInt("blockCount")==item.optInt("assetCount"))"此版本暂无文字正文。" else "本页暂无文字正文。"))
+            for(index in 0 until spans.length()) {
+                val span=spans.getJSONObject(index)
+                if(span.getString("kind")=="text") {
+                    val range=span.getJSONObject("pageRange");val literal=pageText.substring(range.getInt("start"),range.getInt("end"))
+                    if(literal.isNotEmpty())ui.text(literal).tag="material-literal:"+span.getString("blockId")
+                }
+                span.optJSONObject("asset")?.let { asset ->
+                    val card=ui.card();card.tag="material-asset:"+span.getString("blockId")
+                    ui.text(item.getString("title"),NativeFontRole.SECTION,card)
+                    ui.text(asset.getString("mimeType"),NativeFontRole.SUPPORT,card)
+                    ui.text(MoteI18n.text(if(item.getJSONObject("retention").getString("original")=="retained")"原件已保留" else "原件不可用"),NativeFontRole.META,card)
+                }
+            }
+            val reference="material:"+item.getString("id")+"@"+item.getString("revision")
+            ui.button(MoteI18n.text("围绕这份资料提问")) { screens.askAboutMaterial(reference) }.tag="material-ask"
+            ui.disclosure(MoteI18n.text("更多")) { more ->
+            values(item.getJSONObject("origin"), ui.card(more))
+            for(index in 0 until spans.length())spans.getJSONObject(index).optJSONObject("asset")?.let { values(it,ui.card(more)) }
             item.optJSONObject("attributionContext")?.let { context ->
-                val card = ui.card(); ui.text(MoteI18n.text("内容与我的关系") + " · " + relationLabel(context.optString("ownerRelation")), parent = card)
+                val card = ui.card(more); ui.text(MoteI18n.text("内容与我的关系") + " · " + relationLabel(context.optString("ownerRelation")), parent = card)
                 val basis = when (context.optString("basis")) {
                     "owner_material" -> MoteI18n.text("你对这份资料的声明")
                     "owner_source" -> MoteI18n.text("你对来源的声明")
@@ -248,12 +304,13 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                     }
                 } else ui.button(MoteI18n.text("查看当前版本"), parent = card) { material(id, current.getString("revision")) }
             }
+            }
             val range = value.getJSONObject("textRange")
-            if (!range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { material(id, revision, range.getInt("nextOffset")) }
+            if (!range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { material(id, item.getString("revision"), range.getInt("nextOffset")) }
             ui.button(MoteI18n.text("来源与处理")) {
                 val target = ui.card()
-                paged("/api/materials/" + enc(id) + "/members?limit=20" + (revision?.let { "&revision=" + enc(it) } ?: ""), target) { member, card ->
-                    ui.button(member.optString("kind"), parent = card) { evidence(member.getString("ref")) }
+                paged("/api/materials/" + enc(id) + "/members?limit=20&revision="+enc(item.getString("revision")), target) { member, card ->
+                    ui.button(MoteI18n.text("查看原文"), parent = card) { evidence(member.getString("ref")) }
                 }
             }
         }
@@ -268,6 +325,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("处理设置")) { CentralAdmin(screens).fileSettings() }
     }
+    fun openFile(id: String) { java.util.UUID.fromString(id); file(id) }
     private fun file(id: String, offset: Int = 0) {
         val api = client
         ui.work(MoteI18n.text("正在读取文件…"), { api.get("/api/files/" + enc(id)) to api.get("/api/files/" + enc(id) + "/chunks?offset=$offset") }) { (row, chunks) ->
@@ -325,7 +383,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 }
             }
             ui.button(MoteI18n.text("删除文件")) { screens.confirm(MoteI18n.text("删除中央文件"), MoteI18n.text("删除中央保存的这份文件。不会删除设备上的原件，也不会改变来源同步策略。删除后无法恢复。")) {
-                ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/files/" + enc(id)) }) { screens.refresh() }
+                ui.work(MoteI18n.text("正在删除…"), { CentralDeletion.delete(api,"/api/files/" + enc(id)) }) { screens.refresh() }
             } }
         }
     }
@@ -375,10 +433,12 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             }
         }
     }
-    private val topics by lazy { CentralMemoryTopics(screens, {
-        memoryDeletionNotice?.takeIf { it.first === client }?.let { ui.text(it.second) }
-        ui.button(MoteI18n.text("提取记忆")) { CentralAdmin(screens).memoryJobs() }
-        ui.button(MoteI18n.text("记忆设置")) { CentralAdmin(screens).memorySettings() }
+    private val topics by lazy { CentralMemoryTopics(screens, { target, management ->
+        if (management) ui.button(MoteI18n.text("记忆设置"), parent = target) { CentralAdmin(screens).memorySettings() }
+        else {
+            memoryDeletionNotice?.takeIf { it.first === client }?.let { ui.text(it.second, parent = target) }
+            ui.button(MoteI18n.text("手动提取记忆"), parent = target) { CentralAdmin(screens).memoryJobs() }
+        }
     }, ::memoryStatus) { id, back, accept -> memory(id, back, accept) } }
     private fun memories() = topics.show()
     fun saveTopics(out: android.os.Bundle) = topics.save(out)
@@ -397,9 +457,16 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 "stale" -> MoteI18n.text("需要重验")
                 else -> row.optString("status")
     }
-    private fun memory(id: String, returnTo: (() -> Unit)? = null, accept: ((JSONObject) -> Boolean)? = null) {
+    fun openWorkMemory(id: String, returnTo: () -> Unit, accept: (JSONObject) -> Boolean, verify: (CentralClient) -> Boolean, reference: () -> WorkMemoryReference?, onOpened: () -> Unit, onFailure: (Throwable) -> Unit) = memory(id,returnTo,accept,verify,reference,onOpened,onFailure)
+    private fun memory(id: String, returnTo: (() -> Unit)? = null, accept: ((JSONObject) -> Boolean)? = null, verify: ((CentralClient) -> Boolean)? = null, reference: (() -> WorkMemoryReference?)? = null, onOpened: (() -> Unit)? = null, onFailure: ((Throwable) -> Unit)? = null) {
         val api = client
-        ui.work(MoteI18n.text("正在读取记忆…"), { api.get("/api/memories/" + enc(id)) }) { row ->
+        ui.work(MoteI18n.text("正在读取记忆…"), { runCatching {
+            if(verify!=null && !verify(api))throw WorkMemoryUnavailable()
+            val row=api.get("/api/memories/" + enc(id))
+            if(verify!=null && !verify(api))throw WorkMemoryUnavailable()
+            row
+        } }) { result ->
+            val row=result.getOrElse { error->if(onFailure!=null)onFailure(error) else ui.requestFailure(error);return@work }
             if (accept != null && !accept(row)) return@work
             body.removeAllViews(); screens.setBack { returnTo?.invoke() ?: screens.refresh() }
             val evidenceIds = row.optJSONArray("evidenceIds") ?: JSONArray()
@@ -424,21 +491,48 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             ui.text(MoteI18n.text("不确定性"), NativeFontRole.SECTION, facts)
             ui.text(row.optString("uncertainty"), parent = facts)
             ui.disclosure(MoteI18n.text("元数据")) { target -> ui.text(row.toString(2), parent = target) }
-            for (i in 0 until evidenceIds.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (i + 1)) { if (returnTo != null) capture(evidenceIds.getString(i), id, accept) else captureEvidence(evidenceIds.getString(i)) }
+            for (i in 0 until evidenceIds.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (i + 1)) {
+                if (returnTo == null) captureEvidence(evidenceIds.getString(i))
+                else if (verify == null) capture(evidenceIds.getString(i), id, accept)
+                else {
+                    val exact=reference?.invoke() ?: return@button
+                    capture(evidenceIds.getString(i), id, accept, workMemory = exact, returnToWork = returnTo, memoryFailure = onFailure)
+                }
+            }
             val statement = ui.field(MoteI18n.text("陈述"), row.optString("statement"), multiline = true)
             val title = ui.field(MoteI18n.text("标题"), row.optString("title"))
             val uncertainty = ui.field(MoteI18n.text("不确定性"), row.optString("uncertainty"), multiline = true)
             if (returnTo != null) {
-                statement.tag = MemoryTopicEdit(MoteI18n.text("陈述"), statement.text.toString())
-                title.tag = MemoryTopicEdit(MoteI18n.text("标题"), title.text.toString())
-                uncertainty.tag = MemoryTopicEdit(MoteI18n.text("不确定性"), uncertainty.text.toString())
+                statement.tag = MemoryTopicEdit(MoteI18n.text("陈述"), statement.text.toString(),"statement")
+                title.tag = MemoryTopicEdit(MoteI18n.text("标题"), title.text.toString(),"title")
+                uncertainty.tag = MemoryTopicEdit(MoteI18n.text("不确定性"), uncertainty.text.toString(),"uncertainty")
             }
             ui.button(MoteI18n.text("保存校正"), true) {
                 val corrected = JSONObject().put("title", title.text.toString()).put("statement", statement.text.toString()).put("uncertainty", uncertainty.text.toString()).put("version", row.optInt("version", 1))
-                ui.work(MoteI18n.text("正在保存…"), { api.post("/api/memories/" + enc(id) + "/correct", corrected) }) { memory(id, returnTo, accept) }
+                val exact=reference?.invoke()
+                if(reference!=null && exact==null) { onFailure?.invoke(WorkMemoryUnavailable());return@button }
+                val visit=ui.readVisit()
+                ui.work(MoteI18n.text("正在保存…"), { runCatching {
+                    exact?.verify(api,evidenceIds.getString(0))
+                    if(exact!=null)check(visit()) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
+                    api.post("/api/memories/" + enc(id) + "/correct", corrected)
+                } }) { result ->
+                    result.onSuccess {
+                        if(reference!=null) { returnTo?.invoke();android.widget.Toast.makeText(ui,MoteI18n.text("已保存"),android.widget.Toast.LENGTH_SHORT).show() }
+                        else memory(id, returnTo, accept, verify, reference, onOpened, onFailure)
+                    }.onFailure { error->if(onFailure!=null)onFailure(error) else ui.requestFailure(error) }
+                }
             }
             ui.button(MoteI18n.text("删除记忆")) { screens.confirm(MoteI18n.text("删除记忆"), MoteI18n.text("删除后无法恢复。")) {
-                ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/memories/" + enc(id)) }) { receipt ->
+                val exact=reference?.invoke()
+                if(reference!=null && exact==null) { onFailure?.invoke(WorkMemoryUnavailable());return@confirm }
+                val visit=ui.readVisit()
+                ui.work(MoteI18n.text("正在删除…"), { runCatching {
+                    exact?.verify(api,evidenceIds.getString(0))
+                    if(exact!=null)check(visit()) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
+                    api.delete("/api/memories/" + enc(id))
+                } }) { result ->
+                    val receipt=result.getOrElse { error->if(onFailure!=null)onFailure(error) else ui.requestFailure(error);return@work }
                     val message = when {
                         receipt.optString("externalErase") == "pending" -> MoteI18n.text("记忆已禁止使用；外部清除仍待确认。")
                         receipt.optString("externalErase") == "acknowledged" && !receipt.optBoolean("physicalEraseVerified") -> MoteI18n.text("记忆已禁止使用；外部已确认移除当前记录，物理擦除尚未核验。")
@@ -447,7 +541,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                     memoryDeletionNotice = api to message; returnTo?.invoke() ?: screens.refresh()
                 }
             } }
-            if (returnTo != null) ui.scheduleMemoryTopicsPoll()
+            if (onOpened != null) onOpened() else if (returnTo != null) ui.scheduleMemoryTopicsPoll()
         }
     }
     private fun insights() = screens.showInsights()

@@ -1,4 +1,6 @@
-import {storedCaptureLibraryVersion} from './capture-library-version.js';
+import type {EvidenceDeletion} from './evidence-deletion.js';
+import {storedCaptureLibraryVersion,materialEvidenceLibraryVersion} from './capture-library-version.js';
+import {CaptureTimeline,type TimelineRange} from './capture-timeline.js';
 import {registerDeviceLibrary} from './device-library.js';
 import type {EvidenceReader} from './evidence-reader.js';
 import {navigationScopeSchema} from './context-navigation.js';
@@ -10,17 +12,24 @@ import {sourceSchema,formatEvidenceRef} from '@mote/shared';
 import {Store,StoreError} from './store.js';
 import {Connections,ConnectionError,type ConnectionCredential} from './connections.js';
 
-const range=z.object({
+const rangeFields={
   after:z.string().datetime({offset:true}).optional(),before:z.string().datetime({offset:true}).optional(),
   deviceId:z.string().min(1).max(128).optional(),appId:z.string().max(300).optional(),source:sourceSchema.optional(),
   collection:z.enum(['content','activity']).optional(),
   ocrStatus:z.enum(['pending','completed','disabled','failed','unknown','not_applicable']).optional(),
   limit:z.coerce.number().int().min(1).max(60).default(30),cursor:z.string().max(512).optional(),
-}).strict().refine(v=>!v.after||!v.before||Date.parse(v.after)<Date.parse(v.before),{message:'Invalid time range'});
+};
+const range=z.object(rangeFields).strict().refine(v=>!v.after||!v.before||Date.parse(v.after)<Date.parse(v.before),{message:'Invalid time range'});
+const timelineFields={...rangeFields,after:z.string().datetime({offset:true}),before:z.string().datetime({offset:true}),
+ timeZone:z.string().min(1).max(100).refine(value=>{try{new Intl.DateTimeFormat('en',{timeZone:value});return true;}catch{return false;}},{message:'Invalid time zone'}),cursor:z.string().max(8192).optional()};
+const validTimelineRange=(value:{after:string;before:string})=>Date.parse(value.after)<Date.parse(value.before)&&Date.parse(value.before)-Date.parse(value.after)<=32*86400000;
+const timelineRange=z.object(timelineFields).strict().refine(validTimelineRange,{message:'Select up to 32 days for time browsing'});
+const timelineMemberRange=z.object({...timelineFields,group:z.string().min(1).max(8192)}).strict().refine(validTimelineRange,{message:'Select up to 32 days for time browsing'});
 const update=z.object({status:z.enum(['completed','failed']),ocrText:z.string().max(100000)}).strict();
 
-export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;evidenceReader:EvidenceReader;connections:Connections;credential:(req:FastifyRequest)=>ConnectionCredential|undefined}) {
-  const {store,connections,credential,evidenceReader}=context;
+export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;evidenceReader:EvidenceReader;connections:Connections;credential:(req:FastifyRequest)=>ConnectionCredential|undefined;deletion:EvidenceDeletion}) {
+  const {store,connections,credential,evidenceReader,deletion}=context;
+  const timeline=new CaptureTimeline(store);
   registerDeviceLibrary(app,context);
   const thumbnails=new Map<string,Buffer>();let cachedBytes=0;
   const ownRecord=(req:FastifyRequest)=>{
@@ -55,6 +64,11 @@ export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;
     }
     return store.previews(query);
   });
+  const timelineOwner=(req:FastifyRequest,query:TimelineRange)=>{
+    const c=credential(req);if(c){connections.assertActive(c);if(!c.deviceId||query.deviceId&&query.deviceId!==c.deviceId)throw new ConnectionError('connection_scope_denied',403,moteText('只能读取本设备的采集记录。'));query.deviceId=c.deviceId;}return c?.id??'owner';
+  };
+  app.get('/api/capture-browser/timeline',async req=>{const query=timelineRange.parse(req.query),identity=timelineOwner(req,query);return timeline.page(query,identity);});
+  app.get('/api/capture-browser/timeline/members',async req=>{const {group,...query}=timelineMemberRange.parse(req.query),identity=timelineOwner(req,query);return timeline.members(query,identity,group);});
   const galleryRange=z.object({after:z.string().datetime({offset:true}),before:z.string().datetime({offset:true}),
     deviceId:z.string().min(1).max(128).optional(),appId:z.string().max(300).optional(),
     limit:z.coerce.number().int().min(1).max(60).default(20),cursor:z.string().min(1).max(2048).optional(),
@@ -89,7 +103,12 @@ export function registerCaptureBrowser(app:FastifyInstance,context:{store:Store;
       record.source!=='screen'&&record.source!=='ui_page'&&
       store.db.prepare('SELECT 1 FROM source_connections WHERE id=?').get(provenance.sourceId));
     const memoryMaterialRef=evidenceReader.currentMemoryMaterialRef(record);
-    return {...evidenceReader.context([record])[0],libraryVersion:storedCaptureLibraryVersion(store,record.id),fileArchive:file?{captureId:record.id}:undefined,
+    const detailed=evidenceReader.context([record])[0];
+    if(credential(req)&&detailed.attributionContext){
+      const {recordContextDeclarations:_,recordContextStatements:__,sourceContextDeclarations:___,sourceContextStatements:____,...context}=detailed.attributionContext;
+      detailed.attributionContext=context;
+    }
+    return {...detailed,deletion:credential(req)?{available:false,kind:null}:deletion.capability(record.id),libraryVersion:storedCaptureLibraryVersion(store,record.id)??materialEvidenceLibraryVersion(store,detailed),fileArchive:file?{captureId:record.id}:undefined,
       requiresMaterialForMemory,...(memoryMaterialRef?{memoryMaterialRef}:{})};
   });
   app.get('/api/capture-browser/:id/image',async(req,reply)=>{

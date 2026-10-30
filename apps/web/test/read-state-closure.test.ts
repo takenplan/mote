@@ -175,7 +175,7 @@ test('connection reads share cache and reject stale authenticated inventories',a
  const {root,d}=await fixture(t),old=deferred();const first=apiWith(path=>path==='/api/configuration'?{groups:[]}:old.promise),next=apiWith(path=>path==='/api/configuration'?Promise.reject(new ApiError('generated configuration unavailable',503)):{items:[],mcp:{enabled:false,writeEnabled:false,writeSourceIds:[]}});
  await act(async()=>root.render(React.createElement(Connections,{api:first,serverUrl:'http://localhost',devices:[]})));await act(async()=>root.render(React.createElement(Connections,{api:next,serverUrl:'https://generated.example',devices:[]})));
  await act(async()=>old.resolve({items:[{id:'old',label:'OLD PRIVATE DEVICE',scope:'collector',createdAt:when}],mcp:{enabled:true}}));
- assert.doesNotMatch(d.body.textContent!,/OLD PRIVATE DEVICE/);assert.match(d.body.textContent!,/generated configuration unavailable/);assert.equal(d.querySelector<HTMLInputElement>('[aria-label="邀请节点地址"]')!.value,'https://generated.example');
+ assert.doesNotMatch(d.body.textContent!,/OLD PRIVATE DEVICE/);assert.match(d.body.textContent!,/generated configuration unavailable/);await act(async()=>button(d,'新建连接').click());assert.equal(d.querySelector<HTMLInputElement>('[aria-label="邀请节点地址"]')!.value,'https://generated.example');
 });
 test('execution overview shares initial settings read; dirty runtime draft survives updates and clears after revocation',async t=>{
  const {root,d}=await fixture(t);let count=0,enabled=true,revoked=false;const value=()=>({enabled,debug:false,traceEnabled:false,level:'info',queues:{agents:{active:0,waiting:0,limit:1},llm:{active:0,waiting:0,limit:1}}});
@@ -226,7 +226,7 @@ test('Memory progress readers share pending reads and fence another selected job
 });
 test('configuration views share reads and discard revoked deployment details',async t=>{
  const {ServerSettings,AdvancedConfiguration}=await import('../src/ServerSettings.js'),{root,d}=await fixture(t);let reads=0,revoked=false;
- const api=apiWith(path=>{if(path==='/api/configuration'){reads++;if(revoked)throw new ApiError('generated configuration revoked',403);return {profile:'fixture',runtime:'node',description:'fixture',storage:{dataDir:'PRIVATE FIXTURE DIRECTORY'},groups:[]};}return {enabled:false,debug:false,traceEnabled:false,level:'info'};});
+ const api=apiWith(path=>{if(path==='/api/configuration'){reads++;if(revoked)throw new ApiError('generated configuration revoked',403);return {profile:'fixture',runtime:'node',description:'fixture',storage:{dataDir:'PRIVATE FIXTURE DIRECTORY'},groups:[]};}if(path==='/api/file-processing')return {revision:'generated',settings:{},policy:{services:[],profiles:[]},processors:[],policyConfigured:false};return {enabled:false,debug:false,traceEnabled:false,level:'info'};});
  await act(async()=>root.render(React.createElement(React.Fragment,null,React.createElement(ServerSettings,{api,onNavigate:()=>{},onModelApplied:()=>{}}),React.createElement(AdvancedConfiguration,{api}))));assert.equal(reads,1);assert.match(d.body.textContent!,/PRIVATE FIXTURE DIRECTORY/);
  revoked=true;await act(async()=>resources(api).invalidate(path=>path==='/api/configuration'));assert.doesNotMatch(d.body.textContent!,/PRIVATE FIXTURE DIRECTORY/);assert.match(d.body.textContent!,/generated configuration revoked/);
 });
@@ -248,18 +248,18 @@ test('Markdown citation renderer retains the exact focused control across parent
 });
 
 test('Insight cancel shows a distinct stopped state and does not automatically relaunch',async t=>{
- const {root,d}=await fixture(t),pendingPoll=deferred();let status='running',writes=0;
+ const {root,d}=await fixture(t),pendingPoll=deferred();window.history.replaceState(null,'','#/library/insights?insight=new');let status='running',writes=0;
  const run=()=>({id:'generated-insight',status,createdAt:when,updatedAt:when,scope:{},events:[]});
  const api=apiWith((path,init)=>{if(path.endsWith('/cancel')){assert.equal(init?.method,'POST');writes++;status='cancelled';return run();}if(path==='/api/insight-runs')return {items:[run()]};if(path==='/api/insight-runs/generated-insight')return status==='running'?pendingPoll.promise:run();return {items:[]};});
  await act(async()=>root.render(React.createElement(Insights,{api,range:{},configured:true,onOpen:()=>{},onSettings:()=>{},onChanged:()=>{}})));
  await act(async()=>button(d,'取消回顾').click());
  await act(async()=>pendingPoll.resolve({...run(),status:'running'}));
  assert.equal(writes,1);assert.match(d.querySelector('.insight-progress')!.textContent!,/回顾已取消/);assert.match(d.querySelector('.insight-progress')!.textContent!,/原始资料仍保留/);
- assert.equal(button(d,'取消回顾'),undefined);assert.doesNotMatch(d.querySelector('.insight-progress')!.textContent!,/报告已归档/);assert.ok(button(d,'新建洞察'));
+ assert.equal(button(d,'取消回顾'),undefined);assert.doesNotMatch(d.querySelector('.insight-progress')!.textContent!,/报告已归档/);assert.ok(button(d,'调整范围后重试'));await act(async()=>button(d,'调整范围后重试').click());assert.ok(d.querySelector('.insight-compose'));assert.equal(writes,1,'Opening the retained draft never relaunches automatically');
 });
 
 test('Insight cancellation on a new node is not blocked or overwritten by an old node request ignoring abort',async t=>{
- const {root,d}=await fixture(t),oldReply=deferred();let oldSignal:AbortSignal|undefined,newCancels=0;
+ const {root,d}=await fixture(t),oldReply=deferred();window.history.replaceState(null,'','#/library/insights?insight=new');let oldSignal:AbortSignal|undefined,newCancels=0;
  const run=(status='running')=>({id:'same-generated-id',status,createdAt:when,updatedAt:when,scope:{},events:[]});
  const oldApi=apiWith((path,init)=>{if(path.endsWith('/cancel')){oldSignal=init?.signal as AbortSignal;return oldReply.promise;}return path==='/api/insight-runs'?{items:[run()]}:path.includes('/api/insight-runs/')?run():{items:[]};});
  const newApi=apiWith((path,init)=>{if(path.endsWith('/cancel')){assert.equal(init?.method,'POST');newCancels++;return run('cancelled');}return path==='/api/insight-runs'?{items:[run()]}:path.includes('/api/insight-runs/')?run(newCancels?'cancelled':'running'):{items:[]};});
@@ -313,13 +313,14 @@ test('connection permission selection cannot relabel an already issued invitatio
  await act(async()=>root.render(React.createElement(Connections,{api,serverUrl:'http://localhost',devices:[],mode:'device'})));
  const selector=d.querySelector<HTMLSelectElement>('[aria-label="设备权限"]')!;
  await act(async()=>{selector.value='collector';selector.dispatchEvent(new window.Event('change',{bubbles:true}));});
- await act(async()=>button(d,'生成设备二维码').click());
+ await act(async()=>button(d,'生成连接邀请').click());
  assert.equal(writes.at(-1),'/api/connections/collector-invitations');
  const invitation=()=>d.querySelector('[aria-label="连接邀请"]')!;
  assert.match(invitation().textContent!,/将邀请交给独立采集程序/);assert.match(invitation().textContent!,/采集器 · 仅同步本设备/);
- await act(async()=>{selector.value='owner';selector.dispatchEvent(new window.Event('change',{bubbles:true}));});
- assert.match(invitation().textContent!,/将邀请交给独立采集程序/,'form selection does not change the issued authority');
- await act(async()=>button(d,'重新生成二维码').click());
+ await act(async()=>button(d,'修改连接设置').click());const nextSelector=d.querySelector<HTMLSelectElement>('[aria-label="设备权限"]')!;
+ await act(async()=>{nextSelector.value='owner';nextSelector.dispatchEvent(new window.Event('change',{bubbles:true}));});
+ await act(async()=>button(d,'取消').click());assert.match(invitation().textContent!,/将邀请交给独立采集程序/,'cancelled form changes do not relabel the issued authority');assert.match(invitation().textContent!,/采集器 · 仅同步本设备/);
+ await act(async()=>button(d,'修改连接设置').click());await act(async()=>button(d,'生成连接邀请').click());
  assert.deepEqual(writes.slice(-2),['/api/connections/invitations/revoke','/api/connections/invitations']);
- assert.match(invitation().textContent!,/在客户端打开「设置 → 连接」/);assert.match(invitation().textContent!,/完整客户端权限/);
+ assert.match(invitation().textContent!,/在 Mac 打开 Mote/);assert.match(invitation().textContent!,/完整客户端权限/);
 });

@@ -376,16 +376,16 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun actions() {
-        ui.button(MoteI18n.text("日程建议")) { ui.startActivity(Intent(ui, CalendarActionsActivity::class.java)) }
-        ui.button(MoteI18n.text("行动设置")) {
-            configuration(MoteI18n.text("行动设置"), "/api/actions", "/api/actions/settings") { it.getJSONObject("settings") }
-        }
-        val todo = ui.field(MoteI18n.text("待办标题"))
+        if(!ui.actionsEmbedded)ui.button(MoteI18n.text("日程建议")){ui.openCalendarActions()}
+        ui.disclosure(MoteI18n.text("更多")){target->ui.button(MoteI18n.text("行动设置"),parent=target){
+            configuration(MoteI18n.text("行动设置"),"/api/actions","/api/actions/settings"){it.getJSONObject("settings")}
+        }}
+        val todo = ui.field(MoteI18n.text("待办标题")).apply { tag="todo-title" };ui.takeTodoDraft()?.let(todo::setText)
         ui.button(MoteI18n.text("添加待办"), true) {
             action("/api/todos", JSONObject().put("id", UUID.randomUUID().toString()).put("title", todo.text.toString()).put("description", "").put("dueAt", JSONObject.NULL).put("evidenceIds", JSONArray()))
         }
         library.paged("/api/todos?limit=30", ui.card()) { row, card ->
-            ui.text(row.getString("title"), NativeFontRole.SECTION, card); ui.text(row.optString("description"), parent = card); ui.text(row.optString("status"), parent = card)
+            ui.text(row.getString("title"), NativeFontRole.SECTION, card); ui.text(row.optString("description"), parent = card); ui.text(MoteI18n.text(if(row.optString("status")=="completed")"已完成" else "未完成"), parent = card)
             if (row.optString("status") == "open") ui.button(MoteI18n.text("标记完成"), true, parent = card) {
                 val api = client
                 ui.work(MoteI18n.text("正在保存…"), { api.patch("/api/todos/" + enc(row.getString("id")), JSONObject().put("version", row.getInt("version")).put("status", "completed")) }) { screens.refresh() }
@@ -500,7 +500,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("检查更新")) { action("/api/software-update/check") { target.removeAllViews(); values(it, target) } }
     }
     private fun agent(path: String = "/context") {
-        body.removeAllViews(); screens.setBack { screens.refresh() }
+        body.removeAllViews(); if (path != "/context") screens.setBack { agent() }
         listOf("/context", "/context/memory", "/context/episodes", "/context/sources").forEach { folder ->
             ui.button(folder) { agent(folder) }
         }
@@ -589,7 +589,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private fun lark() {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/lark") to api.get("/api/sources") }) { (value, sourceList) ->
-            body.removeAllViews(); screens.setBack { screens.refresh() }
+            body.removeAllViews()
             ui.button(MoteI18n.text("刷新")) { lark() }
             ui.text(MoteI18n.text("飞书文档与日历"), DesignTokens.fontTitleMobile.toFloat())
             ui.text(MoteI18n.text("照常在飞书写日记、会议纪要和方案。中央节点归档文档与活动线索，供回顾、问答和 Memory 使用。"))

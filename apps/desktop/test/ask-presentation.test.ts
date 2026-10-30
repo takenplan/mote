@@ -34,7 +34,7 @@ it('keeps exact evidence text and a visible original action outside the excerpt 
 
 it('distinguishes strict records from reference records and opens exact original identities', () => {
   const document = new JSDOM('').window.document, opened: string[] = [];
-  for (const [scope, wording] of [[{evidenceIds:[id]}, '严格范围：只查询'], [{anchorEvidenceIds:[id]}, '其他已授权内容']] as const) {
+  for (const [scope, wording] of [[{evidenceIds:[id]}, '仅查阅上面的资料'], [{anchorEvidenceIds:[id]}, '其他已授权资料']] as const) {
     const view = renderAskScope(document, {...scope, ...('evidenceIds' in scope ? {evidenceIds:[id]} : {anchorEvidenceIds:[id]})}, value => opened.push(value));
     expect(view.textContent).toContain(wording); view.querySelector('button')!.click();
   }
@@ -47,4 +47,10 @@ it('renders other current filters as literal text without granting navigation', 
   const document = new JSDOM('').window.document;
   const view = renderAskScope(document, {deviceId:'<img src=evil>',after:'2026-01-01'}, () => {});
   expect(view.textContent).toContain('<img src=evil>'); expect(view.querySelector('img')).toBeNull();
+});
+it('retains a whole Material version reference as an exact Central navigation entry',()=>{
+ const document=new JSDOM('').window.document,reference='material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64),opened:string[]=[];
+ const view=renderAskScope(document,{anchorMaterialRef:reference},value=>opened.push(value));
+ expect(view.hidden).toBe(false);expect(view.textContent).toContain('其他已授权资料');expect(view.querySelectorAll('button')).toHaveLength(1);view.querySelector('button')!.click();expect(opened).toEqual([reference]);
+ expect(renderAskScope(document,{anchorMaterialRef:reference},()=>{},true).querySelector('button')).toBeNull();
 });

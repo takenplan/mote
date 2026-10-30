@@ -34,7 +34,7 @@ import {memorySchema,type Memory} from './memory-schema.js';
 import {combineSourceContextDependencies,sourceContextDependenciesCurrent} from './source-context-lineage.js';
 import type {CaptureRead,CaptureContextRead,SourceFileCatalogRead,MaterialRead,MemoryRead,MemoryReadSnapshots,MemoryInputSelection,MemoryReadSnapshot,MemoryReadExposure as MemoryExposure,MemoryCatalogMetadataReceipt} from './evidence-read-ports.js';
 export type {MemoryReadSnapshot,MemoryCatalogMetadataReceipt} from './evidence-read-ports.js';
-const attributionMetadata=(context:AttributionContext)=>{const {ownerStatements:_,importStatements:__,sourceContextStatements:___,...metadata}=context;return JSON.stringify(metadata);};
+const attributionMetadata=(context:AttributionContext)=>{const {ownerStatements:_,importStatements:__,sourceContextStatements:___,recordContextStatements:____,...metadata}=context;return JSON.stringify(metadata);};
 
 export {parseEvidenceRef} from '@mote/shared';
 type ScreenOriginalGrant={kind:'material'|'segment';ref:string;scope:Range};
@@ -379,6 +379,12 @@ export class EvidenceReader implements CaptureRead,CaptureContextRead,SourceFile
       }
     }
     return members.length?{material,members}:undefined;
+  }
+  /** A selected locator is metadata only; actual pages retain normal read gates. */
+  queryMaterialReference(ref:string,scope:Range={},policy:EvidenceExposurePolicy=defaultEvidenceExposurePolicy):boolean {
+    const scoped=this.scopedMaterial(ref,scope);
+    return Boolean(scoped&&this.materials?.get(scoped.material.id)?.ref===ref&&
+      this.materialExposure(scoped.material,'discover',policy)&&this.materialExposure(scoped.material,'expand',policy));
   }
   materialCatalog(args:Range&{sourceId?:string;kind?:string;query?:string}={}){
     if(!this.materials)return {items:[],nextCursor:null};

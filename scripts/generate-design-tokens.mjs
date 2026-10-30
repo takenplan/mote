@@ -5,7 +5,7 @@ const root=new URL('../',import.meta.url);
 const tokens=JSON.parse(readFileSync(new URL('packages/shared/design-tokens.json',root),'utf8'));
 const lightTokens=JSON.parse(readFileSync(new URL('packages/shared/design-tokens.light.json',root),'utf8'));
 if(JSON.stringify(Object.keys(tokens))!==JSON.stringify(Object.keys(lightTokens)))throw Error('Light/dark theme roles differ');
-const layout={id:'mote.android',version:'1',primary:['home','library','ask','sources'],initial:'home',navigation:'adaptive',detail:'split'};
+const layout={id:'mote.android',version:'1',primary:['home'],initial:'home',navigation:'home',detail:'stack'};
 const theme={id:'mote.linear',version:'1',tokens,schemes:{light:lightTokens,dark:tokens}};
 const name=key=>key.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
 const colors=Object.entries(tokens).filter(([,value])=>/^#[\da-f]{6}$/i.test(value));

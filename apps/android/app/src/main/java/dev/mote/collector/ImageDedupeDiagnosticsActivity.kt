@@ -23,16 +23,19 @@ class ImageDedupeDiagnosticsActivity : MoteActivity() {
     private lateinit var refresh: Button
     private var revision = 0
     private var currentDialog: AlertDialog? = null
+    private var zoomDialog: AlertDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        body = moteDetailPage(title = MoteI18n.text("图片去重诊断"))
-        text(body, MoteI18n.text("仅保留开启诊断后命中的图片对。图片已完成隐私检查和遮罩，仅在本机保存，不会同步。"), 14f)
-        text(body, MoteI18n.text("最多 20 组、32 MiB，保存期限 24 小时。读取时清理过期记录；系统休眠可能延后后台清理。关闭诊断后清空。"), 12f)
-        status = text(body, MoteI18n.text("正在读取…"), 14f)
-        refresh = button(body, MoteI18n.text("刷新诊断")) { load() }
-        clear = button(body, MoteI18n.text("清空全部诊断图片")) { mutate { imageDedupeDiagnostics().clear() } }
-        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(list)
+        body = moteDetailPage(title = MoteI18n.text("去重对比诊断"))
+        status = SecondaryUi.text(body, MoteI18n.text("正在读取…"), muted = true)
+        list = SecondaryUi.column(body)
+        val actions = SecondaryUi.actions(body)
+        refresh = SecondaryUi.action(actions, MoteI18n.text("刷新诊断")) { load() }
+        clear = SecondaryUi.action(actions, MoteI18n.text("清空诊断副本")) { mutate { imageDedupeDiagnostics().clear() } }
+        val details = SecondaryUi.disclosure(body, MoteI18n.text("诊断范围与保留"), "dedupe-diagnostic-scope")
+        SecondaryUi.text(details, MoteI18n.text("仅保留开启诊断后命中的图片对。图片已完成隐私检查和遮罩，仅在本机保存，不会同步。"), muted = true)
+        SecondaryUi.text(details, MoteI18n.text("最多 20 组、32 MiB，保存期限 24 小时。读取时清理过期记录；系统休眠可能延后后台清理。关闭诊断后清空。"), muted = true)
         MoteUi.styleTree(body)
     }
     override fun onResume() { super.onResume(); if (::list.isInitialized) load() }
@@ -45,11 +48,15 @@ class ImageDedupeDiagnosticsActivity : MoteActivity() {
                 if (isDestroyed || isFinishing || stamp != revision) return@runOnUiThread
                 refresh.isEnabled = true
                 result.onSuccess { (rows, enabled) ->
-                    clear.isEnabled = rows.isNotEmpty()
-                    status.text = if (enabled) MoteI18n.text("本机保留 {0} 组去重诊断", rows.size) else MoteI18n.text("诊断已关闭，临时图片已清空。可在开发者选项中开启。")
-                    if (rows.isEmpty()) text(list, MoteI18n.text("暂无图片对。开启后，下一次采集到重复画面时会在这里显示。"), 14f)
+                    clear.isEnabled = rows.isNotEmpty(); clear.visibility = if (rows.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+                    status.text = if (enabled) MoteI18n.text("本机保留 {0} 组去重诊断", rows.size) else MoteI18n.text("诊断已关闭。")
+                    if (rows.isEmpty()) {
+                        val card = SecondaryUi.column(list, card = true)
+                        SecondaryUi.text(card, MoteI18n.text("暂无对比诊断记录"), heading = true)
+                        SecondaryUi.text(card, MoteI18n.text("可在图像设置开启并保存。"), muted = true)
+                    }
                     rows.forEach { item ->
-                        button(list, MoteI18n.text("{0} · {1}\n哈希相似度 {2}\n{3}", time(item.optString("capturedAt")), ImageDedupeDiagnosticsDetails.modeName(item.optString("mode")), percent(item.optDouble("hashSimilarityPercent")), ImageDedupeDiagnosticsDetails.reason(item))) { detail(item.getString("id")) }
+                        SecondaryUi.row(list, MoteI18n.text("当前图与最近保留图"), MoteI18n.text("{0} · {1} · 哈希相似度 {2}", time(item.optString("capturedAt")), ImageDedupeDiagnosticsDetails.modeName(item.optString("mode")), percent(item.optDouble("hashSimilarityPercent")))) { detail(item.getString("id")) }
                             .tag = "dedupe:${item.getString("id")}"
                     }
                 }.onFailure { status.text = MoteI18n.text("诊断读取失败，请重试。采集队列不受影响。") }
@@ -73,11 +80,11 @@ class ImageDedupeDiagnosticsActivity : MoteActivity() {
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(16), moteDp(8), moteDp(16), moteDp(12)) }
         text(content, MoteI18n.text("正在读取图片对…"), 14f)
         val bitmaps = mutableListOf<Bitmap>()
-        val dialog = MoteDialogBuilder(this).setTitle(MoteI18n.text("去重图片对"))
+        val dialog = MoteDialogBuilder(this).setTitle(MoteI18n.text("原图与保留图"))
             .setView(ScrollView(this).apply { addView(content) })
             .setNegativeButton(MoteI18n.text("关闭"), null).setPositiveButton(MoteI18n.text("删除这组图片")) { _, _ -> mutate { imageDedupeDiagnostics().delete(id) } }.create()
         currentDialog = dialog
-        dialog.setOnDismissListener { content.removeAllViews(); bitmaps.forEach { it.recycle() }; bitmaps.clear(); if (currentDialog === dialog) currentDialog = null }
+        dialog.setOnDismissListener { zoomDialog?.dismiss(); zoomDialog = null; content.removeAllViews(); bitmaps.forEach { it.recycle() }; bitmaps.clear(); if (currentDialog === dialog) currentDialog = null }
         dialog.show(); dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         executor.execute {
             val decoded = mutableListOf<Bitmap>()
@@ -92,14 +99,22 @@ class ImageDedupeDiagnosticsActivity : MoteActivity() {
                 content.removeAllViews()
                 result.onSuccess { item ->
                     bitmaps.addAll(decoded)
-                    text(content, MoteI18n.text("档位：{0}\n依据：{1}", ImageDedupeDiagnosticsDetails.modeName(item.getString("mode")), ImageDedupeDiagnosticsDetails.reason(item)), 15f)
-                    text(content, MoteI18n.text("哈希相似度 {0}\n计算：1 − {1}/64；这是像素哈希指标，不是模型置信度或语义相似度。", percent(item.getDouble("hashSimilarityPercent")), item.getInt("hashDistance")), 14f)
-                    text(content, measurements(item), 13f).setTextIsSelectable(true)
-                    text(content, MoteI18n.text("处理后基准图 · 上一次保留的非重复帧\n{0}", time(item.getString("referenceCapturedAt"))), 15f)
-                    image(content, decoded[0], MoteI18n.text("处理后基准图"))
-                    text(content, MoteI18n.text("被去重图片 · 本次未进入图片上传队列\n{0}", time(item.getString("capturedAt"))), 15f)
-                    image(content, decoded[1], MoteI18n.text("被去重图片"))
-                    text(content, MoteI18n.text("处理后图片：{0} × {1} px\n去重采样：{2} × {3} px\n缩略比较网格：32 × 32；区块：8 × 8。", item.getInt("width"), item.getInt("height"), item.getInt("sampleWidth"), item.getInt("sampleHeight")), 12f)
+                    val pair = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                    content.addView(pair)
+                    listOf(1 to MoteI18n.text("被去重图片"), 0 to MoteI18n.text("处理后基准图")).forEach { (index, label) ->
+                        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                        pair.addView(column, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(MoteTheme.spaceInline) })
+                        image(column, decoded[index], label)
+                        SecondaryUi.text(column, label, muted = true)
+                    }
+                    SecondaryUi.text(content, MoteI18n.text("点击图片放大比较。"), muted = true)
+                    val details = SecondaryUi.disclosure(content, MoteI18n.text("评分与采集时的对比依据"), "dedupe-measurements")
+                    text(details, MoteI18n.text("档位：{0}\n依据：{1}", ImageDedupeDiagnosticsDetails.modeName(item.getString("mode")), ImageDedupeDiagnosticsDetails.reason(item)), 15f)
+                    text(details, MoteI18n.text("哈希相似度 {0}\n计算：1 − {1}/64；这是像素哈希指标，不是模型置信度或语义相似度。", percent(item.getDouble("hashSimilarityPercent")), item.getInt("hashDistance")), 14f)
+                    text(details, measurements(item), 13f).setTextIsSelectable(true)
+                    text(details, MoteI18n.text("处理后基准图 · 上一次保留的非重复帧\n{0}", time(item.getString("referenceCapturedAt"))), 15f)
+                    text(details, MoteI18n.text("被去重图片 · 本次未进入图片上传队列\n{0}", time(item.getString("capturedAt"))), 15f)
+                    text(details, MoteI18n.text("处理后图片：{0} × {1} px\n去重采样：{2} × {3} px\n缩略比较网格：32 × 32；区块：8 × 8。", item.getInt("width"), item.getInt("height"), item.getInt("sampleWidth"), item.getInt("sampleHeight")), 12f)
                     MoteUi.styleTree(content)
                 }.onFailure { decoded.forEach { it.recycle() }; text(content, MoteI18n.text("图片已过期、已删除或暂时无法读取。请关闭后刷新列表。"), 14f) }
             }
@@ -116,7 +131,18 @@ class ImageDedupeDiagnosticsActivity : MoteActivity() {
             item.optString("appId").takeIf { it.isNotBlank() }?.let { MoteI18n.text("\n应用：{0}", it) }.orEmpty()
     }
     private fun image(parent: LinearLayout, bitmap: Bitmap, label: String) {
-        parent.addView(ImageView(this).apply { setImageBitmap(bitmap); adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = label }, LinearLayout.LayoutParams(-1, -2))
+        parent.addView(ImageView(this).apply {
+            setImageBitmap(bitmap); scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = label
+            setOnClickListener {
+                zoomDialog?.dismiss()
+                val image = BulkDedupeImageView(this@ImageDedupeDiagnosticsActivity).apply { setImageBitmap(bitmap); contentDescription = label }
+                zoomDialog = MoteDialogBuilder(this@ImageDedupeDiagnosticsActivity).setTitle(label).setView(image)
+                    .setPositiveButton(MoteI18n.text("关闭"), null).create().also { dialog ->
+                        dialog.show(); dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        image.layoutParams = image.layoutParams.apply { height = (resources.displayMetrics.heightPixels * .65).toInt() }
+                    }
+            }
+        }, LinearLayout.LayoutParams(-1, moteDp(200)))
     }
     private fun text(parent: LinearLayout, value: String, size: Float) = TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(8), 0, moteDp(8)) }.also(parent::addView)
     private fun button(parent: LinearLayout, label: String, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; isAllCaps = false; setOnClickListener { action() } }).also(parent::addView)

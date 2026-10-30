@@ -13,6 +13,8 @@ export interface QueryRequest {
   skill?: Exclude<MoteSkillId,'document-import'>;
   /** User-selected starting originals for an open query; never an authorization grant. */
   anchorEvidenceIds?: string[];
+  /** Owner-selected pinned Material entrypoint. It grants no additional reads. */
+  anchorMaterialRef?: string;
   /** Host-reported archive-wide coverage, not a guarantee for the selected window. */
   memoryCoverage?:{scope:'archive';pendingBatches:number;failedBatches:number;lastSavedAt:string|null};
   /** Small host-selected derived leads, never citation evidence or an owner-identity grant. */

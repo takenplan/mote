@@ -36,7 +36,7 @@ fun ActivityScenario<MainActivity>.awaitMainUi(): ActivityScenario<MainActivity>
     while (!ready && SystemClock.elapsedRealtime() < deadline) {
         onActivity { activity ->
             val rows = views(activity.window.decorView).toList()
-            ready = rows.any { it is MotePrimaryNavigation && it.isShown }
+            ready = rows.any { it is MotePrimaryNavigation } && rows.any { it.isShown && (it.tag == "local-page-title" || it.tag == "central-title") }
         }
         if (!ready) Thread.sleep(25)
     }
@@ -63,31 +63,58 @@ fun <T : Activity> ActivityScenario<T>.resumeGeneratedTask(): ActivityScenario<T
     return this
 }
 
-/** Follow visible source configuration for SCREEN; other actions use the shared Add menu. */
-fun Activity.openGeneratedAdd(action: MoteAddAction) {
+/** Reach the visible secondary menu; never recreate the window to navigate a draft. */
+fun Activity.openGeneratedMenu() {
     fun views(root: View): List<View> = buildList { add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) } }
-    if (action == MoteAddAction.SCREEN && this is MainActivity) {
-        views(window.decorView).single { it.isShown && it.tag == "primary:SOURCES" }.performClick()
-        views(window.decorView).single { it.isShown && it.tag == "menu:${MoteI18n.text("按应用配置")}" }.performClick()
-        return
+    repeat(8) {
+        val rows = views(window.decorView)
+        if (rows.any { it.isShown && it.tag == "menu:" + MoteI18n.text("资料与记忆") }) return
+        rows.firstOrNull { it.isShown && it.contentDescription == MoteI18n.text("打开菜单") }?.let { it.performClick(); return }
+        rows.firstOrNull { it.isShown && (it.tag?.toString()?.startsWith("local-back:") == true || (it is TextView && it.text.toString() == "‹")) }?.performClick()
     }
-    if (views(window.decorView).filterIsInstance<TextView>().none { it.isShown && it.isClickable && it.text.toString() == MoteI18n.text("添加") }) {
-        views(window.decorView).single { it.isShown && it.tag == "primary:LIBRARY" }.performClick()
-    }
-    views(window.decorView).filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString() == MoteI18n.text("添加") }.performClick()
-    val list = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views)
-        .filterIsInstance<android.widget.ListView>().single { it.isShown && it.adapter != null }
-    val index = (0 until list.adapter.count).single { list.adapter.getItem(it).toString() == MoteI18n.text(action.titleKey) }
-    val row = list.getChildAt(index - list.firstVisiblePosition) ?: list.adapter.getView(index, null, list)
-    assertTrue("Native Add list must activate the chosen action", list.performItemClick(row, index, list.adapter.getItemId(index)))
+    error("Secondary menu unavailable")
 }
 
-/** Home is an auxiliary Settings destination; visual journeys reach its actual menu. */
+/** The home record action and the source menu retain their real native task entrypoints. */
+fun Activity.openGeneratedAdd(action: MoteAddAction) {
+    fun views(root: View): List<View> = buildList { add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) } }
+    if (action == MoteAddAction.NOTE) {
+        openGeneratedHome()
+        views(window.decorView).single { it.isShown && it.tag == "home-record-action" }.performClick()
+        return
+    }
+    if (action == MoteAddAction.SCREEN) {
+        openGeneratedMenu()
+        views(window.decorView).single { it.isShown && it.tag == "menu:" + MoteI18n.text("设置") }.performClick()
+        views(window.decorView).single { it.isShown && it.tag == "menu:" + MoteI18n.text("采集范围") }.performClick()
+        return
+    }
+    openGeneratedMenu()
+    views(window.decorView).single { it.isShown && it.tag == "menu:" + MoteI18n.text("采集与同步") }.performClick()
+    val deadline = SystemClock.elapsedRealtime() + 10_000
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    val choose = object : Runnable {
+        override fun run() {
+            val source = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).filterIsInstance<SourcesActivity>().singleOrNull()
+            if (source == null) { check(SystemClock.elapsedRealtime() < deadline) { "Actual source list did not open" }; handler.postDelayed(this,40); return }
+            views(source.window.decorView).single { it.tag == "sources-add" }.performClick()
+            val key = when (action) { MoteAddAction.FILE -> "导入文件"; MoteAddAction.FOLDER -> "同步文件夹"; MoteAddAction.FEISHU -> "连接飞书文档"; else -> error("Unexpected action") }
+            val list = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<android.widget.ListView>().single { it.isShown }
+            val position = (0 until list.adapter.count).single { list.adapter.getItem(it).toString() == MoteI18n.text(key) }
+            list.performItemClick(list.getChildAt(position),position,list.adapter.getItemId(position))
+        }
+    }
+    handler.post(choose)
+}
+
+/** Home is the default light entry; each secondary page has an ordinary back path. */
 fun Activity.openGeneratedHome() {
     fun views(root: View): List<View> = buildList { add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) } }
-    val label = MoteI18n.text("首页")
-    if (views(window.decorView).none { it.isShown && it.tag == "menu:$label" }) {
-        views(window.decorView).filterIsInstance<TextView>().first { it.isShown && it.isClickable && it.text.toString() == MoteI18n.text("设置") }.performClick()
+    repeat(8) {
+        val rows = views(window.decorView)
+        if (rows.any { it.isShown && it.tag == "home-record-action" }) return
+        rows.firstOrNull { it.isShown && (it.tag?.toString()?.startsWith("local-back:") == true || (it is TextView && it.text.toString() == "‹")) }?.performClick()
     }
-    requireNotNull(views(window.decorView).firstOrNull { it.isShown && it.tag == "menu:$label" }) { "Auxiliary Home menu is unavailable" }.performClick()
+    error("Home return unavailable")
 }

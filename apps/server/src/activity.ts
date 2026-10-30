@@ -158,10 +158,24 @@ export class ActivityProjection {
   });
   return {items,nextCursor:rows.length>limit?start+limit:null,...(related?{relation:{coverage:'partial' as const,...(args.materialId?{materialId:args.materialId}:{}),...(args.sourceId?{sourceId:args.sourceId}:{})}}:{})};
  }
+ /** Only identifiers from persisted job/batch output receipts. Replanning a
+  * batch does not erase an already-saved result. Content still requires its
+  * own authorized Memory reader. */
+ memoryResults(id:string,cursor:string|undefined,limit:number){
+  const summary=this.memoryIndex.summary(id);if(!summary)throw new StoreError('Work activity not found',404);
+  const jobs=JSON.stringify(this.memoryIndex.jobIds(id,summary.sources));
+  const from=`WITH selected(id) AS (SELECT value FROM json_each(?)), present(id) AS (
+   SELECT DISTINCT o.memory_id FROM selected s JOIN activity_memory_outputs o ON o.job_id=s.id JOIN memories m ON m.id=o.memory_id
+  )`;
+  const total=Number(this.store.db.prepare(`${from} SELECT count(*) total FROM present`).get(jobs)!.total);
+  const rows=this.store.db.prepare(`${from} SELECT id FROM present WHERE id>? ORDER BY id LIMIT ?`).all(jobs,cursor??'',limit+1).map(row=>String(row.id));
+  const ids=rows.slice(0,limit);return {ids,total,nextCursor:rows.length>limit?ids[ids.length-1]:null};
+ }
  detail(id:string,cursor=0,limit=50):WorkActivity {let work:WorkActivity;const delegated=this.options.delegation?(this.has('delegation_works')?this.store.db.prepare("SELECT id FROM delegation_works WHERE json_extract(json,'$.operationId')=? OR id=? LIMIT 1").get(id,id.startsWith('work:')?id.slice(5):id):this.options.delegation.list().find(value=>this.options.delegation!.get(value.id).operationId===id||'work:'+value.id===id)):undefined;if(delegated)work=this.delegated(String(delegated.id));else {const group=this.memoryGroupData(id);work=group?this.memoryGroup(id,group.jobs,group.sources):this.operation(this.operations.detail(id,0,1).operation);}return {...work,branchCounts:{total:work.branches.length,running:work.branches.filter(branch=>branch.state==='running').length,completed:work.branches.filter(branch=>branch.state==='completed').length},branches:work.branches.slice(cursor,cursor+limit),branchesNextCursor:cursor+limit<work.branches.length?cursor+limit:null,events:work.events.slice(-30)};}
 }
 export function registerActivity(app:FastifyInstance,activity:ActivityProjection,isCollector:(request:FastifyRequest)=>boolean){
  const owner=(request:FastifyRequest)=>{if(isCollector(request))throw new StoreError('Owner access required',403);};
  app.get('/api/work-activity',async request=>{owner(request);return activity.page(z.object({state:z.enum(['active','attention','completed']).optional(),cursor:z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),limit:z.coerce.number().int().min(1).max(100).optional(),materialId:z.string().regex(/^mat_[a-f0-9]{64}$/).optional(),sourceId:z.string().min(1).max(128).optional()}).strict().refine(value=>!value.materialId||!value.sourceId,'Choose one exact relationship scope').parse(request.query));});
+ app.get('/api/work-activity/:id/memory-results',async request=>{owner(request);const {cursor,limit}=z.object({cursor:z.string().uuid().optional(),limit:z.coerce.number().int().min(1).max(100).default(20)}).strict().parse(request.query);return activity.memoryResults(z.object({id:z.string().min(1).max(512)}).parse(request.params).id,cursor,limit);});
  app.get('/api/work-activity/:id',async request=>{owner(request);const {cursor,limit}=z.object({cursor:z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),limit:z.coerce.number().int().min(1).max(100).default(50)}).strict().parse(request.query);return activity.detail(z.object({id:z.string().min(1).max(512)}).parse(request.params).id,cursor,limit);});
 }

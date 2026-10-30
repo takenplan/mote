@@ -42,6 +42,29 @@ test('related activity uses exact material and source receipts before pagination
 });
 function insertJob(store:Store,job:Partial<MemoryJob>&Pick<MemoryJob,'id'|'evidenceIds'>){const value={createdAt:at,updatedAt:at,status:'running',memoryIds:[],materialInputs:[],materialRefs:{},...job};store.db.prepare('INSERT INTO memory_jobs VALUES(?,?,?)').run(value.id,at,JSON.stringify(value));return value;}
 function insertBatch(store:Store,jobId:string,batch:Partial<MemoryBatch>&Pick<MemoryBatch,'id'|'evidenceRanges'>){const value={index:0,status:'pending',memoryIds:[],attempts:0,...batch};store.db.prepare('INSERT INTO memory_batches VALUES(?,?,?,?)').run(value.id,jobId,value.index,JSON.stringify(value));return value;}
+test('owner result pages expose only extant exact activity receipt IDs across continuations and imports',async t=>{
+ const {store,activity}=fixture(t),ids=Array.from({length:28},(_,i)=>'00000000-0000-4000-8000-'+String(i+1).padStart(12,'0'));
+ for(const id of ids)store.db.prepare('INSERT INTO memories(id,created_at,json) VALUES(?,?,?)').run(id,at,JSON.stringify({id,title:'PRIVATE TITLE',statement:'PRIVATE BODY'}));
+ const root=insertJob(store,{id:'results-root',status:'completed',evidenceIds:[],memoryIds:ids.slice(0,21)});
+ const child=insertJob(store,{id:'results-child',status:'completed',evidenceIds:[],memoryIds:[ids[20],ids[21]]});
+ store.db.prepare("UPDATE memory_jobs SET json=json_set(json,'$.continuationOf',?) WHERE id=?").run(root.id,child.id);
+ insertBatch(store,child.id,{id:'results-leaf',status:'completed',evidenceRanges:[],memoryIds:[ids[21],ids[22]]});
+ insertBatch(store,child.id,{id:'results-replaced',status:'completed',evidenceRanges:[],memoryIds:[ids[23]],supersededBy:['results-leaf']});
+ insertJob(store,{id:'other-result',status:'completed',evidenceIds:[],memoryIds:[ids[24]]});
+ insertJob(store,{id:'import-result',status:'completed',evidenceIds:[],memoryIds:[ids[25]],importJobId:'selected-import'});
+ insertJob(store,{id:'other-import-result',status:'completed',evidenceIds:[],memoryIds:[ids[26]],importJobId:'other-import'});
+ insertJob(store,{id:'import-continuation',status:'completed',evidenceIds:[],memoryIds:[ids[27]]});store.db.prepare("UPDATE memory_jobs SET json=json_set(json,'$.continuationOf',?) WHERE id=?").run('import-result','import-continuation');
+ const app=Fastify();app.setErrorHandler((error,_request,reply)=>reply.code(error.name==='ZodError'?400:(error as {statusCode?:number}).statusCode??500).send({error:error.message}));t.after(()=>app.close());registerActivity(app,activity,req=>req.headers.authorization==='Bearer collector');
+ const path='/api/work-activity/'+encodeURIComponent('memory:'+root.id)+'/memory-results';
+ const first=await app.inject({url:path+'?limit=20'});assert.equal(first.statusCode,200);assert.doesNotMatch(first.body,/PRIVATE/);assert.deepEqual(first.json(),{ids:ids.slice(0,20),total:24,nextCursor:ids[19]});
+ const second=await app.inject({url:path+'?limit=20&cursor='+ids[19]});assert.deepEqual(second.json(),{ids:ids.slice(20,24),total:24,nextCursor:null},'a saved result remains present when its batch is replanned');
+ assert.equal(activity.detail('memory:'+root.id).artifacts.length,1,'existing shared artifact remains aggregated');
+ assert.equal((await app.inject({url:path,headers:{authorization:'Bearer collector'}})).statusCode,403);
+ assert.equal((await app.inject({url:path+'?limit=101'})).statusCode,400);assert.equal((await app.inject({url:path+'?cursor=bad'})).statusCode,400);
+ assert.equal((await app.inject({url:'/api/work-activity/not-a-memory/memory-results'})).statusCode,404);
+ assert.deepEqual((await app.inject({url:'/api/work-activity/memory-import%3Aselected-import/memory-results'})).json(),{ids:[ids[25],ids[27]],total:2,nextCursor:null},'the import inherits its continuation without borrowing another import');
+ store.db.prepare('DELETE FROM memories WHERE id=?').run(ids[21]);assert.deepEqual((await app.inject({url:path+'?limit=20&cursor='+ids[19]})).json(),{ids:[ids[20],ids[22],ids[23]],total:23,nextCursor:null});
+});
 test('formal file activity follows exact original and import membership and drops deleted originals',async t=>{
  const {store,engine,activity}=fixture(t),sources=new SourceStore(store),materials=new MaterialStore(store);
  sources.register({id:'generated-file-source',name:'Generated same title',kind:'custom',deviceId:'fixture',platform:'import'});

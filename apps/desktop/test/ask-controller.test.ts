@@ -46,3 +46,12 @@ it('uses actual Ask endpoints, signs out a current revoked credential and permit
     expect(options.headers.Authorization).toBe('Bearer ' + f.settings().token);
   }
 });
+
+
+it('keeps a missing run distinct from a confirmed execution result and rejects another request ID',async()=>{
+  const f=fixture(),id='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222';
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(Response.json({}, {status:404})).mockResolvedValueOnce(Response.json({id:other,status:'completed',events:[]})).mockResolvedValueOnce(Response.json({id,status:'running',events:[]})));
+  expect(await f.controller.request('run',{id})).toMatchObject({id,notFound:true});
+  await expect(f.controller.request('run',{id})).rejects.toThrow('Invalid query run response');
+  expect(await f.controller.request('run',{id})).toEqual({id,status:'running',events:[]});
+});

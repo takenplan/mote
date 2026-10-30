@@ -24,4 +24,43 @@ class NativeAnswerPresentationTest {
         assertNull(NativeRecordAttachmentLabels.generatedKind(java.util.UUID.randomUUID().toString(), name, "image/jpeg"))
     }
 
+    @Test fun `verified inline ranges preserve identity across formatting without making literal numbers clickable`() {
+        val first="2fe73d52-265e-472f-9211-1c1f70476139"; val second="785f6960-59fc-43a6-9713-383cb9960162"
+        val original="## **Plan [$second]** and *review [$first]*. Literal [1]. Repeat [$second]."
+        val formatted=NativeAnswerPresentation.format(original,listOf(first,second,first))
+        assertEquals("Plan [2] and review [1]. Literal [1]. Repeat [2].",formatted.text)
+        assertEquals(listOf(second,first,second),formatted.citations.map { it.id })
+        assertEquals(listOf("[2]","[1]","[2]"),formatted.citations.map { formatted.text.substring(it.start,it.end) })
+        assertEquals(listOf("Plan [2]","review [1]"),formatted.emphasis.map { formatted.text.substring(it.start,it.end) })
+        assertTrue(original.contains(first)); assertTrue(original.contains(second))
+    }
+
+    @Test fun `only prose citations become clickable while code escaped text and authored links remain literal`() {
+        val id = "2fe73d52-265e-472f-9211-1c1f70476139"
+        val unknown = "785f6960-59fc-43a6-9713-383cb9960162"
+        val original = "> **Fact** [$id]\n\n`[$id]`\n```text\n[$id] **literal**\n```\n\\[$id] [$id](https://example.test) [$unknown] [$id]"
+        val display = NativeAnswerPresentation.format(original, listOf(id))
+        assertEquals("Fact [1]\n\n`[$id]`\n```text\n[$id] **literal**\n```\n\\[$id] [$id](https://example.test) [$unknown] [1]", display.text)
+        assertEquals(listOf(id,id), display.citations.map { it.id })
+        assertEquals(listOf("[1]","[1]"), display.citations.map { display.text.substring(it.start,it.end) })
+        assertEquals(original, "> **Fact** [$id]\n\n`[$id]`\n```text\n[$id] **literal**\n```\n\\[$id] [$id](https://example.test) [$unknown] [$id]")
+    }
+    @Test fun `indented blocks reference definitions and non closing fences are never citations`() {
+        val id = "2fe73d52-265e-472f-9211-1c1f70476139"
+        val defined = "785f6960-59fc-43a6-9713-383cb9960162"
+        val original = "    [$id]\n```text\n```python\n[$id]\n```\n[$id]\n[$defined] ![$defined]\n\n[$defined]: https://example.test"
+        val display = NativeAnswerPresentation.format(original,listOf(id,defined))
+        assertEquals("    [$id]\n```text\n```python\n[$id]\n```\n[1]\n[$defined] ![$defined]\n\n[$defined]: https://example.test",display.text)
+        assertEquals(listOf(id),display.citations.map { it.id })
+    }
+    @Test fun `fences nested under lists and blockquotes do not create citations`() {
+        val id = "2fe73d52-265e-472f-9211-1c1f70476139"
+        val original = "- ```\n  [$id]\n  ```\n\n> ```\n> [$id]\n> ```\n\nOutside [$id]"
+        val display = NativeAnswerPresentation.format(original,listOf(id))
+        assertEquals(1,display.citations.size)
+        assertEquals(id,display.citations.single().id)
+        assertTrue(display.text.contains("  [$id]"));assertTrue(display.text.contains("> [$id]"))
+        assertTrue(display.text.endsWith("Outside [1]"))
+    }
+
 }

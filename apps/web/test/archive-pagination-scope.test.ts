@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {httpStatusMessage} from '@mote/shared';
 import assert from 'node:assert/strict';
 import React,{act} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -78,7 +79,7 @@ for(const view of ['sources','files'] as const){
   const api=apiWith(view,path=>{if(denied)throw new ApiError('Generated revoked archive',status);return path.includes('cursor=older')?page(view,'B'):page(view,'A','older');});
   await f.render(api);await act(async()=>f.next().click());assert.equal(f.rows().length,2);
   denied=true;await act(async()=>resources(api).invalidate(path=>path.startsWith(prefix(view))&&path.includes('cursor=older')));
-  assert.equal(f.rows().length,0);assert.match(f.d.querySelector('[role=alert]')!.textContent!,/Generated revoked archive/);
+  assert.equal(f.rows().length,0);if(view==='sources'){assert.equal(f.d.querySelector('[role=alert]')!.textContent,httpStatusMessage(status));assert.match(f.d.querySelector('.source-final-failure details')!.textContent!,/Generated revoked archive/);}else assert.match(f.d.querySelector('[role=alert]')!.textContent!,/Generated revoked archive/);
   denied=false;await act(async()=>resources(api).invalidate(path=>path.startsWith(prefix(view))&&path.includes('cursor=older')));
   assert.equal(f.rows().length,1);assert.match(f.rows()[0].textContent!,/Generated B/);assert.doesNotMatch(f.d.body.textContent!,/Generated A/);
  });
@@ -88,7 +89,7 @@ for(const view of ['sources','files'] as const){
   const api=apiWith(view,path=>{if(failed)throw new ApiError('Generated transient archive failure',503);return path.includes('cursor=older')?page(view,'B'):page(view,'A','older');});
   await f.render(api);await act(async()=>f.next().click());const rows=f.rows();assert.equal(rows.length,2);
   failed=true;await act(async()=>resources(api).invalidate(path=>path.startsWith(prefix(view))&&path.includes('cursor=older')));
-  assert.deepEqual(f.rows(),rows);assert.match(f.d.querySelector('[role=alert]')!.textContent!,/Generated transient archive failure/);
+  assert.deepEqual(f.rows(),rows);if(view==='sources'){assert.equal(f.d.querySelector('[role=alert]')!.textContent,httpStatusMessage(503));assert.match(f.d.querySelector('.source-final-failure details')!.textContent!,/Generated transient archive failure/);}else assert.match(f.d.querySelector('[role=alert]')!.textContent!,/Generated transient archive failure/);
  });
 
  test(view+' API changes reset pagination immediately and ignore late old-node reads',async t=>{

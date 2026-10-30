@@ -20,14 +20,15 @@ const archive = new Map(), requests = [], errors = [];let materialReady=true,mat
 const blockedDetails=[];
 const pixels = Buffer.alloc(64, 200);
 const generatedImage = nativeImage.createFromBitmap(pixels, { width: 4, height: 4 }).toJPEG(70);
+const wireRecord=record=>({...record,source:record.source==='coding'?'message':record.source});
 const server = createServer((req, res) => {
   requests.push(req.url);
   const path = req.url.split('?')[0], id = path.split('/')[3], record = archive.get(id);
   if (path.endsWith('/image') && record) { res.setHeader('Content-Type', 'image/jpeg'); res.end(generatedImage); return; }
   res.setHeader('Content-Type', 'application/json');
-  if (path === '/api/capture-browser') {if(feedStatus!==200){res.statusCode=feedStatus;res.end('{}');return;}const offset=Number(new URL(req.url,'http://fixture').searchParams.get('cursor')||0),rows=[...archive.values()].sort((a,b)=>b.capturedAt.localeCompare(a.capturedAt));res.end(JSON.stringify({items:rows.slice(offset,offset+30),totalCount:rows.length,nextCursor:offset+30<rows.length?String(offset+30):null}));return;}
+  if (path === '/api/capture-browser') {if(feedStatus!==200){res.statusCode=feedStatus;res.end('{}');return;}const offset=Number(new URL(req.url,'http://fixture').searchParams.get('cursor')||0),rows=[...archive.values()].sort((a,b)=>b.capturedAt.localeCompare(a.capturedAt));res.end(JSON.stringify({items:rows.slice(offset,offset+30).map(wireRecord),totalCount:rows.length,nextCursor:offset+30<rows.length?String(offset+30):null}));return;}
   if (path === '/api/materials/generated') {if(!materialAuthorized){res.statusCode=403;res.end('{}');return;}res.end(JSON.stringify({ref:'material:generated@r1',revision:'r1',coverage:{state:materialReady?'complete':'partial'},indexing:{state:'indexed',revision:'r1'}}));return;}
-  if (path.startsWith('/api/capture-browser/') && record) {if(blockDetail){blockedDetails.push(()=>res.end(JSON.stringify(record)));return;}res.end(JSON.stringify(record)); return; }
+  if (path.startsWith('/api/capture-browser/') && record) {if(blockDetail){blockedDetails.push(()=>res.end(JSON.stringify(wireRecord(record))));return;}res.end(JSON.stringify(wireRecord(record))); return; }
   res.statusCode = 410; res.end('{}');
 });
 const timeout = setTimeout(() => { process.stderr.write('Sync history smoke timed out\n'); app.exit(1); }, process.env.MOTE_UI_ROLLOUT_DIALOGS ? 180000 : 60000);
@@ -38,13 +39,13 @@ app.on('browser-window-created', (_event, window) => {
   window.webContents.once('did-finish-load', () => void (async () => {
     const js = code => window.webContents.executeJavaScript(code);
     const wait = async (code, label) => { for (let i = 0; i < 200; i++) { if (await js(code)) return; await new Promise(resolve => setTimeout(resolve, 25)); } throw Error(label); };
-    await wait('Boolean(window.mote && document.querySelector("#home-sync-details [data-nav=uploads]"))', 'Renderer startup');
+    await wait('Boolean(window.mote && document.querySelector("[data-page=work] [data-nav=uploads]"))', 'Renderer startup');
     const status = await js('window.mote.status()'); assert.equal(status.running, false);
     ipcMain.removeHandler('mote:permission-status');
     ipcMain.handle('mote:permission-status', () => ({ screen: 'denied', accessibility: 'denied', calendar: 'denied' }));
     const config = { ...defaultConfig(), ...status.config };
     let now = Date.now(); const history = new SyncHistory(join(profile, 'sync-history.sqlite'), () => ++now); await history.initialize();
-    const fixtureEvent = (id, source = 'note', title = 'Generated app') => ({ id, deviceId: config.deviceId, deviceName: 'Synthetic Mac', platform: 'macos', capturedAt: new Date(now).toISOString(), durationMs: 0, appId: 'dev.mote.synthetic', appName: title, source, privacy: { excluded: false, redacted: false, mode: 'none' }, ocrText: '<script>window.fixtureExecuted=true</script> Generated evidence', ...(source === 'screen' ? { imageMime: 'image/jpeg' } : {}) });
+    const fixtureEvent = (id, source = 'note', title = 'Generated app') => ({ id, deviceId: config.deviceId, deviceName: 'Synthetic Mac', platform: 'macos', capturedAt: new Date(now).toISOString(), durationMs: 0, appId: 'dev.mote.synthetic', appName: title, source, privacy: { excluded: false, redacted: false, mode: 'none' }, ocrText: '<script>window.fixtureExecuted=true</script> Generated evidence', ...(source==='note'?{attributionContext:{recordContextStatements:[{captureId:id,version:1,description:'Generated scoped owner description <script>literal</script>'}]}}:{}), ...(source === 'screen' ? { imageMime: 'image/jpeg' } : {}) });
     for (let i = 0; i < 21; i++) { const e = fixtureEvent(randomUUID()), r = history.begin(config, 'automatic'); history.attempt(r, [captureHistoryItem(e)]); history.settle(r, e.id, true, e.id, 201); history.addBytes(r, 500); history.finish(r); archive.set(e.id, e); }
     const run = history.begin(config, 'manual'), items = [];
     for (let i = 0; i < 23; i++) {
@@ -117,7 +118,7 @@ app.on('browser-window-created', (_event, window) => {
     await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     writeFileSync(join(out,'shared-library.png'),(await window.webContents.capturePage()).toPNG());
     await js('document.querySelector("aside [data-nav=overview]").click()');
-    await js('document.querySelector("#home-sync-details").open=true;document.querySelector("#home-sync-details [data-nav=uploads]").click()');
+    await js('document.querySelector("aside [data-nav=work]").click();document.querySelector("[data-page=work] [data-nav=uploads]").click()');
     await wait('document.querySelectorAll("[data-upload-run]").length === 20', 'Run pagination');
     assert.equal(await js('document.querySelector("#upload-received").textContent'), '44');
     assert.equal(await js('document.querySelector("#upload-next").disabled'), false);
@@ -137,6 +138,7 @@ app.on('browser-window-created', (_event, window) => {
     await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     assert.equal(await js('Boolean(window.fixtureExecuted)'), false, 'Evidence is text, never executable HTML');
     assert((await js('document.querySelector("#upload-content-preview").textContent')).includes('<script>'));
+    const visibleKeys=await js('Array.from(document.querySelectorAll(".upload-record-pick")).map(b=>b.dataset.uploadKey)'),noteKey=visibleKeys.find(key=>archive.get(key)?.source==='note');assert(noteKey,'Real paged receipt includes an exact generated note');await js('document.querySelector('+JSON.stringify('[data-upload-key="'+noteKey+'"]')+').click()');await wait('document.querySelector(".upload-content-description pre")?.textContent==="Generated scoped owner description <script>literal</script>"','Scoped receipt description');assert.equal(await js('document.querySelectorAll(".upload-content-description script").length'),0);assert.equal(await js('document.querySelector("#upload-content-preview > .upload-content-text").textContent.includes("scoped owner description")'),false,'Owner context never becomes original bytes');
     writeFileSync(join(out, 'content.png'), (await window.webContents.capturePage()).toPNG());
     await js('document.querySelector("#upload-content-next").click()');
     await wait('document.querySelectorAll(".upload-record-pick").length === 3', 'Content pagination');
@@ -146,13 +148,17 @@ app.on('browser-window-created', (_event, window) => {
     const captureId = (await js(`window.mote.syncHistoryContent(${JSON.stringify(run)},${JSON.stringify(id)})`)).captureId;
     archive.delete(captureId);
     await js('document.querySelector("#upload-preview-refresh").click()');
-    await wait('Boolean(document.querySelector("#upload-content-preview [role=alert]"))', 'Expired archive preview');
-    assert((await js('document.querySelector("#upload-content-preview").textContent')).includes('清理'));
-    assert(!(await js('document.querySelector("#upload-content-preview [role=alert]").textContent')).includes('Error invoking remote method'), 'Archive error displays the user-facing fact without the IPC transport wrapper');
+    await wait('document.querySelector("#upload-content-preview").getAttribute("role")==="alert"', 'Expired archive preview');
+    assert((await js('document.querySelector("#upload-content-preview").firstChild.textContent')).includes('清理'),'Retention outcome remains visible without expanding technical details');
+    assert.equal(await js('document.querySelector("#upload-content-preview details").open'),false);
+    assert(!(await js('document.querySelector("#upload-content-preview").firstChild.textContent')).includes('Error invoking remote method'), 'Archive error displays the user-facing fact without the IPC transport wrapper');
     assert.equal((await js(`window.mote.syncHistoryContents({runId:${JSON.stringify(run)}})`)).run.received, 23);
     await js('document.querySelector("#upload-content-back").click()');
     await wait('Boolean(document.querySelector("#upload-view-all")) && document.querySelector("#upload-receipt-dialog").open', 'Return to receipt after native close event');
-    await js('document.querySelector("#upload-receipt-dialog [data-upload-close]").click()');
+    await js('document.querySelector("#upload-view-all").click()');
+    await wait('document.querySelector("#upload-content-dialog").open && document.querySelectorAll(".upload-record-pick").length===20 && !document.querySelector("#upload-content-preview").hasAttribute("role")', 'A successful preview clears the earlier alert role');
+    assert.equal(await js('document.querySelector("#upload-content-list").hasAttribute("role")'),false);
+    await js('document.querySelector("#upload-content-dialog [data-upload-close]").click()');
     window.setSize(820, 620);
     await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     assert(await js('document.documentElement.scrollWidth <= innerWidth'), 'Overview fits minimum window');

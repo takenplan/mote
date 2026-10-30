@@ -1,70 +1,47 @@
 import {invalidateConfiguration} from './configuration-cache';
-import { useResource } from './useResource';
-import { ModelStartGuide } from './ModelStartGuide';
-import { ApiError } from './api';
-import { useUnsavedChanges } from './unsaved';
-import { moteText } from '@mote/shared/i18n';
-import { useEffect, useState } from 'react';
-import { MODEL_FEATURES, MODEL_FEATURE_LABELS, type ModelFeature, type ModelFeatureDefaults, type ModelFeatureModels, type ModelSettingsView } from '@mote/shared/models';
-import { type Api, errorMessage } from './api';
-function ModuleModel({ api, feature, profileId, value, onChange, disabled, fallback }: {
-    api: Api;
-    feature: ModelFeature;
-    profileId: string;
-    value: string;
-    onChange: (value: string) => void;
-    disabled: boolean;
-    fallback: string;
-}) {
-    const [custom, setCustom] = useState(Boolean(value));
-    useEffect(() => { setCustom(Boolean(value)); }, [profileId]);
-    const { data, error, loading } = useResource<{
-        items: {
-            id: string;
-            name: string;
-        }[];
-    }>(api, custom ? `/api/model-settings/profiles/${encodeURIComponent(profileId)}/models` : null), models = data?.items ?? [];
-    return <div className="module-model"><label className="preference-field">{moteText("模型")}<select aria-label={MODEL_FEATURE_LABELS[feature] + moteText("模型方式")} disabled={disabled} value={custom ? 'custom' : 'inherit'} onChange={e => { const next = e.target.value === 'custom'; setCustom(next); if (!next)
-        onChange(''); }}><option value="inherit">{moteText("跟随预设默认")}{fallback ? ' · ' + fallback : ''}</option><option value="custom">{moteText("指定此 Provider 下的模型")}</option></select></label>{custom && <label className="preference-field">{moteText("指定模型 ID")}<input aria-label={MODEL_FEATURE_LABELS[feature] + moteText("指定模型 ID")} list={'module-models-' + feature} value={value} maxLength={512} disabled={disabled} placeholder={loading ? moteText("正在读取模型列表…") : fallback || moteText("选择或填写模型 ID")} onChange={e => onChange(e.target.value)}/><datalist id={'module-models-' + feature}>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</datalist>{error !== undefined && <small role="status">{errorMessage(error)}</small>}</label>}</div>;
+import {useResource} from './useResource';
+import {ApiError,type Api,errorMessage} from './api';
+import {confirmNavigation,useUnsavedChanges} from './unsaved';
+import {moteText} from '@mote/shared/i18n';
+import {commonFailureMessage,httpStatusMessage} from '@mote/shared';
+import {useEffect,useRef,useState} from 'react';
+import {MODEL_FEATURES,MODEL_FEATURE_LABELS,type ModelFeature,type ModelFeatureDefaults,type ModelFeatureModels,type ModelSettingsView} from '@mote/shared/models';
+
+function moduleFailure(error:unknown){return error instanceof ApiError?(commonFailureMessage(error.code??'',error.status)??httpStatusMessage(error.status)):errorMessage(error);}
+function installStyle(){if(document.querySelector('link[data-model-assignments-final]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href=new URL('./model-assignments-final.css?no-inline',import.meta.url).href;link.dataset.modelAssignmentsFinal='';document.head.append(link);}
+const customModes=(models:ModelFeatureModels)=>Object.fromEntries(MODEL_FEATURES.map(feature=>[feature,Boolean(models[feature])]));
+function ModuleModel({api,feature,profileId,value,custom,onCustom,onChange,disabled,fallback}:{api:Api;feature:ModelFeature;profileId:string;value:string;custom:boolean;onCustom:(custom:boolean)=>void;onChange:(value:string)=>void;disabled:boolean;fallback:string}){
+ const {data,error,loading}=useResource<{items:{id:string;name:string}[]}>(api,custom?`/api/model-settings/profiles/${encodeURIComponent(profileId)}/models`:null);
+ return <><label><span className="visually-hidden">{MODEL_FEATURE_LABELS[feature]+moteText('模型方式')}</span><select className="module-mode" aria-label={MODEL_FEATURE_LABELS[feature]+moteText('模型方式')} disabled={disabled} value={custom?'custom':'inherit'} onChange={event=>onCustom(event.target.value==='custom')}><option value="inherit">{moteText('跟随连接默认')} · {fallback||moteText('未配置')}</option><option value="custom">{moteText('指定此连接下的模型')}</option></select></label>{custom&&<label><span className="visually-hidden">{MODEL_FEATURE_LABELS[feature]+moteText('指定模型 ID')}</span><input aria-label={MODEL_FEATURE_LABELS[feature]+moteText('指定模型 ID')} list={'module-models-'+feature} value={value} maxLength={512} disabled={disabled} placeholder={loading?moteText('正在读取模型列表…'):moteText('模型 ID')} onChange={event=>onChange(event.target.value)}/><datalist id={'module-models-'+feature}>{data?.items.map(model=><option key={model.id} value={model.id}>{model.name}</option>)}</datalist>{error!==undefined&&<small role="status">{moduleFailure(error)}</small>}</label>}</>;
 }
-export function ModelAssignments({ api, revision, onApplied, onManage }: {
-    api: Api;
-    revision: number;
-    onApplied: () => void;
-    onManage: () => void;
-}) {
-    const [view, setView] = useState<ModelSettingsView>(), [defaults, setDefaults] = useState<ModelFeatureDefaults>(), [models, setModels] = useState<ModelFeatureModels>({}), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
-    const dirty = !!view && (JSON.stringify(defaults) !== JSON.stringify(view.defaults) || JSON.stringify(models) !== JSON.stringify(view.defaultModels));
-    useUnsavedChanges(dirty);
-    const read = useResource<ModelSettingsView>(api, '/api/model-settings');
-    useEffect(() => { setView(undefined); setDefaults(undefined); setModels({}); setError(''); setNotice(''); }, [api]);
-    useEffect(() => { if (read.data && !dirty) {
-        setView(read.data);
-        setDefaults(read.data.defaults);
-        setModels(read.data.defaultModels);
-    } if (read.error instanceof ApiError && [401, 403, 404, 410].includes(read.error.status)) {
-        setView(undefined);
-        setDefaults(undefined);
-        setModels({});
-    } }, [api, read.data, read.error]);
-    async function save() { if (!view || !defaults)
-        return; setBusy(true); setError(''); setNotice(''); try {
-        const next = await api.request<ModelSettingsView>('/api/model-settings/defaults', { method: 'PUT', body: JSON.stringify({ revision: view.revision, defaults, defaultModels: models }) });
-        setView(next);
-        setDefaults(next.defaults);
-        setModels(next.defaultModels);
-        invalidateConfiguration(api);
-        setNotice(moteText("模块分配已保存，新请求立即生效。"));
-        onApplied();
-    }
-    catch (e) {
-        setError(errorMessage(e));
-    }
-    finally {
-        setBusy(false);
-    } }
-    return <><ModelStartGuide step="module"/><section className="panel module-assignments"><div className="section-heading"><div><h2>{moteText("模块使用的模型")}</h2><p>{moteText("跟随预设的默认模型，或为模块指定同一连接下的其他模型。单次请求的选择优先。")}</p></div><button className="button subtle" onClick={onManage}>{moteText("管理模型连接")}</button></div>{Boolean(error || read.error) && <p role="alert" className="notice error">{error || errorMessage(read.error)}</p>}{view && defaults && <><div className="module-assignment-list">{MODEL_FEATURES.map(feature => <div className="module-assignment-row" key={feature}><div><h3>{MODEL_FEATURE_LABELS[feature]}</h3>{feature === 'file' && <small>{moteText("文件处理器的显式模型与本地处理限制优先。")}</small>}</div><label className="preference-field">{moteText("模型连接预设（Provider）")}<select aria-label={MODEL_FEATURE_LABELS[feature] + moteText("默认模型")} value={defaults[feature]} disabled={busy} onChange={e => { setDefaults({ ...defaults, [feature]: e.target.value }); setModels(prev => { const next = { ...prev }; delete next[feature]; return next; }); setNotice(''); }}>{view.profiles.map(p => <option key={p.id} value={p.id}>{p.name}{p.readOnly ? moteText(" · 只读") : ''}</option>)}</select></label><ModuleModel key={feature + defaults[feature] + view.revision} api={api} feature={feature} profileId={defaults[feature]} fallback={view.profiles.find(p => p.id === defaults[feature])?.settings.model ?? ''} value={models[feature] ?? ''} disabled={busy} onChange={value => { setModels(prev => { const next = { ...prev }; if (value.trim())
-        next[feature] = value.trim();
-    else
-        delete next[feature]; return next; }); setNotice(''); }}/></div>)}</div><div className="module-assignment-footer"><button className="button primary" disabled={busy || (JSON.stringify(defaults) === JSON.stringify(view.defaults) && JSON.stringify(models) === JSON.stringify(view.defaultModels))} onClick={() => void save()}>{moteText("保存模块分配")}</button>{notice && <span role="status">{notice}</span>}</div></>}</section></>;
+export function ModelAssignments({api,revision,onApplied,onManage}:{api:Api;revision:number;onApplied:()=>void;onManage:()=>void}){
+ const [view,setView]=useState<ModelSettingsView>(),[defaults,setDefaults]=useState<ModelFeatureDefaults>(),[models,setModels]=useState<ModelFeatureModels>({}),[custom,setCustom]=useState<Record<string,boolean>>({}),[busy,setBusy]=useState(false),[error,setError]=useState<unknown>(''),[notice,setNotice]=useState('');
+ const activeApi=useRef(api);activeApi.current=api;const viewOwner=useRef<Api|undefined>(undefined),operation=useRef<AbortController|undefined>(undefined),reloadPending=useRef<Api|undefined>(undefined);
+ const invalid=MODEL_FEATURES.some(feature=>custom[feature]&&!models[feature]?.trim()),dirty=!!view&&(invalid||JSON.stringify(defaults)!==JSON.stringify(view.defaults)||JSON.stringify(models)!==JSON.stringify(view.defaultModels));
+ useUnsavedChanges(viewOwner.current===api&&dirty);
+ const read=useResource<ModelSettingsView>(api,'/api/model-settings',undefined,revision),formBusy=busy||reloadPending.current===api&&read.loading;
+ const adopt=(next:ModelSettingsView)=>{viewOwner.current=api;setView(next);setDefaults(next.defaults);setModels(next.defaultModels);setCustom(customModes(next.defaultModels));};
+ useEffect(installStyle,[]);
+ useEffect(()=>{viewOwner.current=undefined;reloadPending.current=undefined;setView(undefined);setDefaults(undefined);setModels({});setCustom({});setError('');setNotice('');setBusy(false);return()=>{operation.current?.abort();operation.current=undefined;};},[api]);
+ useEffect(()=>{
+  const reloading=reloadPending.current===api;
+  if(!read.loading&&read.error===undefined&&read.data&&(!dirty||viewOwner.current!==api||reloading)){
+   adopt(read.data);if(reloading&&!read.loading){reloadPending.current=undefined;setError('');setNotice('');}
+  }
+  if(read.error!==undefined&&!read.loading)reloadPending.current=undefined;
+  if(read.error instanceof ApiError&&[401,403,404,410].includes(read.error.status)){viewOwner.current=undefined;operation.current?.abort();operation.current=undefined;setBusy(false);setView(undefined);setDefaults(undefined);setModels({});setCustom({});}
+ },[api,read.data,read.error,read.loading]);
+ function reload(){if(busy||read.loading||!confirmNavigation())return;reloadPending.current=api;setError('');setNotice('');read.refresh();}
+ async function save(){
+  if(!view||viewOwner.current!==api||!defaults||invalid||!dirty||formBusy||operation.current)return;
+  const controller=new AbortController();operation.current=controller;const current=()=>activeApi.current===api&&!controller.signal.aborted&&operation.current===controller;setBusy(true);setError('');setNotice('');
+  try{const next=await api.request<ModelSettingsView>('/api/model-settings/defaults',{method:'PUT',body:JSON.stringify({revision:view.revision,defaults,defaultModels:models}),signal:controller.signal});if(!current())return;adopt(next);invalidateConfiguration(api);setNotice(moteText('模块分配已保存，新请求立即生效。'));onApplied();}
+  catch(failure){if(current()){setError(failure);if(failure instanceof ApiError&&[401,403,404,410].includes(failure.status)){viewOwner.current=undefined;controller.abort();operation.current=undefined;setBusy(false);setView(undefined);setDefaults(undefined);setModels({});setCustom({});}}}
+  finally{if(current())setBusy(false);if(operation.current===controller)operation.current=undefined;}
+ }
+ return <section className="panel module-assignments final-module-assignments" aria-busy={formBusy}>
+  {Boolean(error||read.error!==undefined)&&<div className="module-assignment-error"><p role="alert">{moduleFailure(error||read.error)}</p><details><summary>{moteText('技术详情')}</summary><p>{errorMessage(error||read.error)}</p></details><button className="text-button" disabled={busy||read.loading} onClick={reload}>{moteText('重新读取')}</button></div>}
+  {read.loading&&!view&&<p role="status">{moteText('正在读取…')}</p>}
+  {viewOwner.current===api&&view&&defaults&&<><div className="module-assignment-list">{MODEL_FEATURES.map(feature=><div className="module-assignment-row" key={feature}><h2>{MODEL_FEATURE_LABELS[feature]}</h2><div className="module-selection"><label><span className="visually-hidden">{MODEL_FEATURE_LABELS[feature]+moteText('默认模型')}</span><select aria-label={MODEL_FEATURE_LABELS[feature]+moteText('默认模型')} value={defaults[feature]} disabled={formBusy} onChange={event=>{setDefaults({...defaults,[feature]:event.target.value});setModels(previous=>{const next={...previous};delete next[feature];return next;});setCustom(previous=>({...previous,[feature]:false}));setNotice('');}}>{!view.profiles.some(profile=>profile.id===defaults[feature])&&<option value={defaults[feature]}>{moteText('所选模型配置不存在，请重新选择。')}</option>}{view.profiles.map(profile=><option key={profile.id} value={profile.id}>{profile.name}{profile.readOnly?moteText(' · 只读'):''}</option>)}</select></label><ModuleModel api={api} feature={feature} profileId={defaults[feature]} fallback={view.profiles.find(profile=>profile.id===defaults[feature])?.settings.model??''} value={models[feature]??''} custom={!!custom[feature]} disabled={formBusy} onCustom={next=>{setCustom(previous=>({...previous,[feature]:next}));if(!next)setModels(previous=>{const copy={...previous};delete copy[feature];return copy;});setNotice('');}} onChange={value=>{setModels(previous=>{const next={...previous};if(value.trim())next[feature]=value.trim();else delete next[feature];return next;});setNotice('');}}/></div></div>)}</div><div className="module-assignment-footer"><span role="status">{notice||(dirty?moteText('有未保存的修改'):moteText('新请求使用已保存的模块分配'))}</span><button className="button primary" aria-label={moteText('保存模块分配')} disabled={formBusy||!dirty||invalid} onClick={()=>void save()}>{moteText('保存模块分配')}</button></div><details className="module-assignment-help"><summary>{moteText('更多选项')}</summary><p>{moteText('跟随预设的默认模型，或为模块指定同一连接下的其他模型。单次请求的选择优先。')}</p><p>{moteText('文件处理器的显式模型与本地处理限制优先。')}</p><button className="text-button" onClick={()=>{if(confirmNavigation())onManage();}}>{moteText('管理模型连接')}</button></details></>}
+ </section>;
 }

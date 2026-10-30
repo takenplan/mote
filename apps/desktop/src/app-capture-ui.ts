@@ -11,7 +11,7 @@ interface AppCaptureUiOptions {
 const element=<K extends keyof HTMLElementTagNameMap>(tag:K,text?:string,className?:string):HTMLElementTagNameMap[K]=>{
   const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;
 };
-const labelFor=(key:typeof captureChannelKeys[number])=>key==='duration'?moteText('应用时长'):key==='screenshots'?moteText('截图'):moteText('结构化内容');
+const labelFor=(key:typeof captureChannelKeys[number])=>key==='duration'?moteText('记录时长'):key==='screenshots'?moteText('保存截图'):moteText('结构化解析');
 export function describeCaptureSelection(mode:CollectionMode):string {
   return captureChannelKeys.filter(key=>mode[key]).map(labelFor).join(' · ')||moteText('不采集');
 }
@@ -34,7 +34,7 @@ export function createAppCaptureUi(options:AppCaptureUiOptions) {
   const search=element('input');search.type='search';search.placeholder=moteText('搜索应用名称或 ID');search.setAttribute('aria-label',moteText('搜索应用名称或 ID'));
   const filters=element('div',undefined,'app-capture-filters');filters.setAttribute('role','group');filters.setAttribute('aria-label',moteText('应用范围'));
   const hint=element('p',undefined,'helper');hint.setAttribute('role','status');hint.setAttribute('aria-live','polite');
-  const split=element('div',undefined,'app-capture-split'),list=element('div',undefined,'app-capture-list'),detail=element('section',undefined,'app-capture-detail');
+  const split=element('div',undefined,'app-capture-split'),list=element('div',undefined,'app-capture-list');let detail=element('section',undefined,'app-capture-detail');
   list.setAttribute('aria-label',moteText('应用列表'));detail.setAttribute('aria-label',moteText('应用采集详情'));split.append(list,detail);toolbar.append(search,filters);options.root.replaceChildren(toolbar,hint,split);
   const defaults=():CollectionMode=>Object.fromEntries(captureChannelKeys.map(key=>[key,Boolean(options.defaultRoot.querySelector<HTMLInputElement>(`[data-channel=${key}]`)?.checked)])) as unknown as CollectionMode;
   function parsedRules():UiRule[]|undefined {
@@ -62,15 +62,15 @@ export function createAppCaptureUi(options:AppCaptureUiOptions) {
     if(!shown.some(row=>row.appId===selected))selected=shown[0]?.appId??'';
     filters.replaceChildren();
     const labels:Record<CaptureAppFilter,string>={all:moteText('全部应用'),custom:moteText('单独设置'),rules:moteText('字段规则'),attention:moteText('需处理')};
-    for(const key of ['all','custom','rules','attention'] as const){
+    for(const key of ['all','custom','attention'] as const){
       const count=captureRowsInFilter(all,key,'',screenPermission,platform,origins).length;
       const control=button(moteText('{0} {1}',labels[key],count),()=>{commitSelected();filter=key;render();},'secondary');control.dataset.appFilter=key;control.setAttribute('aria-pressed',String(key===filter));filters.append(control);
     }
     list.replaceChildren();
     for(const row of shown){
       const control=button('',()=>{commitSelected();selected=row.appId;render();},'app-capture-app');control.dataset.captureApp=row.appId;control.setAttribute('aria-pressed',String(row.appId===selected));
-      const header=element('span',undefined,'app-capture-app-heading');header.append(element('strong',row.appName),element('small',row.custom?moteText('单独设置'):moteText('沿用默认')));
-      control.append(header,element('span',moteText('已选：{0}',describeCaptureSelection(row.selection)),'app-capture-selected'),badge(structuredCapability(row),captureAppNeedsAttention(row,screenPermission,platform,origins)));
+      const header=element('span',undefined,'app-capture-app-heading');header.append(element('strong',row.appName));
+      control.append(header,element('span',describeCaptureSelection(row.selection),'app-capture-selected'));
       if(!row.installed)control.append(element('small',loaded?moteText('未在已安装列表中找到'):moteText('安装状态待读取')));
       list.append(control);
     }
@@ -81,13 +81,13 @@ export function createAppCaptureUi(options:AppCaptureUiOptions) {
     const row=rows().find(row=>row.appId===selected);detail.replaceChildren();
     if(!row){detail.append(element('p',moteText('选择应用，查看采集内容与字段规则。'),'helper'));return;}
     const heading=element('div',undefined,'app-capture-detail-heading');heading.append(element('h3',row.appName),badge(row.custom?moteText('单独设置'):moteText('沿用默认')));detail.append(heading);
-    detail.append(element('p',row.appId,'helper app-capture-identity'));
-    if(row.appVersion)detail.append(element('p',moteText('安装版本：{0}',row.appVersion),'helper'));
+    const capabilityDetails=element('details',undefined,'disclosure app-capture-capabilities');capabilityDetails.append(element('summary',moteText('查看规则与匹配范围')),element('p',row.appId,'helper app-capture-identity'));
+    if(row.appVersion)capabilityDetails.append(element('p',moteText('安装版本：{0}',row.appVersion),'helper'));
     const capabilities=element('div',undefined,'app-capture-badges');
     capabilities.append(badge(platform==='macos'?moteText('时长 · 可记录'):moteText('时长 · 此平台不可用')),
       badge(platform!=='macos'?moteText('截图 · 此平台不可用'):screenPermission==='granted'?moteText('截图 · 已授权'):moteText('截图 · 待授权'),screenPermission!=='granted'),badge(structuredCapability(row)));
-    detail.append(capabilities,element('h4',moteText('要采集什么')));
-    const follow=element('label',undefined,'checkbox option-row'),inherit=element('input');inherit.type='checkbox';inherit.checked=!row.custom;inherit.dataset.appInherit='true';follow.append(inherit,element('span',moteText('沿用默认设置 · {0}',describeCaptureSelection(defaults()))));
+    capabilityDetails.append(capabilities);
+    const follow=element('label',undefined,'checkbox option-row'),inherit=element('input');inherit.type='checkbox';inherit.checked=!row.custom;inherit.dataset.appInherit='true';follow.append(inherit,element('span',moteText('沿用默认范围')));
     inherit.addEventListener('change',()=>{
       if(inherit.checked)delete overrides[row.appId];else overrides[row.appId]={...defaults()};options.changed();render();detail.querySelector<HTMLInputElement>('[data-app-inherit]')?.focus();
     });detail.append(follow);
@@ -100,7 +100,7 @@ export function createAppCaptureUi(options:AppCaptureUiOptions) {
     if(!captureChannelKeys.some(key=>row.selection[key]))detail.append(element('p',moteText('此应用不产生时长、截图或结构化记录。'),'helper'));
     if(row.selection.structured&&!row.rules.some(rule=>rule.applicability==='available'))detail.append(element('p',moteText('已选择结构化内容，但当前没有可用的字段规则。截图仍按独立选择执行。'),'app-capture-warning'));
     if(row.selection.screenshots&&screenPermission!=='granted')detail.append(button(moteText('查看系统权限'),options.permissions));
-    detail.append(element('h4',moteText('结构化规则')));
+    const visibleDetail=detail;detail=capabilityDetails;detail.append(element('h4',moteText('结构化规则')));
     if(!row.rules.length)detail.append(element('p',moteText('没有为此应用配置字段规则。'),'helper'));
     for(const rule of row.rules){
       const item=element('div',undefined,'app-capture-rule'),title=element('div',undefined,'app-capture-rule-heading');
@@ -114,7 +114,9 @@ export function createAppCaptureUi(options:AppCaptureUiOptions) {
       if(rule.source==='browser')details.append(element('p',origins.length?moteText('已配置 {0} 个站点来源；仍需扩展连接与站点授权。',origins.length):moteText('尚未配置允许采集的站点来源。'),'helper'));
       details.append(element('p',moteText('有规则不代表真机验证或已采到内容，实际页面仍需匹配。'),'helper'));item.append(details);detail.append(item);
     }
-    detail.append(button(row.appId==='com.google.Chrome'?moteText('配置站点与扩展'):moteText('查看或编辑页面规则'),()=>options.editRules(row.appId)),element('p',moteText('三个采集项独立执行；全部取消即不采集。'),'helper'));
+    detail=visibleDetail;detail.append(capabilityDetails);
+    detail.append(button(row.appId==='com.google.Chrome'?moteText('配置站点与扩展'):moteText('查看或编辑页面规则'),()=>options.editRules(row.appId)));
+    if(row.custom)detail.append(button(moteText('此应用全部不记录'),()=>{overrides[row.appId]={duration:false,screenshots:false,structured:false};options.changed();render();}));
   }
   function render(){renderList();renderDetail();}
   search.addEventListener('input',event=>{event.stopPropagation();commitSelected();render();});

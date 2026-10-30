@@ -9,7 +9,7 @@ import java.util.UUID
 /** Private draft, immutable submission and encrypted attachment originals share one atomic journal. */
 internal class RecordDraftStore(private val directory: File, private val cipher: ByteCipher, private val availableBytes: () -> Long = { Long.MAX_VALUE }) {
     private val stateFile = File(directory, "record.enc")
-    private fun emptyDraft() = JSONObject().put("text", "").put("attachments", JSONArray()).put("origin", JSONObject().put("kind", "manual"))
+    private fun emptyDraft() = JSONObject().put("text", "").put("description", "").put("attachments", JSONArray()).put("origin", JSONObject().put("kind", "manual"))
     private fun state() = if (stateFile.exists()) JSONObject(String(cipher.open(stateFile.readBytes()), Charsets.UTF_8)) else JSONObject().put("draft", emptyDraft()).put("records", JSONObject())
     fun hasPrepared(): Boolean = state().getJSONObject("draft").has("prepared")
     @Synchronized fun diskBytes(): Long = directory.listFiles().orEmpty().filter { it.isFile }.sumOf { it.length() }
@@ -23,11 +23,12 @@ internal class RecordDraftStore(private val directory: File, private val cipher:
         val state = state(); val pending = state.optJSONArray("pendingMedia") ?: return
         state.put("pendingMedia", JSONArray((0 until pending.length()).map { pending.getJSONObject(it) }.filter { it.getString("id") != id })); write(state)
     }
-    @Synchronized fun draft(): JSONObject = JSONObject(state().getJSONObject("draft").toString())
-    @Synchronized fun edit(text: String, attachments: JSONArray, origin: JSONObject) {
-        require(text.length <= 100000 && attachments.length() <= 10)
-        val state = state(); val next = JSONObject().put("text", text).put("attachments", attachments).put("origin", origin)
-        if (state.getJSONObject("draft").let { old -> old.optString("text") == text && old.getJSONArray("attachments").toString() == attachments.toString() && old.getJSONObject("origin").toString() == origin.toString() }) return
+    @Synchronized fun draft(): JSONObject = JSONObject(state().getJSONObject("draft").toString()).also { if (!it.has("description")) it.put("description", "") }
+    @Synchronized fun edit(text: String, attachments: JSONArray, origin: JSONObject, description: String = "", originPresentation: JSONObject? = null) {
+        require(text.length <= 100000 && attachments.length() <= 10 && description.length <= 12000)
+        val state = state(); val next = JSONObject().put("text", text).put("description", description).put("attachments", attachments).put("origin", origin)
+        originPresentation?.let { next.put("originPresentation", it) }
+        if (state.getJSONObject("draft").let { old -> old.optString("text") == text && old.optString("description") == description && old.getJSONArray("attachments").toString() == attachments.toString() && old.getJSONObject("origin").toString() == origin.toString() && old.optJSONObject("originPresentation")?.toString() == originPresentation?.toString() }) return
         state.put("draft", next); write(state)
     }
     @Synchronized fun stage(bytes: ByteArray, name: String, mime: String, stagedId: String? = null): JSONObject {
@@ -43,7 +44,9 @@ internal class RecordDraftStore(private val directory: File, private val cipher:
         if (prepared != null) { require(draft.getString("server") == origin); return JSONObject(prepared.toString()) }
         val event = create(draft)
         draft.put("prepared", event).put("server", origin)
-        state.getJSONObject("records").put(event.getString("id"), JSONObject().put("server", origin).put("attachments", draft.getJSONArray("attachments")).put("acks", JSONObject()))
+        state.getJSONObject("records").put(event.getString("id"), JSONObject().put("server", origin).put("attachments", draft.getJSONArray("attachments")).put("acks", JSONObject()).also { record ->
+            draft.optJSONObject("originPresentation")?.let { record.put("originPresentation", it) }
+        })
         write(state); return JSONObject(event.toString())
     }
     @Synchronized fun finish(id: String) {

@@ -73,8 +73,8 @@ class NativeCentralInstrumentedTest {
                 }
                 scenario.onActivity { activity ->
                     val tabs = all(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }
-                    assertEquals(listOf("内容", "问一问", "来源", "活动"), tabs.map { it.text.toString() })
-                    assertTrue("$page keeps its primary destination", tabs.single { it.tag == "primary:${MoteNavigation.centralTab(page).name}" }.isSelected)
+                    assertTrue(tabs.isEmpty())
+                    assertTrue("$page has a visible back action", all(activity).any { it.isShown && (it as? TextView)?.text == "‹" })
                     assertFalse("$page embeds a WebView", all(activity).any { it is WebView })
                     assertFalse("$page requested another token", contains(activity, "登录并继续"))
                     assertEquals("$page API error", "", all(activity).filterIsInstance<TextView>().first { it.tag == "central-status" }.text.toString())
@@ -97,7 +97,7 @@ class NativeCentralInstrumentedTest {
             scenario.onActivity { activity ->
                 assertEquals("Coding 会话同步状态", (all(activity).single { it.tag == "central-title" } as TextView).text.toString())
                 assertTrue(all(activity).filterIsInstance<android.widget.Spinner>().none { it.contentDescription == "资料类型" })
-                assertTrue(all(activity).single { it.tag == "primary:LIBRARY" }.isSelected)
+                assertFalse(all(activity).any { it.tag?.toString()?.startsWith("primary:") == true })
             }
         }
     }
@@ -221,7 +221,7 @@ class NativeCentralInstrumentedTest {
         }
     }
 
-    @Test fun querySurvivesReturningToLocalPrimaryNavigation() {
+    @Test fun querySurvivesReturningThroughHomeAndSecondaryMenu() {
         ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
             fun visible(activity: MainActivity) = views(activity.window.decorView).filter { it.isShown }
             fun await(label: String, predicate: (MainActivity) -> Boolean) {
@@ -239,7 +239,7 @@ class NativeCentralInstrumentedTest {
             val askMonitor = instrumentation.addMonitor("dev.mote.collector.AskActivity", null, true)
             val centralMonitor = instrumentation.addMonitor(CentralActivity::class.java.name, null, true)
             try {
-                click("问一问")
+                scenario.onActivity { activity -> visible(activity).single { it.tag == "home-ask-action" }.performClick() }
                 await("Native login") { visible(it).any { view -> view.contentDescription == "中央管理令牌" } }
                 scenario.onActivity { activity -> visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "中央管理令牌" }.setText(owner) }
                 click("登录并继续")
@@ -248,21 +248,18 @@ class NativeCentralInstrumentedTest {
                 await("New conversation ready") { visible(it).any { view -> view.contentDescription == "你的问题" && view.isEnabled } }
                 scenario.onActivity { activity -> visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText("Generated primary navigation question") }
                 click("发送")
-                click("设置"); click("首页"); click("问一问")
+                scenario.onActivity { activity -> activity.openGeneratedMenu(); activity.openGeneratedHome(); visible(activity).single { it.tag == "home-ask-action" }.performClick() }
                 await("Accepted answer survives primary navigation") { visible(it).filterIsInstance<TextView>().any { view -> view.text.contains("Generated native answer") } }
                 scenario.onActivity { activity -> visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.setText("Generated unsent draft") }
-                click("内容"); click("问一问")
+                scenario.onActivity { activity -> activity.openGeneratedHome(); visible(activity).single { it.tag == "home-ask-action" }.performClick() }
                 Thread.sleep(2000) // Allow the return-to-tab poll timer to run before checking the next draft.
                 scenario.onActivity { activity -> assertEquals("Generated unsent draft", visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }.text.toString()) }
-                scenario.onActivity { it.openGeneratedAdd(MoteAddAction.NOTE) }
-                scenario.onActivity { activity -> assertTrue(visible(activity).filterIsInstance<EditText>().any { it.hint.toString() == "记下此刻的想法…" }) }
-                click("问一问")
                 scenario.recreate(); scenario.awaitMainUi()
                 await("Ask draft survives host recreation") { visible(it).filterIsInstance<EditText>().any { view -> view.contentDescription == "你的问题" && view.isEnabled && view.text.toString() == "Generated unsent draft" } }
                 scenario.onActivity { activity ->
                     assertTrue(visible(activity).filterIsInstance<TextView>().any { it.text.contains("Generated native answer") })
-                    assertEquals(1, visible(activity).filterIsInstance<MotePrimaryNavigation>().size)
-                    assertTrue(visible(activity).single { it.tag == "primary:ASK" }.isSelected)
+                    assertEquals(0, visible(activity).filterIsInstance<MotePrimaryNavigation>().size)
+                    assertTrue(visible(activity).any { it.tag == "central-title" })
                     assertFalse(Settings(activity).enabled)
                     val question = visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }
                     assertTrue(question.requestFocus())
@@ -272,17 +269,16 @@ class NativeCentralInstrumentedTest {
                 scenario.onActivity { activity ->
                     val root = activity.window.decorView
                     val keyboard = root.rootWindowInsets.getInsets(android.view.WindowInsets.Type.ime())
-                    for (item in visible(activity).filter { it.tag?.toString()?.startsWith("primary:") == true }) {
-                        val bounds = android.graphics.Rect(); assertTrue(item.getGlobalVisibleRect(bounds))
-                        assertTrue("Primary navigation remains above the Ask keyboard", bounds.bottom <= root.height - keyboard.bottom + 2)
-                    }
+                    val question = visible(activity).filterIsInstance<EditText>().single { it.contentDescription == "你的问题" }
+                    val bounds = android.graphics.Rect(); assertTrue(question.getGlobalVisibleRect(bounds))
+                    assertTrue("Question stays reachable above the keyboard", bounds.top < root.height - keyboard.bottom)
                     // Draw only this opt-in fixture app's generated views.
                     val bitmap = android.graphics.Bitmap.createBitmap(root.width, root.height, android.graphics.Bitmap.Config.ARGB_8888)
                     root.draw(android.graphics.Canvas(bitmap))
                     java.io.File(context.cacheDir, "native-fixture-ask-tab-keyboard.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
                     bitmap.recycle()
                     activity.onBackPressed()
-                    assertTrue(visible(activity).single { it.tag == "primary:LIBRARY" }.isSelected)
+                    assertTrue(visible(activity).any { it.tag == "home-record-action" })
                 }
                 assertEquals(0, askMonitor.hits); assertEquals(0, centralMonitor.hits)
             } finally { instrumentation.removeMonitor(askMonitor); instrumentation.removeMonitor(centralMonitor) }
@@ -361,4 +357,37 @@ class NativeCentralInstrumentedTest {
         assertThrows(IllegalStateException::class.java) { old.get("/api/status") }
         assertNull(CentralAccess.resolve(context).client)
     }
+    @Test fun generatedCalendarProposalPermissionBoundaryIgnoreAndTodoCompletionHaveNativeVisuals() {
+        val host=InstrumentationRegistry.getArguments().getString("nativeCalendarVisualOrigin")
+        assumeTrue(host!=null);require(Regex("http://127\\.0\\.0\\.1:[0-9]+").matches(host!!))
+        val api=CentralClient(host,"generated-managed-calendar-owner")
+        fun fixtureRequest(path:String,body:JSONObject?=null):JSONObject { val (status,value)=HttpJson.request(if(body==null)"GET" else "POST",host+path,body,"generated-managed-calendar-owner");check(status in 200..299 && value!=null);return value }
+        val action=fixtureRequest("/fixture/add",JSONObject())
+        val settings=Settings(context);settings.save(settings.read().copy(server=host,token="",debugHttp=true,syncMode="manual"),confirmCentralEndpoint=true)
+        CentralSession.get(context).select(host);CentralSession.get(context).signIn(host,"generated-managed-calendar-owner")
+        fun shown()=android.view.inspector.WindowInspector.getGlobalWindowViews().filter{it.isShown && it.hasWindowFocus()}.flatMap(::views).filter{it.isShown}
+        fun until(label:String,check:()->Boolean){val end=System.currentTimeMillis()+25000;while(System.currentTimeMillis()<end){var ok=false;instrumentation.runOnMainSync{ok=check()};if(ok)return;Thread.sleep(60)};fail(label)}
+        fun click(label:String){until(label){shown().filterIsInstance<TextView>().any{it.isEnabled && it.isClickable && it.text.toString()==label}};instrumentation.runOnMainSync{shown().filterIsInstance<TextView>().first{it.isEnabled && it.isClickable && it.text.toString()==label}.performClick()}}
+        fun capture(name:String){val before=MoteAppearance.preference();try{for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)){instrumentation.runOnMainSync{MoteAppearance.select(context,theme)};instrumentation.waitForIdleSync();val latch=java.util.concurrent.CountDownLatch(1);instrumentation.runOnMainSync{shown().first().postOnAnimation{shown().first().postOnAnimation{latch.countDown()}}};assertTrue(latch.await(5,java.util.concurrent.TimeUnit.SECONDS));instrumentation.runOnMainSync{val root=android.view.inspector.WindowInspector.getGlobalWindowViews().last{it.isShown && it.hasWindowFocus()};val bitmap=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888);root.draw(android.graphics.Canvas(bitmap));java.io.File(context.filesDir,"calendar-todo-final").apply{mkdirs()}.resolve(name+"-"+theme.value+".png").outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()}}}finally{instrumentation.runOnMainSync{MoteAppearance.select(context,before)}}}
+        val permission=context.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR)
+        require(permission!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+        ActivityScenario.launch(CalendarActionsActivity::class.java).use {
+            until("Real validated generated proposal"){shown().filterIsInstance<TextView>().any{it.text.toString()=="Generated appointment"}};capture("calendar-proposed")
+            click("查看原文依据");until("Real original evidence dialog"){shown().filterIsInstance<TextView>().any{it.text.toString().contains("Generated appointment on 18 September 2099.")}};capture("calendar-original");click("关闭")
+            click("核对并添加到日历");until("Permission boundary remains actual"){shown().filterIsInstance<TextView>().any{it.text.toString()=="请先连接本机日历"}};capture("calendar-needs-permission")
+            assertEquals("proposed",fixtureRequest("/fixture/action/"+action.getString("id")).getString("status"));click("忽略这条建议")
+            until("Actual ignored receipt"){shown().filterIsInstance<TextView>().any{it.text.toString().startsWith("已忽略")} && shown().filterIsInstance<TextView>().none{it.text.toString()=="忽略这条建议"}};capture("calendar-dismissed")
+            assertEquals("dismissed",fixtureRequest("/fixture/action/"+action.getString("id")).getString("status"))
+        }
+        val title="Generated native Todo "+java.util.UUID.randomUUID()
+        open("actions").use { scenario ->
+            waitFor(scenario,"Actual Todo page"){a->!a.isWorking && contains(a,"待办标题")}
+            scenario.onActivity { a->all(a).filterIsInstance<EditText>().single{it.contentDescription=="待办标题"}.setText(title) };click("添加待办")
+            waitFor(scenario,"Actual created Todo"){a->!a.isWorking && contains(a,title)};capture("todo-open");click("标记完成")
+            waitFor(scenario,"Actual completed Todo"){a->!a.isWorking && contains(a,title) && contains(a,"已完成")};capture("todo-completed")
+            val todos=api.get("/api/todos?limit=30").getJSONArray("items");assertEquals("completed",(0 until todos.length()).map{todos.getJSONObject(it)}.single{it.getString("title")==title}.getString("status"))
+        }
+        assertEquals(permission,context.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR))
+    }
+
 }

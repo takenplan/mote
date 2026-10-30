@@ -99,6 +99,8 @@ export default recordingManifest('generated',()=>({
   for(const provider of ['feishu','dingtalk','generated']){
     await act(async()=>{location.hash='#/'+catalogEntry.route;});
     await render(catalogEntry);
+    await settle(()=>Boolean(dom!.window.document.querySelector<HTMLButtonElement>('.source-catalog-final button.discovery-source-card:not(:disabled)')));
+    await act(async()=>dom!.window.document.querySelector<HTMLButtonElement>('.source-catalog-final button.discovery-source-card')!.click());
     await settle(()=>Boolean(providerLink(provider)));
     const link=providerLink(provider)!;
     assert.equal(link.getAttribute('href'),'#/'+recordingsEntry.route+'?provider='+provider);

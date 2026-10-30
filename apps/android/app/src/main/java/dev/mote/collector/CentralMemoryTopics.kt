@@ -7,12 +7,13 @@ import android.widget.EditText
 import android.widget.ArrayAdapter
 import android.widget.ScrollView
 import android.widget.Spinner
+import android.widget.LinearLayout
 import org.json.JSONObject
 
 /** Native consumer of host-generated references. It never classifies or grants model access. */
 internal class CentralMemoryTopics(
     private val screens: CentralScreens,
-    private val controls: () -> Unit,
+    private val controls: (LinearLayout, Boolean) -> Unit,
     private val statusLabel: (JSONObject) -> String,
     private val openMemory: (String, () -> Unit, (JSONObject) -> Boolean) -> Unit,
 ) {
@@ -64,26 +65,30 @@ internal class CentralMemoryTopics(
         }
     }
     private fun list(directory: MemoryTopicCatalog) {
-        body.removeAllViews(); screens.clearBack(); controls()
-        ui.text(MoteI18n.text("记忆主题"), NativeFontRole.TITLE_MOBILE)
-        ui.text(MoteI18n.text(when (directory.state) {
-            "unavailable" -> "自动主题服务尚未就绪；已有记忆仍可浏览。"
-            "running" -> "正在整理自动主题…"
-            "failed" -> "自动主题整理未完成；已有记忆仍可浏览。"
-            else -> if (directory.trees.any { it.id.startsWith("auto.") }) "主题是模型整理的浏览视图，不代表新的用户事实。" else "尚无自动主题；仍可浏览全部记忆和已有维度。"
-        }))
-        if (directory.trees.isNotEmpty()) {
-            val tree = directory.trees.find { it.id == navigation.treeId } ?: directory.trees.first()
-            val choices = Spinner(ui).apply {
-                contentDescription = MoteI18n.text("浏览维度")
-                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, directory.trees.map { it.label })
-                setSelection(directory.trees.indexOf(tree))
-            }; body.addView(choices)
-            ui.button(MoteI18n.text("浏览维度")) { navigation.choose(directory.trees[choices.selectedItemPosition].id); screens.refresh() }
-            ui.button(MoteI18n.text("全部记忆")) { navigation.choose(tree.id); screens.refresh() }
-            tree.nodes.forEach { node -> ui.button((if (node.parentId != null) "  " else "") + node.label) { navigation.choose(tree.id, node.id); screens.refresh() }.tag = "memory-topic:${tree.id}:${node.id}" }
+        body.removeAllViews(); screens.clearBack(); controls(body, false)
+        navigation.nodeId?.let { selected -> directory.trees.find { it.id == navigation.treeId }?.nodes?.find { it.id == selected }?.let { ui.text(it.label, NativeFontRole.SUPPORT) } }
+        ui.disclosure(MoteI18n.text("更多")) { management ->
+            controls(management, true)
+            ui.text(MoteI18n.text("记忆主题"), NativeFontRole.SECTION, management)
+            ui.text(MoteI18n.text(when (directory.state) {
+                "unavailable" -> "自动主题服务尚未就绪；已有记忆仍可浏览。"
+                "running" -> "正在整理自动主题…"
+                "failed" -> "自动主题整理未完成；已有记忆仍可浏览。"
+                else -> if (directory.trees.any { it.id.startsWith("auto.") }) "主题是模型整理的浏览视图，不代表新的用户事实。" else "尚无自动主题；仍可浏览全部记忆和已有维度。"
+            }), parent = management)
+            if (directory.trees.isNotEmpty()) {
+                val tree = directory.trees.find { it.id == navigation.treeId } ?: directory.trees.first()
+                val choices = Spinner(ui).apply {
+                    contentDescription = MoteI18n.text("浏览维度")
+                    adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, directory.trees.map { it.label })
+                    setSelection(directory.trees.indexOf(tree))
+                }; management.addView(choices)
+                ui.button(MoteI18n.text("浏览维度"), parent = management) { navigation.choose(directory.trees[choices.selectedItemPosition].id); screens.refresh() }
+                ui.button(MoteI18n.text("全部记忆"), parent = management) { navigation.choose(tree.id); screens.refresh() }
+                tree.nodes.forEach { node -> ui.button((if (node.parentId != null) "  " else "") + node.label, parent = management) { navigation.choose(tree.id, node.id); screens.refresh() }.tag = "memory-topic:${tree.id}:${node.id}" }
+            }
+            ui.button(MoteI18n.text("刷新"), parent = management) { screens.refresh() }
         }
-        ui.button(MoteI18n.text("刷新")) { screens.refresh() }
         val target = ui.card(); val api = screens.client; val stamp = generation
         ui.work(MoteI18n.text("正在读取记忆…"), { runCatching { api.get(navigation.path()) } }) { result ->
             if (stamp != generation) return@work

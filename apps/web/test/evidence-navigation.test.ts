@@ -17,6 +17,14 @@ test('a direct evidence link closes in place and oversized refs cannot enter the
  changeEvidenceRoute(dom.window as unknown as Window,null);assert.equal(dom.window.history.length,before);assert.equal(dom.window.location.hash,'#/library?view=memories&filter=published');
  assert.equal(readEvidenceRoute('#/library?evidence='+id),null);assert.throws(()=>evidenceRoute('#/library',id),/typed evidence/);assert.equal(readEvidenceRoute('#/library?evidence='+'x'.repeat(4097)),null);assert.equal(evidenceRoute('#/memories?x=1',null),'#/memories?x=1');dom.window.close();
 });
+test('a saved-record citation returns to its exact parent reader before the originating page',async()=>{
+ const dom=new JSDOM('<!doctype html>',{url:'http://localhost/#/ask?conversation=generated'}),w=dom.window,origin=w.location.hash;
+ const parent='capture:'+id,child='capture:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ changeEvidenceRoute(w as unknown as Window,parent);const parentHash=w.location.hash,before=w.history.length;
+ changeEvidenceRoute(w as unknown as Window,child,{returnToCurrent:true});assert.equal(w.history.length,before+1);assert.equal(readEvidenceRoute(w.location.hash),child);
+ const backParent=new Promise(resolve=>w.addEventListener('popstate',resolve,{once:true}));assert.equal(changeEvidenceRoute(w as unknown as Window,null),parent);await backParent;assert.equal(w.location.hash,parentHash);
+ const backOrigin=new Promise(resolve=>w.addEventListener('popstate',resolve,{once:true}));changeEvidenceRoute(w as unknown as Window,null);await backOrigin;assert.equal(w.location.hash,origin);w.close();
+});
 test('detail focus contains outside keyboard focus, skips hidden controls and restores the opener',()=>{
  const dom=new JSDOM('<button id="origin">open</button><section id="dialog"><button id="first">close</button><div hidden><button id="hidden">hidden</button></div><button id="last">read</button></section>');
  const d=dom.window.document;for(const element of Array.from(d.querySelectorAll<HTMLElement>('button')))element.getClientRects=()=>[{}] as unknown as DOMRectList;

@@ -75,7 +75,7 @@ class UiCentralRolloutInstrumentedTest {
                     val title = views(root).single { it.tag == "central-title" }
                     val bounds = android.graphics.Rect()
                     assertTrue(title.getGlobalVisibleRect(bounds)); assertEquals(title.width, bounds.width()); assertEquals(title.height, bounds.height())
-                    assertTrue("$page loaded its actual consumer", labels(activity).size > 7)
+                    assertTrue("$page renders actual content or its real empty state", views(views(root).single { it.tag == "central-body" }).filterIsInstance<TextView>().any { it.text.isNotBlank() })
                     if (!MoteNavigation.centralAllowsAdd(page)) assertFalse(views(root).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") })
                     for (button in views(root).filterIsInstance<Button>().filter { it.isShown }) {
                         if (button.getGlobalVisibleRect(bounds)) assertEquals("$page control fits horizontally: ${button.text}", button.width, bounds.width())
@@ -83,7 +83,7 @@ class UiCentralRolloutInstrumentedTest {
                     when (page) {
                         "overview" -> assertTrue("Generated fixture has a configured model", labels(activity).contains(MoteI18n.text("模型已配置")))
                         "files" -> assertTrue("The fixture has no file uploads and shows the actual empty state", labels(activity).contains(MoteI18n.text("当前范围内暂无条目。没有列出不代表不存在。")))
-                        "notes" -> assertTrue("Attachment limits remain directly on the page", labels(activity).contains(MoteI18n.text("图片和录音会先归档。是否提取文字或转写录音取决于中央处理设置；请在资料库查看状态。每个附件最多 50 MiB。")))
+                        "notes" -> assertTrue("The existing native editor remains reachable from Central notes", views(root).filterIsInstance<Button>().any { it.text.toString() == MoteI18n.text("记下") && it.isEnabled })
                     }
                     GeneratedWindowRendering.save(activity, directory, "rollout-central-$page")
                     File(directory, "$page.txt").writeText(labels(activity).joinToString("\n"))

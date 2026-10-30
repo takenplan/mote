@@ -21,7 +21,7 @@ test('the complete directory belongs to Home while installed settings keep their
  assert.equal(isSettingsContext('featureGuide'),false);assert.equal(isSettingsContext('archive'),false);
  assert.equal(primaryDestination('featureGuide'),'overview');assert.equal(parentDestination('featureGuide'),'overview');
  const document=new JSDOM(renderToStaticMarkup(React.createElement(WorkspaceNavigation,{page:'featureGuide',onPage:()=>{}}))).window.document;
- assert.equal(document.querySelector('button[aria-label="返回今天"]')?.textContent,'返回今天');
+ assert.equal(document.querySelector('button'),null,'the final directory owns its context return in its heading instead of duplicating a Home-only back link');
 });
 
 test('the legacy Coding page stays under Library and has a Library parent without a Settings card',async t=>{
@@ -41,6 +41,24 @@ test('the legacy Coding page stays under Library and has a Library parent withou
  assert.doesNotMatch(settings,/Generated Coding status/);
 });
 
+test('AI access is a primary destination while source setup retains its parent',async t=>{
+ configureLocale(()=> 'zh-CN');
+ const featureId='generated.ai-access-navigation';
+ const fiber=await webFeatures.install({id:featureId,version:'1',components:[]},[
+  {surface:'page',entry:{id:'sources',route:'sources',label:'来源',section:'connections',featureId,render:()=>null}},
+  {surface:'page',entry:{id:'connections',route:'connections',label:'AI 接入',section:'connections',featureId,render:()=>null}},
+  {surface:'page',entry:{id:'gmail',route:'sources/gmail',label:'Gmail',section:'connections',featureId,render:()=>null}},
+ ]);
+ t.after(()=>fiber.dispose());
+ assert.equal(primaryDestination('connections'),'connections');
+ assert.equal(parentDestination('connections'),undefined);
+ const access=new JSDOM(renderToStaticMarkup(React.createElement(WorkspaceNavigation,{page:'connections',onPage:()=>{}}))).window.document;
+ assert.equal(access.querySelector('button'),null,'the AI access component owns its detail/new-connection return without an unrelated source parent');
+ assert.equal(parentDestination('gmail'),'sources');
+ const source=new JSDOM(renderToStaticMarkup(React.createElement(WorkspaceNavigation,{page:'gmail',onPage:()=>{}}))).window.document;
+ assert.equal(source.querySelector('button[aria-label="返回来源"]')?.textContent,'返回上级');
+});
+
 
 test('fixed Settings cards react to page disposal and restoration without invoking an unavailable destination',async t=>{
  configureLocale(()=> 'zh-CN');
@@ -52,7 +70,7 @@ test('fixed Settings cards react to page disposal and restoration without invoki
  const install=()=>webFeatures.install({id:'generated.settings-destination',version:'1',components:[]},[{surface:'page',entry:{id:'settings',route:'system/models',label:'Generated models',featureId:'generated.settings-destination',render:()=>null}}]);
  let registration=await install();
  t.after(async()=>{await act(async()=>root.unmount());await registration.dispose();for(const [key,value] of previous){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
- const modelCard=()=>Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.settings-link-grid button')).find(button=>button.querySelector('strong')?.textContent==='模型与服务')!;
+ const modelCard=()=>Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.settings-directory-rows button')).find(button=>button.querySelector('strong')?.textContent==='模型与服务')!;
  await act(async()=>root.render(React.createElement(SettingsLanding,{onPage:page=>destinations.push(page)})));
  assert.equal(modelCard().disabled,false);await act(async()=>modelCard().click());assert.deepEqual(destinations,['settings']);
  await act(async()=>registration.dispose());

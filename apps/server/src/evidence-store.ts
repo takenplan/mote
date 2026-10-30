@@ -1,4 +1,5 @@
 import {retainConversationRoots,retainedConversationResult} from './conversation-retention.js';
+import {captureSessionMembersSql} from './capture-session-members.js';
 import {installVaultSchema} from './vault-schema-installation.js';
 import {centralOcrState} from './central-ocr-state.js';
 import {CAPTURE_BATCH_MAX_RECORDS,CAPTURE_BATCH_MAX_BYTES} from './capture-limits.js';
@@ -127,6 +128,7 @@ export class EvidenceStore {
   }
   async prepare(raw:unknown):Promise<Prepared> {
     const input=captureSchema.parse(raw); input.capturedAt=new Date(input.capturedAt).toISOString();
+    if(input.metadata?.ownerDescription!==undefined)throw new StoreError('Owner descriptions must pass through the private ingress context boundary');
     if(input.metadata?.uiPage?.version===3){
       input.metadata.observedAt=new Date(input.metadata.observedAt).toISOString();
       input.metadata.uiPage.observations.firstAt=new Date(input.metadata.uiPage.observations.firstAt).toISOString();
@@ -213,7 +215,7 @@ export class EvidenceStore {
     try {before?.();const results=prepared.map((p,i)=>{const result=this.insert(p);transaction?.(result,i);return result;});this.db.exec('COMMIT');return results;}
     catch(e){this.db.exec('ROLLBACK');this.sweep();throw e;}
   }
-  async ingestSettled(raw:CaptureInput[],authorize?:()=>void) {
+  async ingestSettled(raw:CaptureInput[],authorize?:()=>void,transaction?:(result:{id:string;duplicate:boolean},index:number)=>void) {
     if(!raw.length||raw.length>CAPTURE_BATCH_MAX_RECORDS)throw new StoreError('Expected 1–500 observations',413);
     if(Buffer.byteLength(JSON.stringify(raw))>CAPTURE_BATCH_MAX_BYTES)throw new StoreError('Observation batch exceeds 32 MiB',413);
     const prepared:PromiseSettledResult<Prepared>[]=[];
@@ -225,7 +227,7 @@ export class EvidenceStore {
       const results=prepared.map((p,i)=>{
         if(p.status==='rejected')return {id:raw[i].id,error:p.reason as unknown};
         this.db.exec('SAVEPOINT capture_member');
-        try{const result=this.insert(p.value);this.captureReceived(p.value.input.deviceId);this.db.exec('RELEASE capture_member');return {id:raw[i].id,result};}
+        try{const result=this.insert(p.value);transaction?.(result,i);this.captureReceived(p.value.input.deviceId);this.db.exec('RELEASE capture_member');return {id:raw[i].id,result};}
         catch(error){failed=true;this.db.exec('ROLLBACK TO capture_member; RELEASE capture_member');return {id:raw[i].id,error};}
       });
       this.db.exec('COMMIT');if(failed)this.sweep();return results;
@@ -357,14 +359,22 @@ export class EvidenceStore {
   }
   previews(range:Range={}) {
     const page=this.list(range);
-    const items:CapturePreview[]=page.items.map(record=>({id:record.id,deviceId:record.deviceId,deviceName:record.deviceName,platform:record.platform,
+    const items=page.items.map(record=>this.preview(record));
+    return {...page,items};
+  }
+  /** Shared existing raw-browse visibility and filters for a read-only projection. */
+  captureBrowseScope(range:Range){
+    const {cursor:_,after,before,...scope}=range,base=this.clauses({...scope,capturedOrder:true});
+    if(!after||!before)throw new StoreError('Timeline requires a bounded range');
+    const start=new Date(after).toISOString(),end=new Date(before).toISOString();
+    return {where:base.where+` AND ((captured_at>=? AND captured_at<?) OR EXISTS(SELECT 1 FROM json_each(captures.json,'$.stateSeries.samples') observation WHERE unixepoch(json_extract(observation.value,'$.at'),'subsec')>=unixepoch(?,'subsec') AND unixepoch(json_extract(observation.value,'$.at'),'subsec')<unixepoch(?,'subsec')))`,values:[...base.values,start,end,start,end]};
+  }
+  preview(record:CaptureRecord):CapturePreview {return {id:record.id,deviceId:record.deviceId,deviceName:record.deviceName,platform:record.platform,
       capturedAt:record.capturedAt,source:record.source,appId:record.appId,appName:record.appName,windowTitle:record.windowTitle.slice(0,300),
       ...(record.stateSeries?{stateSummary:{count:record.stateSeries.samples.length,lastAt:record.stateSeries.samples.at(-1)!.at}}:{}),durationMs:record.durationMs,hasImage:Boolean(record.blobHash),ocr:captureOcrState(record),
       sizeBytes:Buffer.byteLength(record.ocrText)+(record.blobHash?Number(this.db.prepare('SELECT bytes FROM blobs WHERE hash=?').get(record.blobHash)?.bytes??0):Number(record.provenance?.metadata?.file?.sizeBytes??0)),
       ...(record.metadata?.media?{media:record.metadata.media}:{}),
-      textPreview:(record.source==='media'?(record.metadata?.media?.sessions.map(s=>[s.title,s.artist,s.appName].filter(Boolean).join(' · ')).join(' / ')||({available:moteText("未观察到媒体会话"),disabled:moteText("媒体采集已关闭"),permission_required:moteText("媒体权限未授予"),unavailable:moteText("媒体信息暂不可用")}[record.metadata?.media?.status??'unavailable'])):record.source==='notification'||record.source==='device_event'?systemEventText(record.metadata):record.ocrText).slice(0,160)}));
-    return {...page,items};
-  }
+      textPreview:(record.source==='media'?(record.metadata?.media?.sessions.map(s=>[s.title,s.artist,s.appName].filter(Boolean).join(' · ')).join(' / ')||({available:moteText("未观察到媒体会话"),disabled:moteText("媒体采集已关闭"),permission_required:moteText("媒体权限未授予"),unavailable:moteText("媒体信息暂不可用")}[record.metadata?.media?.status??'unavailable'])):record.source==='notification'||record.source==='device_event'?systemEventText(record.metadata):record.ocrText).slice(0,160)};}
   gallery(range:{after:string;before:string;deviceId?:string;appId?:string;cursor?:string;limit:number}, albums:boolean) {
     const filters=['captured_at>=?','captured_at<?',"(NOT EXISTS(SELECT 1 FROM source_versions v WHERE v.capture_id=capture_gallery.id) OR EXISTS(SELECT 1 FROM source_heads h WHERE h.capture_id=capture_gallery.id AND h.deleted=0) OR id IN (SELECT capture_id FROM file_heads))"];const args:(string|number)[]=[new Date(range.after).toISOString(),new Date(range.before).toISOString()];
     if(range.deviceId){filters.push('device_id=?');args.push(range.deviceId);}
@@ -400,17 +410,7 @@ export class EvidenceStore {
     if(range.deviceId)args.push(range.deviceId);
     // Partition before pagination. App switches remain boundaries even if the user
     // subsequently opens only one app's session; overlapping devices never mix.
-    const cte=`WITH observed AS (
-      SELECT *,LAG(app_id) OVER w AS previous_app,LAG(captured_at) OVER w AS previous_at
-      FROM capture_gallery WHERE captured_at>=? AND captured_at<? ${range.deviceId?'AND device_id=?':''}
-      WINDOW w AS (PARTITION BY device_id ORDER BY captured_at,id)
-    ), segmented AS (
-      SELECT *,SUM(CASE WHEN previous_at IS NULL OR app_id='' OR app_id!=previous_app OR
-        (julianday(captured_at)-julianday(previous_at))*86400000>300000.1 THEN 1 ELSE 0 END)
-        OVER (PARTITION BY device_id ORDER BY captured_at,id) AS segment FROM observed
-    ), members AS (
-      SELECT *,FIRST_VALUE(id) OVER (PARTITION BY device_id,segment ORDER BY captured_at,id) AS session_id FROM segmented
-    )`;
+    const cte=captureSessionMembersSql(range.deviceId);
     let position:{at:string;id:string}|undefined;
     if(range.cursor){try{position=z.object({at:z.string().datetime(),id:z.string().uuid()}).strict().parse(JSON.parse(Buffer.from(range.cursor,'base64url').toString()));}catch{throw new StoreError('Invalid session cursor');}}
     if(range.sessionId){
@@ -620,10 +620,10 @@ export class EvidenceStore {
     if(this.db.isTransaction)throw new StoreError('Evidence collection requires a committed transaction');
     this.sweep();this.archive.collect();
   }
-  delete(id:string) {
+  delete(id:string,assertCurrent?:()=>void) {
     this.db.exec('BEGIN IMMEDIATE');
     let result:{deleted:number};
-    try{result=this.deleteInTransaction(id,true);this.db.exec('COMMIT');}
+    try{assertCurrent?.();result=this.deleteInTransaction(id,true);this.db.exec('COMMIT');}
     catch(error){if(this.db.isTransaction)this.db.exec('ROLLBACK');throw error;}
     this.collectDeletedEvidence();return result;
   }

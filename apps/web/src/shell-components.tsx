@@ -1,3 +1,8 @@
+import {recordingSpeaker} from './recording-presentation';
+import {useMediaEvidenceText} from './media-evidence-presentation';
+import {ReaderToolsDialog} from './ReaderToolsDialog';
+import {originalReferenceRoute,rememberOriginalReturn} from './ask-original-reference';
+import {confirmNavigation} from './unsaved';
 import {ActionResults} from './ActionResults';
 import {NoteOrigin,NoteAttachments} from './NoteOrigin';
 import {StructuredObservation} from './StructuredObservation';
@@ -383,69 +388,125 @@ export function EvidenceDialog({
   onClose,
   onDeleted,
   onOpen,
+  onOpenNested,
+  embedded=false,
 }: {
+  embedded?:boolean;
   id: string;
   api: Api;
   onClose: () => void;
   onDeleted: () => void;
   onOpen: (id:string) => void;
+  onOpenNested?: (id:string) => void;
 }) {
   const parsedRef=parseEvidenceRef(id),captureRef=parsedRef?.kind==='capture';
   const captureId=captureRef?parsedRef.id:undefined;
-  const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/capture-browser/${encodeURIComponent(captureId!)}`:null);
+  const {data:capture,error:readError,loading:captureLoading}=useResource<Capture>(api,captureRef?`/api/capture-browser/${encodeURIComponent(captureId!)}`:null);
   useOperationUpdates(api);
-  const [mutationError,setError]=useState('');
+  const readerAlive=useRef(true),readerPanel=useRef<HTMLElement>(null);
+  useEffect(()=>{readerAlive.current=true;return()=>{readerAlive.current=false;};},[]);
+  const readerVisit=useRef({api,id});
+  if(readerVisit.current.api!==api||readerVisit.current.id!==id)readerVisit.current={api,id};
+  // A saved note is a parent reader: keep its place while opening its exact
+  // cited source. Ordinary reader-to-reader navigation continues to replace.
+  type ReaderReturn={owner:Api;parent:string;child:string;scroll:number;pending:boolean;ready:boolean;fallbackApplied:boolean;previousOrigin?:object};
+  const nestedReturns=useRef<ReaderReturn[]>([]),originInstances=useRef(new Map<string,object>()),originOwner=useRef(api);
+  const restoreSavedParent=()=>{
+    const panel=readerPanel.current,visit=[...nestedReturns.current].reverse().find(item=>item.pending&&item.owner===api&&item.parent===id);
+    if(!panel||!visit||readerVisit.current.api!==visit.owner||readerVisit.current.id!==visit.parent)return;
+    const target=[...panel.querySelectorAll<HTMLButtonElement>('.note-origin nav button')].find(item=>item.dataset.originCitation===parseEvidenceRef(visit.child)?.id)
+      ??panel.querySelector<HTMLButtonElement>('.evidence-back');
+    const scroll=panel.closest<HTMLElement>('.evidence-reader-backdrop');if(scroll)scroll.scrollTop=visit.scroll;
+    target?.focus({preventScroll:true});visit.pending=false;
+  };
+  useEffect(()=>{
+    nestedReturns.current=nestedReturns.current.filter(visit=>visit.owner===api);
+    if(originOwner.current!==api){originOwner.current=api;originInstances.current.clear();}
+    // Forward then Back is also a new visit to the child.
+    for(const visit of nestedReturns.current)if(visit.child===id){visit.pending=true;visit.ready=false;visit.fallbackApplied=false;visit.previousOrigin=originInstances.current.get(visit.parent);}
+  },[api,id]);
+  useEffect(()=>{
+    const origin=capture?.metadata?.noteOrigin;
+    // The parent or its conversation may disappear while the child is open.
+    // Once the parent read has settled without a ConversationOrigin, still
+    // restore the scroll and put focus on its Back control.
+    const visit=[...nestedReturns.current].reverse().find(item=>item.pending&&item.owner===api&&item.parent===id);
+    const ready=!captureLoading&&(readError||capture&&(!origin||origin.kind!=='conversation'||!origin.conversationId||origin.messageIds?.length!==1||visit?.ready));
+    if(ready)restoreSavedParent();
+    else if(visit&&!visit.fallbackApplied){readerPanel.current?.querySelector<HTMLButtonElement>('.evidence-back')?.focus({preventScroll:true});visit.fallbackApplied=true;}
+  },[api,id,capture,readError,captureLoading]);
+  const originSettled=(instance:object)=>{
+    originInstances.current.set(id,instance);
+    const visit=[...nestedReturns.current].reverse().find(item=>item.pending&&item.owner===api&&item.parent===id);
+    if(visit&&instance!==visit.previousOrigin){visit.ready=true;if(!captureLoading&&!readError)restoreSavedParent();}
+  };
+  const openSavedCitation=(ref:string)=>{
+    if(!embedded&&onOpenNested&&ref!==id){
+      const scroll=readerPanel.current?.closest<HTMLElement>('.evidence-reader-backdrop');
+      nestedReturns.current=[...nestedReturns.current.filter(visit=>visit.owner!==api||visit.parent!==id||visit.child!==ref),{owner:api,parent:id,child:ref,scroll:scroll?.scrollTop??0,pending:true,ready:false,fallbackApplied:false,previousOrigin:originInstances.current.get(id)}].slice(-32);
+      onOpenNested(ref);
+    }else onOpen(ref);
+  };
+  const [mutationError,setError]=useState(''),[deletionDiagnostic,setDeletionDiagnostic]=useState('');
   const error=mutationError||(readError?errorMessage(readError):'');
-  const [confirm, setConfirm] = useState(false);
+  const [confirm, setConfirm] = useState(false),[readerTools,setReaderTools]=useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(()=>{setError('');setConfirm(false);},[id]);
+  useEffect(()=>{setError('');setDeletionDiagnostic('');setBusy(false);setConfirm(false);setReaderTools(false);},[api,id]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape"){if(readerTools)setReaderTools(false);else onClose();}
     };
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
-  }, [onClose]);
+  }, [onClose,readerTools]);
   useEffect(() => {
-    const panel = document.querySelector<HTMLElement>('.evidence-modal');
+    if(embedded)return;
+    const panel=readerPanel.current;
     return panel?containDialogFocus(panel,document.activeElement as HTMLElement|null):undefined;
-  }, []);
+  }, [embedded]);
   async function remove() {
-    setBusy(true);
+    if(busy||!capture?.deletion?.available)return;
+    const visit=readerVisit.current;setBusy(true);setError('');setDeletionDiagnostic('');
     try {
-      await api.request(`/api/captures/${encodeURIComponent(captureId!)}`, {
+      const result=await api.request<{deleted?:unknown}>(`/api/captures/${encodeURIComponent(captureId!)}`, {
         method: "DELETE",
       });
-      resources(api).invalidate(key=>/^\/api\/(capture-browser|captures|files|memories|source-items|sources)([/?]|$)/.test(key));
+      if(!Number.isSafeInteger(result?.deleted)||Number(result.deleted)<=0)throw new Error('Deletion response did not confirm a positive deleted count');
+      resources(api).invalidate(key=>/^\/api\/(capture-browser|captures|files|memories|source-items|sources|materials|library)([/?]|$)/.test(key));
+      if(!readerAlive.current||readerVisit.current!==visit)return;
       onDeleted();
       onClose();
     } catch (e) {
-      setError(errorMessage(e));
+      if(readerAlive.current&&readerVisit.current===visit){setError(moteText('未能确认删除完成。请刷新查看当前状态。'));setDeletionDiagnostic(errorMessage(e));}
     } finally {
-      setBusy(false);
+      if(readerAlive.current&&readerVisit.current===visit)setBusy(false);
     }
   }
   const presentation = capture ? evidencePresentation(capture) : null;
   // Decode only the server-declared organizer format; user prose that resembles JSON stays literal.
   const sourceBody=capture?.evidencePresentation==='source-record-json-v1'?decodeSourceText(capture.evidencePresentation,capture.ocrText):undefined;
-  const readableText=sourceBody?.kind==='source'?sourceBody.text:capture?.ocrText;
+  const mediaBody=useMediaEvidenceText(api,capture);
+  const readableText=mediaBody.body?.text??(sourceBody?.kind==='source'?sourceBody.text:capture?.ocrText);
+  const projectedMedia=mediaBody.body!==undefined;
   const ocr = capture ? ocrPresentation(captureOcrState(capture), capture.ocrText, capture.metadata?.capture?.deduplication?.duplicate, capture.perceptionJobs) : null;
   const sourceLabel=capture?(sourceLabels[capture.source]||capture.source):'';
-  const readerTitle=capture?(capture.source==='note'?sourceLabel:capture.windowTitle||capture.appName||sourceLabel):moteText('上下文证据');
+  const readerTitle=capture?(capture.windowTitle||(capture.source==='note'?capture.ocrText?.split('\n')[0]?.slice(0,100):capture.appName)||sourceLabel):moteText('上下文证据');
   const materialRef=capture?.revisionState==='current'&&capture.memoryMaterialRef;
   const currentMaterialRef=materialRef&&/^material:mat_[a-f0-9]{64}@[a-f0-9]{64}$/.test(materialRef)?materialRef:undefined;
   return (
     <div
-      className="modal-backdrop"
+      className={embedded?"embedded-evidence":"modal-backdrop evidence-reader-backdrop"}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <section
-        className="modal evidence-modal"
-        role="dialog"
-        aria-modal="true"
+        ref={readerPanel}
+        className={embedded?"evidence-modal evidence-reader":"modal evidence-modal evidence-reader"}
+        role={embedded?"region":"dialog"}
+        aria-modal={embedded?undefined:true}
         aria-label={moteText("上下文证据详情")}
       >
-        <div className="evidence-heading">
+        <div className="reader-top-actions"><button className="text-button evidence-back" onClick={onClose}>{moteText("返回")}</button>{capture&&<button className="text-button reader-more-button" onClick={()=>setReaderTools(true)}>{moteText('更多')}</button>}{capture&&capture.revisionState!=='historical'&&<a className="button capture-reader-ask" href={originalReferenceRoute('capture',capture.id)} onClick={event=>{if(!confirmNavigation()){event.preventDefault();return;}rememberOriginalReturn(api,'capture',capture.id);}}>{moteText('问问 AI')} ↗</a>}</div>
+        {captureRef&&<div className="evidence-heading">
           <div>
             <h2>{readerTitle}</h2>
             {capture && (
@@ -463,12 +524,13 @@ export function EvidenceDialog({
           >
             <X size={20} />
           </button>
-        </div>
+        </div>}
+
         {capture?.blobHash&&capture.revisionState!=='historical'&&<ImageProgress api={api} id={capture.id}/>}
         {capture?.revisionState==='historical'&&<p role="status">{moteText('历史证据，仅用于核对当时的内容。')}</p>}
         {presentation?.nativeFile && <FileDetail api={api} id={presentation.nativeFile.captureId} startMs={presentation.nativeFile.startMs} onOpen={onOpen}/>}
-        {error && <ErrorNotice text={error} />}
-        {!captureRef&&<ReferenceDetail key={id} api={api} reference={id} onOpen={onOpen}/>}
+        {error && !readerTools && <ErrorNotice text={error} />}
+        {!captureRef&&<ReferenceDetail key={id} api={api} reference={id} onOpen={onOpen} onOpenSavedOrigin={openSavedCitation} onSavedOriginSettled={originSettled}/>}
         {captureRef && !capture && !error && (
           <div className="panel-pad">
             <Spinner />
@@ -478,19 +540,17 @@ export function EvidenceDialog({
           <>
             <div className={`evidence-grid ${!capture.blobHash ? 'note-evidence' : ''}`}>
               {capture.blobHash && <OriginalImage key={capture.id} api={api} capture={capture}/>}
-              <div className="evidence-text"><EvidenceState compact/>
+              <div className="evidence-text">
                 {capture.source === 'screen' && ocr && <div className="evidence-ocr-status" role="status"><span className={`badge ${ocr.tone}`}>{ocr.label}</span><p>{ocr.description}</p></div>}
-                <NoteOrigin api={api} capture={capture} onOpen={onOpen}/>{(!capture.metadata?.noteOrigin||capture.metadata.noteOrigin.kind==='manual'||Boolean(readableText))&&<><h3 className="evidence-body-heading">{capture.metadata?.noteOrigin?.kind!==undefined&&capture.metadata.noteOrigin.kind!=='manual'?moteText("我的补充"):presentation?.textLabel}</h3>
-                {capture.metadata?.uiPage?.version === 3 ? <StructuredObservation page={capture.metadata.uiPage}/> : <pre>
+                <NoteOrigin api={api} capture={capture} onOpen={openSavedCitation} onSettled={originSettled}/>{!presentation?.nativeFile&&(!capture.metadata?.noteOrigin||capture.metadata.noteOrigin.kind==='manual'||Boolean(readableText))&&<><h3 className="evidence-body-heading">{capture.metadata?.noteOrigin?.kind!==undefined&&capture.metadata.noteOrigin.kind!=='manual'?moteText("我的补充"):presentation?.textLabel}</h3>
+                {!mediaBody.loading&&mediaBody.body&&(mediaBody.body.speaker!==undefined||mediaBody.body.speakerAttribution)&&<p className="field-note evidence-speaker">{mediaBody.body.speakerAttribution?moteText('已确认说话人：{0}',mediaBody.body.speakerAttribution.name):recordingSpeaker(mediaBody.body.speaker,false)}</p>}
+                {mediaBody.loading?<p role="status">{moteText('正在读取…')}</p>:capture.metadata?.uiPage?.version === 3 ? <StructuredObservation page={capture.metadata.uiPage}/> : <pre>
                   {capture.source==='media'?mediaExplanation:capture.source === 'activity' ? activityExplanation : systemEventText(capture.metadata) || readableText || (capture.provenance?.deleted ? moteText("来源已报告删除；本次只保留来源元数据。") : capture.provenance?.layer === 'reference' ? moteText("此来源仅保留引用与元数据，未导入正文。") : presentation?.nativeFile&&capture.provenance?.layer==='original'?moteText("原件单独保存；转写与摘要见上方。"):capture.blobHash ? moteText("暂无文字。") : moteText("此记录没有正文。"))}
                 </pre>} </>}
-                <EvidenceProcessingHelp/>
     <ActionResults api={api} evidenceId={capture.id}/>
-                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
-                  capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
-                  capture.revisionState!=='historical'&&<a className="button" href={memorySourceRoute(formatEvidenceRef('capture',capture.id))}>{moteText("仅从这条资料提取记忆")}</a>}</div>
+
                 {(capture.source==='media'||capture.metadata?.media)&&<MediaSnapshot media={capture.metadata?.media} observedAt={capture.metadata?.observedAt??capture.capturedAt} screenLocked={capture.metadata?.state?.screenLocked} collection={capture.privacy.collection}/>}
-                <dl>
+                <details className="reader-source-details"><summary>{moteText("来源与详情")}</summary>{presentation?.nativeFile&&readableText&&<pre>{readableText}</pre>}<EvidenceState compact/><dl>
                   <div>
                     <dt>{moteText("来源")}</dt>
                     <dd>
@@ -530,14 +590,16 @@ export function EvidenceDialog({
                 {capture.privacy.reason && (
                   <p className="field-note">{capture.privacy.reason}</p>
                 )}
-                <code className="record-id">{capture.id}</code>
+                <code className="record-id">{capture.id}</code></details>
               </div>
             </div>
-            <div className="evidence-footer">
-              {confirm ? (
+            {readerTools&&<ReaderToolsDialog onClose={()=>setReaderTools(false)}>{projectedMedia&&<details className="evidence-canonical"><summary>{moteText('技术详情')}</summary><pre>{capture.ocrText}</pre></details>}{error&&<ErrorNotice text={error}/>} {deletionDiagnostic&&<details className="deletion-diagnostic"><summary>{moteText('技术详情')}</summary><pre>{deletionDiagnostic}</pre></details>}                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
+                  capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
+                  capture.revisionState!=='historical'&&<a className="button" href={memorySourceRoute(formatEvidenceRef('capture',capture.id))}>{moteText("仅从这条资料提取记忆")}</a>}</div><EvidenceProcessingHelp/>            <div className="evidence-footer">
+              {confirm&&capture.deletion?.available ? (
                 <>
                   <p>
-                    {presentation?.deleteDescription}{moteText("此操作无法撤销。")}</p>
+                    {capture.deletion?.kind==='file'?moteText('删除中央文件归档及其派生内容和依赖记忆，并清除已有洞察；来源设备上的原文件保留。'):presentation?.deleteDescription}{moteText("此操作无法撤销。")}</p>
                   <button
                     className="button subtle"
                     onClick={() => setConfirm(false)}
@@ -559,15 +621,15 @@ export function EvidenceDialog({
                   ) : capture.source === "note" ? (
                     <span>{moteText("由你主动记录")}</span>
                   ) : <span />}
-                  <button
+                  {capture.deletion?.available?<button
                     className="text-button danger-text"
                     onClick={() => setConfirm(true)}
                   >
                     <Trash2 size={15} />
-                    {moteText("删除这条记录")}</button>
+                    {moteText("删除这条记录")}</button>:<span className="muted">{moteText('此引用不能直接删除原始记录。')}</span>}
                 </>
               )}
-            </div>
+            </div></ReaderToolsDialog>}
           </>
         )}
       </section>
@@ -578,23 +640,25 @@ export function EvidenceDialog({
 export function AnswerView({
   answer,
   onOpen,
+  compact=false,
 }: {
   answer: Answer;
   onOpen: (id: string) => void;
+  compact?:boolean;
 }) {
   return (
-    <div className="answer">
-      <div className="answer-label">
+    <div className={"answer"+(compact?" answer-compact":"")}>
+      {!compact&&<div className="answer-label">
         <span className="mote-symbol small">m</span>
         <strong>Mote</strong>
         <span>{moteText("根据你的上下文")}</span>
-      </div>
+      </div>}
       <div className="markdown">
-        <AnswerMarkdown answer={answer} onOpen={onOpen} />
+        <AnswerMarkdown answer={answer} onOpen={onOpen} numericCitations={compact}/>
       </div>
       {answer.citations.length > 0 && (
         <div className="citations">
-          <span className="eyebrow">{moteText("证据来源 ·")}{' '}{answer.citations.length}</span>
+          <span className="eyebrow">{compact?moteText("依据"):moteText("证据来源 ·")+' '+answer.citations.length}</span>
           <div className="citation-grid">
             {answer.citations.map((cite, index) => (
               <button
@@ -614,7 +678,7 @@ export function AnswerView({
           </div>
         </div>
       )}
-      <TurnUsage usage={answer.usage}/>
+      {!compact&&<><TurnUsage usage={answer.usage}/>
       <details className="trace">
         <summary>
           <Layers3 size={14} />
@@ -629,7 +693,7 @@ export function AnswerView({
           </div>
         ))}
         <p className="run-id">{moteText("运行 ID ·")}{' '}{answer.runId}</p>
-      </details>
+      </details></>}
     </div>
   );
 }

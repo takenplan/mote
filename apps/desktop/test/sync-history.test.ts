@@ -112,3 +112,14 @@ it('preserves an earlier individual file ACK when a later request fails', async 
   expect(history.run(config, run)).toMatchObject({ outcome: 'partial', received: 1, unconfirmed: 1 });
   expect(engine.status().pending).toBe(2);
 });
+
+
+it('clips a seven-day summary to the existing earliest supported date without extending readable years', () => {
+  const first = historyRange('2000-01-01', 7);
+  expect(first.days).toEqual(['2000-01-01']);
+  expect(first.after).toBe(new Date(2000, 0, 1).toISOString());
+  expect(first.before).toBe(new Date(2000, 0, 2).toISOString());
+  expect(history.page(config, { day: '2000-01-01', days: 7 })).toMatchObject({ items: [], total: 0, received: 0, days: [{ day: '2000-01-01', received: 0 }] });
+  expect(historyRange('2000-01-03', 7).days).toEqual(['2000-01-01', '2000-01-02', '2000-01-03']);
+  expect(() => historyRange('1999-12-31', 7)).toThrow();
+});

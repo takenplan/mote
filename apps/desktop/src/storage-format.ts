@@ -2,8 +2,8 @@ import {mkdir,open,readFile,readdir,lstat,rename,unlink} from 'node:fs/promises'
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 
-export const DESKTOP_STORAGE_VERSION = 4;
-export const RESET_REQUIRED = 'Unsupported desktop storage format. Back up the existing directory, then reset it before starting this version. Existing files were preserved.';
+import {DESKTOP_STORAGE_VERSION,RESET_REQUIRED} from './storage-format-constants';
+export {DESKTOP_STORAGE_VERSION,RESET_REQUIRED} from './storage-format-constants';
 /** Old personal data is never converted, adopted, or silently moved at startup. */
 export async function ensureStorageFormat(directory:string,contentNames:readonly string[]):Promise<void>{
   const marker=join(directory,'storage-format.json');

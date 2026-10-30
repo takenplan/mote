@@ -1,5 +1,6 @@
 import type { SyncContent } from './contracts/content';
 export type { SyncContent } from './contracts/content';
+import {sourceSchema} from '@mote/shared';
 import {noteBody} from './note-presentation';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
@@ -13,7 +14,7 @@ import type { SyncHistory, SyncHistoryItem } from './sync-history';
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function text(value: unknown, max = 100000): string { return typeof value === 'string' ? value.slice(0, max) : ''; }
-function recordText(source: SyncHistoryItem['source'], record: Record<string, unknown>): string {
+function recordText(source: SyncContent['item']['source'], record: Record<string, unknown>): string {
   if (source === 'notification') {
     const notification = (record.metadata as { notification?: Record<string, unknown> } | undefined)?.notification;
     if (notification) return ['title', 'text', 'bigText', 'subText'].map(key => text(notification[key])).concat(Array.isArray(notification.textLines) ? notification.textLines.slice(0, 100).map(line => text(line)) : []).filter(Boolean).join('\n').slice(0, 100000);
@@ -44,7 +45,7 @@ export async function syncContent(history: SyncHistory, queue: DurableQueue, sou
       }
     } else if (item.captureId) {
       const record = queue.recordForHistory(item.captureId);
-      if (record) { const bytes = includeImage ? await queue.imageForBrowser(item.captureId) : undefined; return { item, location: 'local', hasImage:Boolean(record.blobHash), truncated:recordText(item.source,record.event as unknown as Record<string,unknown>).length>100000,text:recordText(item.source,record.event as unknown as Record<string,unknown>).slice(0,100000), ...(bytes && includeImage ? { image: await previewWork.run<string>({ kind: 'preview', bytes, thumbnail: false }) } : {}), metadata: JSON.stringify(record.event.metadata ?? {}, null, 2) }; }
+      if (record) { const bytes = includeImage ? await queue.imageForBrowser(item.captureId) : undefined; return { item, location: 'local',description:record.event.metadata?.ownerDescription, hasImage:Boolean(record.blobHash), truncated:recordText(item.source,record.event as unknown as Record<string,unknown>).length>100000,text:recordText(item.source,record.event as unknown as Record<string,unknown>).slice(0,100000), ...(bytes && includeImage ? { image: await previewWork.run<string>({ kind: 'preview', bytes, thumbnail: false }) } : {}), metadata: JSON.stringify(record.event.metadata ?? {}, null, 2) }; }
     }
     // A later retry can have cleared the local copy. Resolve only a receipt from this same node/device.
     const receipt = history.receivedCapture(config, item.key);
@@ -52,16 +53,18 @@ export async function syncContent(history: SyncHistory, queue: DurableQueue, sou
   }
   return readCentralContent(config,item,chunkOffset,includeImage);
 }
-export async function readCentralContent(config:Config,item:SyncHistoryItem,chunkOffset=0,includeImage=false):Promise<SyncContent>{
+export async function readCentralContent(config:Config,item:SyncContent['item'],chunkOffset=0,includeImage=false):Promise<SyncContent>{
   if (!item.captureId || !uuid.test(item.captureId)) throw Error(moteText('本机副本已变化；尚无可读取的中央接收凭据。'));
   const record = await json(config, `/api/capture-browser/${item.captureId}`);
   if (record.id !== item.captureId || record.deviceId !== config.deviceId) throw Error(moteText('记录不属于当前设备'));
-  if(typeof record.source==='string'&&['screen','ui_page','note','activity','notification','file','calendar','message'].includes(record.source)) item.source=record.source==='message'?'coding':record.source as SyncHistoryItem['source'];
+  if(record.source!==undefined)item.source=record.source==='message'?'coding':sourceSchema.parse(record.source);
   item.title=typeof record.windowTitle==='string'?record.windowTitle:typeof record.appName==='string'?record.appName:item.title;
   item.observedAt=typeof record.capturedAt==='string'?record.capturedAt:item.observedAt;
   const provenance = record.provenance as Record<string, unknown> | undefined;
   if (item.sourceId && provenance?.sourceId !== item.sourceId) throw Error(moteText('记录不属于当前设备'));
-  const result: SyncContent = { truncated:recordText(item.source,record).length>100000,item, location: 'central', captureId: item.captureId, text:recordText(item.source,record).slice(0,100000), metadataOnly: item.layer === 'reference'||provenance?.layer==='reference', metadata: JSON.stringify({ capturedAt: record.capturedAt, appName: record.appName, provenance, metadata: record.metadata }, null, 2).slice(0, 100000) };
+  const descriptions=(record.attributionContext as {recordContextStatements?:{captureId:string;description:string}[]}|undefined)?.recordContextStatements;
+  const description=Array.isArray(descriptions)?descriptions.find(statement=>statement.captureId===item.captureId&&typeof statement.description==='string'&&statement.description.length<=12000)?.description:undefined;
+  const result: SyncContent = { truncated:recordText(item.source,record).length>100000,item, location: 'central', captureId: item.captureId, text:recordText(item.source,record).slice(0,100000),description, metadataOnly: item.layer === 'reference'||provenance?.layer==='reference', metadata: JSON.stringify({ capturedAt: record.capturedAt, appName: record.appName, provenance, metadata: record.metadata }, null, 2).slice(0, 100000) };
   const ocr = record.ocr as { status?: string } | undefined;
   result.processing = ocr?.status === 'pending';
   result.hasImage=Boolean(record.imageMime && item.source==='screen'); if(record.imageMime)result.retainsOriginal=true;

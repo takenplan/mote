@@ -83,7 +83,7 @@ it('preserves both real queue copies and enters recovery when config rename comm
     const save = f.store.save.bind(f.store);
     vi.spyOn(f.store, 'save').mockImplementationOnce(async config => { await save(config); throw Error('Generated failure after durable config rename'); });
     await expect(f.coordinator.paused(() => f.coordinator.apply(updated))).rejects.toThrow('恢复');
-    expect((await f.store.load()).captureStorageDirectory).toBe(target); expect(f.recovery()).toContain('恢复');
+    expect((await f.store.load()).captureStorageDirectory).toBe(target); expect(f.recovery()).toContain('恢复'); expect(f.recovery()).toContain('新旧副本均已保留');
     expect((await stat(source)).isDirectory()).toBe(true); expect((await stat(target)).isDirectory()).toBe(true);
     expect(await f.queue.exportArchive()).toEqual(archive); expect(f.notes.hasPrepared()).toBe(true);
     expect(f.collector.status().state).toBe('error'); expect(f.dependencies.clearStorageSelection).not.toHaveBeenCalled();

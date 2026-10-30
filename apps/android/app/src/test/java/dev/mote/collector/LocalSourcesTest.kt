@@ -15,6 +15,19 @@ class LocalSourcesTest {
     }
     private val at = "2026-09-14T00:00:00Z"
     private fun source() = LocalSource(name = "合成文件", kind = "local-files", uri = "content://fixture/document/root")
+    @Test fun explicitPauseRemainsPausedAndDoesNotRecreateRemovedSource() {
+        val store = LocalSourceStore(folder.newFolder(), cipher); val initial = source()
+        store.save(initial)
+        val acknowledged = initial.copy(enabled = false, description = "owner context", contextVersion = 3, contextDirty = false)
+        store.save(acknowledged)
+        assertTrue(store.setEnabled(initial.id, false))
+        assertEquals(acknowledged, store.sources().single())
+        assertTrue(store.setEnabled(initial.id, true))
+        assertEquals(acknowledged.copy(enabled = true), store.sources().single())
+        store.remove(initial.id)
+        assertFalse(store.setEnabled(initial.id, true))
+        assertTrue(store.sources().isEmpty())
+    }
     @Test fun historyCompletionChecksExactTargetAndBodyWithoutClearingNewerRevision() {
         val store=LocalSourceStore(folder.newFolder(),cipher); val source=source(); store.save(source); store.selectTarget(source.id,"target")
         store.scan(source,SourceScan(listOf(body()),true,at))

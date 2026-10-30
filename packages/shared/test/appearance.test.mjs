@@ -18,15 +18,21 @@ test('live OS changes affect only auto, and returning to auto resolves immediate
  assert.equal(changes,3);
 });
 
-test('both built-in palettes meet text and required-control contrast including statuses, selection and code',async()=>{
+test('palettes retain the final source muted color and contrast for other text and required controls',async()=>{
  const {linearUiTheme}=await import('../dist/ui-presentation.js');
  const luminance=hex=>{const rgb=hex.slice(1).match(/../g).map(x=>parseInt(x,16)/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
  const ratio=(a,b)=>{const values=[luminance(a),luminance(b)].sort((a,b)=>b-a);return (values[0]+.05)/(values[1]+.05);};
+ // The owner requires the exact final prototype. Its light secondary text is
+ // #777066, superseding the implementation-only D34 adjustment. These five
+ // source pairs range from 4.0485 to 4.4915; all other 4.5:1 checks stay intact.
+ const sourcePairs=new Set(['muted/background','muted/surface-sunken','muted/surface-hover','sidebar-muted/sidebar','muted/tint']);
  for(const [scheme,t]of Object.entries(linearUiTheme.schemes)){
-  for(const fg of ['ink','muted','accent','success','warning','danger'])for(const bg of ['background','surface','surface-raised','surface-sunken','surface-hover'])assert.ok(ratio(t[fg],t[bg])>=4.5,`${scheme} ${fg}/${bg}: ${ratio(t[fg],t[bg])}`);
-  for(const [fg,bg]of [['primary-ink','primary-background'],['on-accent','accent'],['accent','tint'],['sidebar-ink','sidebar'],['sidebar-muted','sidebar'],['success','success-tint'],['warning','warning-tint'],['danger','danger-tint']])assert.ok(ratio(t[fg],t[bg])>=4.5,`${scheme} ${fg}/${bg}: ${ratio(t[fg],t[bg])}`);
+  if(scheme==='light'){assert.equal(t.muted,'#777066');assert.equal(t['sidebar-muted'],'#777066');}
+  const check=(fg,bg)=>assert.ok(ratio(t[fg],t[bg])>=(scheme==='light'&&sourcePairs.has(`${fg}/${bg}`)?4.04:4.5),`${scheme} ${fg}/${bg}: ${ratio(t[fg],t[bg])}`);
+  for(const fg of ['ink','muted','accent','success','warning','danger'])for(const bg of ['background','surface','surface-raised','surface-sunken','surface-hover'])check(fg,bg);
+  for(const [fg,bg]of [['primary-ink','primary-background'],['on-accent','accent'],['accent','tint'],['sidebar-ink','sidebar'],['sidebar-muted','sidebar'],['success','success-tint'],['warning','warning-tint'],['danger','danger-tint']])check(fg,bg);
   // Selected discovery summaries and native record timestamps retain muted text.
-  assert.ok(ratio(t.muted,t.tint)>=4.5,`${scheme} muted/tint: ${ratio(t.muted,t.tint)}`);
+  check('muted','tint');
   for(const bg of ['background','surface'])assert.ok(ratio(t['control-border'],t[bg])>=3,`${scheme} control/${bg}`);
  }
 });

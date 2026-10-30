@@ -92,20 +92,21 @@ internal object MoteUi {
         // Native text editing drawables are retained by the View; retint them in place.
         listOf(textCursorDrawable, textSelectHandle, textSelectHandleLeft, textSelectHandleRight).filterNotNull().forEach { it.mutate().setTint(MoteTheme.accent) }
     }
-    fun field(field: EditText): EditText = field.apply {
-        NativePresentationStyles.remember(this, "field") { value -> (value as EditText).apply {
-            MoteUi.textColor(this, NativeColorRole.INK); inputColors(this); minHeight = context.moteDp(MoteTheme.controlHeight); minimumHeight = minHeight
-        } }
-        textColor(this, NativeColorRole.INK); inputColors(this); type(this, NativeFontRole.BODY)
-        backgroundTintList = null
-        background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, NativeColorRole.BACKGROUND, NativeRadiusRole.CONTROL, true, NativeColorRole.BORDER))
-            addState(intArrayOf(android.R.attr.state_focused), shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.ACCENT))
-            addState(intArrayOf(), shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.CONTROL_BORDER))
+    private fun inputBackground(field:EditText) {
+        field.backgroundTintList=null
+        field.background=android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(-android.R.attr.state_enabled),shape(field.context,NativeColorRole.BACKGROUND,NativeRadiusRole.CONTROL,true,NativeColorRole.CONTROL_BORDER))
+            addState(intArrayOf(android.R.attr.state_focused),shape(field.context,NativeColorRole.SURFACE,NativeRadiusRole.CONTROL,true,NativeColorRole.ACCENT))
+            addState(intArrayOf(),shape(field.context,NativeColorRole.SURFACE,NativeRadiusRole.CONTROL,true,NativeColorRole.CONTROL_BORDER))
         }
-        setPadding(context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem), context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem))
-        minHeight = context.moteDp(MoteTheme.controlHeight)
-        minimumHeight = minHeight
+    }
+    fun field(field: EditText): EditText = field.apply {
+        NativePresentationStyles.remember(this,"field") { value -> (value as EditText).apply {
+            MoteUi.textColor(this,NativeColorRole.INK);inputColors(this);inputBackground(this);minimumHeight=context.moteDp(MoteTheme.controlHeight)
+        } }
+        textColor(this,NativeColorRole.INK);inputColors(this);type(this,NativeFontRole.BODY);inputBackground(this)
+        setPadding(context.moteDp(MoteTheme.spacePanel),context.moteDp(MoteTheme.spaceItem),context.moteDp(MoteTheme.spacePanel),context.moteDp(MoteTheme.spaceItem))
+        minimumHeight=context.moteDp(MoteTheme.controlHeight)
     }
 
     fun select(spinner: Spinner): Spinner = spinner.apply {
@@ -147,17 +148,17 @@ internal object MoteUi {
 
     /** A selected scope or retention choice must remain fully readable, including at 130%. */
     fun choiceAdapter(context: Context, labels: List<String>) = object : ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item, labels) {
-        private fun present(view: View): View = view.apply {
+        private fun present(view: View, popup: Boolean): View = view.apply {
             (this as? TextView)?.let {
                 type(it, NativeFontRole.BODY); textColor(it, NativeColorRole.INK)
-                MoteUi.backgroundColor(it, NativeColorRole.SURFACE_RAISED)
+                if(popup) MoteUi.backgroundColor(it, NativeColorRole.SURFACE_RAISED) else NativePresentationStyles.bind(it,"background-color") { selected -> selected.setBackgroundColor(Color.TRANSPARENT) }
                 it.isSingleLine = false; it.maxLines = Int.MAX_VALUE; it.ellipsize = null
                 it.gravity = Gravity.CENTER_VERTICAL; it.minHeight = context.moteDp(MoteTheme.controlHeight)
                 it.setPadding(context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spaceInline))
             }
         }
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getView(position, convertView, parent))
-        override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getDropDownView(position, convertView, parent))
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getView(position, convertView, parent),false)
+        override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getDropDownView(position, convertView, parent),true)
     }
 
     /** Set line behavior before inputType: setSingleLine replaces password transformation. */
@@ -175,7 +176,11 @@ internal object MoteUi {
             is Spinner -> select(view)
             is Button -> if (view !is CompoundButton) {
                 action(view, view.getTag(R.id.mote_button_role) as? ButtonRole ?: if (view.getTag(R.id.mote_primary) == true) ButtonRole.PRIMARY else ButtonRole.SECONDARY)
-                (view.layoutParams as? LinearLayout.LayoutParams)?.let { it.bottomMargin = view.context.moteDp(8) }
+                (view.layoutParams as? LinearLayout.LayoutParams)?.let {
+                    // A bottom margin in a vertically centered horizontal row shifts
+                    // the child above its parent and clips its top border.
+                    it.bottomMargin = if ((view.parent as? LinearLayout)?.orientation == LinearLayout.VERTICAL) view.context.moteDp(8) else 0
+                }
                 // The native dialog bar bottom-aligns actions. Baseline alignment also
                 // subtracts the custom bottom margin, moving their top into its padding.
                 if (view.id in setOf(android.R.id.button1, android.R.id.button2, android.R.id.button3))
@@ -200,15 +205,16 @@ internal object MoteUi {
 
 /** Native adapters retain their data and selection semantics while the provider owns presentation. */
 private class NativeSpinnerAdapter(private val delegate: SpinnerAdapter) : SpinnerAdapter by delegate {
-    private fun present(view: View): View = view.apply {
+    private fun present(view: View, popup: Boolean): View = view.apply {
         if (this is TextView) {
-            MoteUi.type(this); MoteUi.textColor(this, NativeColorRole.INK); MoteUi.backgroundColor(this, NativeColorRole.SURFACE_RAISED)
+            MoteUi.type(this); MoteUi.textColor(this, NativeColorRole.INK)
+            if(popup) MoteUi.backgroundColor(this, NativeColorRole.SURFACE_RAISED) else NativePresentationStyles.bind(this,"background-color") { selected -> selected.setBackgroundColor(Color.TRANSPARENT) }
             minHeight = context.moteDp(MoteTheme.controlHeight)
             isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null
         }
     }
-    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getView(position, convertView, parent))
-    override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getDropDownView(position, convertView, parent))
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getView(position, convertView, parent),false)
+    override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getDropDownView(position, convertView, parent),true)
 }
 
 fun Context.moteDp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -268,47 +274,50 @@ class MoteNavigationIcon(context: Context, private val kind: String, private val
     @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** One primary navigation, including while login or a detail screen is visible. */
+/** The phone home has two actions; management and detail pages have no persistent tabs. */
 class MotePrimaryNavigation(private val activity: Activity, private val onSelect: (MotePrimaryTab) -> Unit) : LinearLayout(activity) {
-    private val items = linkedMapOf<MotePrimaryTab, TextView>()
-    private var selected = MotePrimaryTab.LIBRARY
-    init { refreshPresentation() }
+    private var selected = MotePrimaryTab.HOME
+    private var hasDraft = false
+    private lateinit var record: TextView
+    init { setWillNotDraw(false); refreshPresentation() }
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val line = Paint().apply { color = NativeColorRole.DIVIDER.color(); strokeWidth = resources.displayMetrics.density }
+        canvas.drawLine(0f, 0f, width.toFloat(), 0f, line)
+    }
     fun refreshPresentation() {
-        removeAllViews(); items.clear()
-        val rail = NativeUiPacks.registry.layout().navigation == "adaptive" && resources.configuration.screenWidthDp >= 600
-        orientation = if (rail) VERTICAL else HORIZONTAL
-        isBaselineAligned = false
-        gravity = if (rail) Gravity.TOP else Gravity.CENTER_VERTICAL
-        setPadding(activity.moteDp(8), activity.moteDp(8), activity.moteDp(8), activity.moteDp(8))
-        MoteUi.backgroundColor(this, NativeColorRole.SIDEBAR)
-        contentDescription = MoteI18n.text("主导航")
-        MoteNavigation.primaryTabs().forEachIndexed { index, tab ->
-            if (index == 2) {
-                val record = MoteUi.button(Button(activity).apply {
-                    text = MoteI18n.text("＋记下"); contentDescription = MoteI18n.text("＋记下"); tag = "global-record-action"
-                    setOnClickListener { activity.openRecordEditor() }
-                }, true)
-                addView(record, if (rail) LayoutParams(activity.moteDp(88), activity.moteDp(58)) else LayoutParams(0, activity.moteDp(58), 1f))
-            }
-            val item = TextView(activity).apply {
-                text = MoteI18n.text(tab.titleKey); MoteUi.type(this, NativeFontRole.META); gravity = Gravity.CENTER; minHeight = activity.moteDp(58)
-                compoundDrawablePadding = activity.moteDp(5); isFocusable = true; tag = "primary:${tab.name}"
-                contentDescription = MoteI18n.text(tab.titleKey); setOnClickListener { onSelect(tab) }
-            }
-            items[tab] = item
-            addView(item, (if (rail) LayoutParams(activity.moteDp(88), -2) else LayoutParams(0, -2, 1f)).apply { marginStart = activity.moteDp(2); marginEnd = activity.moteDp(2) })
+        removeAllViews()
+        orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; isBaselineAligned = false
+        setPadding(activity.moteDp(20), activity.moteDp(14), activity.moteDp(20), activity.moteDp(16))
+        MoteUi.backgroundColor(this, NativeColorRole.BACKGROUND)
+        contentDescription = MoteI18n.text("记录与提问")
+        record = TextView(activity).apply {
+            tag = "home-record-action"; gravity = Gravity.CENTER; minHeight = activity.moteDp(53)
+            setPadding(activity.moteDp(18), 0, activity.moteDp(18), 0)
+            MoteUi.type(this, NativeFontRole.ACTION, medium = true)
+            MoteUi.textColor(this, NativeColorRole.BACKGROUND)
+            background = MoteUi.clickable(activity, NativeColorRole.ACCENT, 10, false)
+            isFocusable = true; setOnClickListener { activity.openRecordEditor() }
         }
-        select(selected)
-    }
-    fun select(tab: MotePrimaryTab) {
-        selected = tab
-        items.forEach { (destination, view) ->
-            val active = destination == tab
-            view.isSelected = active; view.setTextColor(if (active) MoteUi.accent else MoteUi.muted)
-            view.background = MoteUi.clickable(activity, NativeColorRole.SIDEBAR, outline = false)
-            view.setCompoundDrawablesWithIntrinsicBounds(null, MoteNavigationIndicator(activity, destination.icon, active), null, null)
+        addView(record, LayoutParams(-2, -2).apply { marginEnd = activity.moteDp(10) })
+        val ask = LinearLayout(activity).apply {
+            tag = "home-ask-action"; gravity = Gravity.CENTER_VERTICAL; minimumHeight = activity.moteDp(53)
+            setPadding(activity.moteDp(15), 0, activity.moteDp(15), 0)
+            background = MoteUi.clickable(activity, NativeColorRole.SURFACE, 10, true, NativeColorRole.BORDER)
+            contentDescription = MoteI18n.text("问一问"); isFocusable = true
+            setOnClickListener { onSelect(MotePrimaryTab.ASK) }
         }
+        ask.addView(TextView(activity).apply { text = MoteI18n.text("问一问…"); MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this, NativeColorRole.MUTED) }, LayoutParams(0, -2, 1f))
+        ask.addView(TextView(activity).apply { text = "↗"; textSize = 17f; MoteUi.textColor(this, NativeColorRole.ACCENT) })
+        addView(ask, LayoutParams(0, -2, 1f))
+        updateDraft(hasDraft); select(selected)
     }
+    fun updateDraft(value: Boolean) {
+        hasDraft = value
+        record.text = "✎  " + MoteI18n.text(if (value) "继续草稿" else "记录")
+        record.contentDescription = MoteI18n.text(if (value) "继续草稿" else "记录")
+    }
+    fun select(tab: MotePrimaryTab) { selected = tab; visibility = if (tab == MotePrimaryTab.HOME) VISIBLE else GONE }
 }
 
 /** The selected destination is indicated at its icon; the entire item remains one touch target. */
@@ -347,16 +356,19 @@ private fun Activity.detailTab(): MotePrimaryTab? = when (this) {
     else -> MotePrimaryTab.LIBRARY
 }
 
-fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: String? = null, onBack: () -> Unit = { finish() }): LinearLayout {
+fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: String? = null, headerAction: View? = null, onBack: () -> Unit = { finish() }): LinearLayout =
+    moteDetailPageContent(primary,title,headerAction,onBack) { body->ScrollView(this).apply { isFillViewport=true;addView(body) } }
+
+internal fun Activity.moteDetailPageContent(primary: MotePrimaryTab? = detailTab(), title: String? = null, headerAction: View? = null, onBack: () -> Unit = { finish() }, buildContent:(LinearLayout)->View): LinearLayout {
     val body = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(moteDp(MoteTheme.spacePage), moteDp(MoteTheme.spaceItem), moteDp(MoteTheme.spacePage), moteDp(MoteTheme.spaceGroup))
     }
     val root = NativeAppShell(this).apply { moteInsets() }
-    val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+    val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; minimumHeight = moteDp(66) }
     header.addView(TextView(this).apply {
         text = if (title == null) "‹  " + MoteI18n.text("返回上级") else "‹"
-        MoteUi.type(this, NativeFontRole.ACTION); MoteUi.textColor(this, NativeColorRole.ACCENT)
+        MoteUi.type(this, NativeFontRole.ACTION); MoteUi.textColor(this, NativeColorRole.MUTED)
         gravity = Gravity.CENTER_VERTICAL; minHeight = moteDp(48)
         setPadding(moteDp(16), moteDp(4), moteDp(16), moteDp(4))
         contentDescription = MoteI18n.text("返回上一页"); isFocusable = true; setOnClickListener { onBack() }
@@ -365,16 +377,10 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: Strin
         text = title; tag = "detail-title"; MoteUi.type(this, NativeFontRole.APPBAR, medium = true); MoteUi.textColor(this, NativeColorRole.INK)
         setPadding(0, moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spaceInline))
     }, LinearLayout.LayoutParams(0, -2, 1f))
-    // Content and source tasks share Add; maintenance pages keep their configuration duty.
-    val allowsAdd = this is CaptureRecordsActivity || this is FileContentActivity || this is FileTaskActivity || this is SourcesActivity
-    if (primary != null && allowsAdd) header.addView(MoteUi.button(Button(this).apply {
-        tag = "detail-add-action"
-        text = MoteI18n.text("记下"); contentDescription = MoteI18n.text("记下")
-        setOnClickListener { openRecordEditor() }
-    }), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(14) })
+    headerAction?.let { header.addView(it, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(20) }) }
     root.header(header)
-    root.content(ScrollView(this).apply { isFillViewport = true; addView(body) })
-    if (primary != null) root.navigation(MotePrimaryNavigation(this) { openMotePrimary(it) }.apply { select(primary) })
+    root.header(View(this).apply { MoteUi.backgroundColor(this, NativeColorRole.DIVIDER); layoutParams = LinearLayout.LayoutParams(-1, moteDp(1)) })
+    root.content(buildContent(body))
     setContentView(root)
     return body
 }

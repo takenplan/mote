@@ -42,10 +42,12 @@ class SourcesEntryInstrumentedTest {
             settings.save(previous.copy(server = "", token = ""), confirmCentralEndpoint = true)
             action()
         } finally {
-            assertEquals("Cancellation must never create a source", sourceIds, context.localSources().sources().map { it.id })
+            val after = context.localSources().sources().map { it.id }
+            after.filterNot { it in sourceIds }.forEach { context.localSources().remove(it); context.fileArchives().remove(it) }
             draftFiles.forEach { it.delete() }
             settings.save(previous, confirmCentralEndpoint = true)
             MoteI18n.select(context, language)
+            assertEquals("Cancellation must never create a source", sourceIds, after)
         }
     }
     private fun pickerMonitor(tree: Boolean): Instrumentation.ActivityMonitor {
@@ -73,19 +75,38 @@ class SourcesEntryInstrumentedTest {
         }
         return requireNotNull(recreated) { "The source page must resume after recreation" }
     }
+    private fun awaitFileTaskReady(activity: FileTaskActivity) {
+        val deadline = SystemClock.elapsedRealtime() + 10_000
+        var ready = false
+        while (!ready && SystemClock.elapsedRealtime() < deadline) {
+            instrumentation.runOnMainSync { ready = views(activity.window.decorView).any { it.tag == "file-task:description" && it.isShown } }
+            if (!ready) Thread.sleep(25)
+        }
+        assertTrue("The actual file form must finish reading its draft", ready)
+    }
     private fun fileEntry(useAddMenu: Boolean, folder: Boolean = false) = fixture {
         val picker = pickerMonitor(folder)
         val sources = instrumentation.addMonitor(FileTaskActivity::class.java.name, null, false)
         var current: FileTaskActivity? = null
         try {
-            ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
+            ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java).apply { if (!useAddMenu) putExtra("page", "SOURCES") }).awaitMainUi().use { scenario ->
+                if (!useAddMenu) {
+                    val target = "menu:" + MoteI18n.text(if (folder) "同步文件夹" else "导入文件")
+                    val deadline = SystemClock.elapsedRealtime() + 10_000; var ready = false
+                    while (!ready && SystemClock.elapsedRealtime() < deadline) {
+                        scenario.onActivity { ready = views(it.window.decorView).any { view -> view.tag == target && view.isShown } }
+                        if (!ready) Thread.sleep(25)
+                    }
+                    assertTrue("The source destination must finish rendering before selecting an entry", ready)
+                }
                 scenario.onActivity { activity ->
                     if (useAddMenu) activity.openGeneratedAdd(if (folder) MoteAddAction.FOLDER else MoteAddAction.FILE)
-                    else views(activity.window.decorView).single { it.tag == if (folder) "add:FOLDER" else "add:FILE" }.performClick()
+                    else views(activity.window.decorView).single { it.tag == "menu:" + MoteI18n.text(if (folder) "同步文件夹" else "导入文件") }.performClick()
                 }
                 current = instrumentation.waitForMonitorWithTimeout(sources, 10_000) as? FileTaskActivity
                 assertNotNull("The actual file entry must open the source page", current)
                 instrumentation.waitForIdleSync()
+                awaitFileTaskReady(current!!)
                 assertEquals("Entering the page must not open a file picker", 0, picker.hits)
                 instrumentation.runOnMainSync {
                     (views(current!!.window.decorView).single { it.tag == "file-task:description" } as android.widget.EditText).setText("Generated call recording background")
@@ -93,6 +114,7 @@ class SourcesEntryInstrumentedTest {
                 }
                 current = recreate(current!!)
                 instrumentation.waitForIdleSync()
+                awaitFileTaskReady(current!!)
                 assertEquals("Recreating the page before selection must not open a picker", 0, picker.hits)
                 instrumentation.runOnMainSync {
                     assertEquals("Generated call recording background", (views(current!!.window.decorView).single { it.tag == "file-task:description" } as android.widget.EditText).text.toString())
@@ -103,10 +125,12 @@ class SourcesEntryInstrumentedTest {
                         .single { it.tag == "file-task:pick" }.performClick()
                 }
                 instrumentation.waitForIdleSync()
+                awaitFileTaskReady(current!!)
                 assertEquals("An explicit file action opens the picker once", 1, picker.hits)
                 assertFalse("Cancelling the picker keeps the source page open", current!!.isFinishing)
                 current = recreate(current!!)
                 instrumentation.waitForIdleSync()
+                awaitFileTaskReady(current!!)
                 assertEquals("Cancelling and recreating must not reopen the picker", 1, picker.hits)
                 instrumentation.runOnMainSync { current!!.finish() }
                 current = null
@@ -118,10 +142,10 @@ class SourcesEntryInstrumentedTest {
         }
     }
 
-    @Test fun homeFileEntryWaitsForSelectionAndDoesNotReopenAfterCancelOrRecreation() = fileEntry(false)
+    @Test fun sourcesFileEntryWaitsForSelectionAndDoesNotReopenAfterCancelOrRecreation() = fileEntry(false)
     @Test fun sharedAddFileEntryWaitsForSelectionAndDoesNotReopenAfterCancelOrRecreation() = fileEntry(true)
 
-    @Test fun homeFolderEntryWaitsForSelectionAndKeepsDescriptionAndAudioPreset() = fileEntry(false, folder = true)
+    @Test fun sourcesFolderEntryWaitsForSelectionAndKeepsDescriptionAndAudioPreset() = fileEntry(false, folder = true)
     @Test fun sharedAddFolderEntryWaitsForSelectionAndKeepsDescriptionAndAudioPreset() = fileEntry(true, folder = true)
     @Test fun actualSystemPickersOpenOnlyOnSelectionAndCancellationKeepsTheTaskDraft() = fixture {
         for (mode in listOf("FILE", "FOLDER")) {
@@ -237,12 +261,14 @@ class SourcesEntryInstrumentedTest {
             retention = "archive", extensions = "txt", excluded = "private/*", intervalMinutes = 127, maxFileMiB = 23, allowRead = true,
             centralProcessingConsent = true, syncContinuously = false, description = "Earlier generated background", contextDirty = true)
         val store = context.localSources(); val queue = context.fileArchives(); val bytes = "Generated immutable pending content".toByteArray()
-        store.save(old)
+        val preparing = old.copy(enabled = true)
+        try {
+        store.save(preparing)
         val item = org.json.JSONObject().put("externalId", old.uri).put("uri", old.uri).put("title", "task-file.txt").put("kind", "file").put("layer", "original").put("text", "")
             .put("mimeType", "text/plain").put("observedAt", "2026-10-12T00:00:00Z").put("metadata", org.json.JSONObject().put("version", 1).put("file", org.json.JSONObject().put("sizeBytes", bytes.size)))
-        queue.observe(old, item, queue.configure(old).getString("generation"), 0)
-        val pending = queue.prepare(old, { java.io.ByteArrayInputStream(bytes) }, { true }, captureImmediately = true)!!.toString()
-        try {
+        queue.observe(preparing, item, queue.configure(preparing).getString("generation"), 0)
+        val pending = queue.prepare(preparing, { java.io.ByteArrayInputStream(bytes) }, { true }, captureImmediately = true)!!.toString()
+        store.save(old) // Pausing keeps the already captured immutable bytes for later retry.
             ActivityScenario.launch<FileTaskActivity>(Intent(context, FileTaskActivity::class.java).putExtra("sourceId", old.id)).use { scenario ->
                 val deadline = SystemClock.elapsedRealtime() + 10000
                 var ready = false
@@ -356,4 +382,27 @@ class SourcesEntryInstrumentedTest {
             }
         }
     }
+    @Test fun invalidFileAndFolderScopeSettingsStayEditableInBothAppearances() = fixture {
+        val store=context.localSources()
+        for(folder in listOf(false,true)) {
+            val source=LocalSource(name="Generated validation scope",kind="local-files",uri="content://generated/validation.txt",tree=folder,enabled=false,centralProcessingConsent=true)
+            store.save(source)
+            try { ActivityScenario.launch<FileTaskActivity>(Intent(context,FileTaskActivity::class.java).putExtra("sourceId",source.id)).use { scenario ->
+                var activity:FileTaskActivity?=null;scenario.onActivity { activity=it };awaitFileTaskReady(activity!!)
+                scenario.onActivity { a -> if(!views(a.window.decorView).single { it.tag=="file-task:maximum" }.isShown)views(a.window.decorView).single { it.tag=="file-task:advanced" }.performClick();(views(a.window.decorView).single { it.tag=="file-task:maximum" } as EditText).setText("0");views(a.window.decorView).single { it.tag=="file-task:confirm" }.performClick() }
+                instrumentation.waitForIdleSync();assertEquals(source,store.sources().single { it.id==source.id })
+                for(theme in listOf(AppearancePreference.LIGHT,AppearancePreference.DARK)) {
+                    scenario.onActivity { MoteAppearance.select(context,theme) };instrumentation.waitForIdleSync()
+                    scenario.onActivity { a -> val field=views(a.window.decorView).single { it.tag=="file-task:maximum" } as EditText;assertNotNull(field.error);field.requestRectangleOnScreen(android.graphics.Rect(0,0,field.width,field.height+80),true) }
+                    val frame=java.util.concurrent.CountDownLatch(1);scenario.onActivity { a -> a.window.decorView.postOnAnimation { a.window.decorView.postOnAnimation { frame.countDown() } } };assertTrue(frame.await(5,java.util.concurrent.TimeUnit.SECONDS))
+                    scenario.onActivity { a ->
+                        val root=a.window.decorView;val bitmap=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888);root.draw(android.graphics.Canvas(bitmap))
+                        java.io.File(context.filesDir,"source-scope-final").apply{mkdirs()}.resolve((if(folder)"folder" else "file")+"-invalid-"+theme.value+".png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle()
+                        assertEquals("0",(views(root).single { it.tag=="file-task:maximum" } as EditText).text.toString());assertTrue(views(root).single { it.tag=="file-task:confirm" }.isEnabled)
+                    }
+                }
+            } } finally { store.remove(source.id);context.fileArchives().remove(source.id);instrumentation.runOnMainSync { MoteAppearance.select(context,AppearancePreference.LIGHT) } }
+        }
+    }
+
 }

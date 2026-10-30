@@ -56,7 +56,7 @@ class AppearanceInstrumentedTest {
     private fun screenshot(activity:Activity,name:String) {
         val view=activity.window.decorView
         val bitmap=Bitmap.createBitmap(view.width,view.height,Bitmap.Config.ARGB_8888)
-        try { view.draw(Canvas(bitmap)); File(context.getExternalFilesDir(null),"appearance/$name.png").apply { parentFile!!.mkdirs();outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) } } }
+        try { view.draw(Canvas(bitmap)); File(context.filesDir,"appearance/$name.png").apply { parentFile!!.mkdirs();outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) } } }
         finally { bitmap.recycle() }
     }
     @Test fun sixSelectionOsPairsColdActivityRecreationAndNativeChrome() {
@@ -158,4 +158,31 @@ class AppearanceInstrumentedTest {
             }
         }
     }
+    @Test fun darkActualFormFieldsKeepSurfaceInkFocusDisabledAndDraftAcrossAppearanceChanges() {
+        val before=Settings(context).read()
+        for(page in listOf("CONNECTION","PREVIEW","DIAGNOSTICS")) {
+            instrumentation.runOnMainSync { MoteAppearance.select(context,AppearancePreference.LIGHT) }
+            ActivityScenario.launch<Activity>(Intent(context,if(page=="PREVIEW")CompressionPreviewActivity::class.java else MainActivity::class.java).putExtra("page",page)).use { scenario ->
+                if(page=="CONNECTION") {
+                    waitFor("Actual connection disclosure ready"){var ready=false;scenario.onActivity { ready=visible(it).any { view->view.tag=="connection-settings-toggle" } };ready}
+                    scenario.onActivity { a->visible(a).single { it.tag=="connection-settings-toggle" }.performClick() }
+                }
+                waitFor("Actual $page fields ready"){var ready=false;scenario.onActivity { ready=visible(it).filterIsInstance<EditText>().any{field->field.isEnabled && field.isFocusable && field.keyListener!=null} };ready}
+                lateinit var field:EditText;var originalText="";scenario.onActivity { a->field=visible(a).filterIsInstance<EditText>().first{it.isEnabled && it.isFocusable && it.keyListener!=null};originalText=field.text.toString();assertTrue("Editable $page field must accept focus before switching",field.requestFocus());field.setSelection(0,field.text.length);MoteAppearance.select(context,AppearancePreference.DARK) }
+                instrumentation.waitForIdleSync();val frame=java.util.concurrent.CountDownLatch(1);scenario.onActivity { a->a.window.decorView.postOnAnimation{a.window.decorView.postOnAnimation{frame.countDown()}} };assertTrue(frame.await(5,java.util.concurrent.TimeUnit.SECONDS))
+                scenario.onActivity { a->
+                    assertTrue(field.hasFocus());assertEquals(originalText,field.text.toString());assertEquals(0,field.selectionStart);assertEquals(originalText.length,field.selectionEnd)
+                    assertEquals(MoteTheme.ink,field.currentTextColor);assertEquals(NativeColorRole.SURFACE.color(),(field.background.current as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
+                    screenshot(a,page+"-dark-focused");field.isEnabled=false
+                    assertEquals(MoteTheme.muted,field.currentTextColor);assertEquals(NativeColorRole.BACKGROUND.color(),(field.background.current as android.graphics.drawable.GradientDrawable).color!!.defaultColor);screenshot(a,page+"-dark-disabled")
+                    field.isEnabled=true;field.requestFocus();MoteAppearance.select(context,AppearancePreference.LIGHT)
+                }
+                instrumentation.waitForIdleSync();scenario.onActivity { assertEquals(originalText,field.text.toString());assertEquals(NativeColorRole.SURFACE.color(),(field.background.current as android.graphics.drawable.GradientDrawable).color!!.defaultColor);assertTrue(field.isEnabled) }
+            }
+        }
+        instrumentation.runOnMainSync { MoteAppearance.select(context,AppearancePreference.DARK) }
+        ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java).putExtra("page","PROCESSING")).awaitMainUi().use { scenario ->scenario.onActivity { a->visible(a).filterIsInstance<EditText>().forEach { field->assertEquals(NativeColorRole.SURFACE.color(),(field.background.current as android.graphics.drawable.GradientDrawable).color!!.defaultColor) };screenshot(a,"PROCESSING-dark-presets") } }
+        assertEquals(before,Settings(context).read());assertEquals(0,context.queue().depth())
+    }
+
 }

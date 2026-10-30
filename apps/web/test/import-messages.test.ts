@@ -1,0 +1,18 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {configureLocale} from '@mote/shared/i18n';import type {ImportJob} from '@mote/shared';import {importReviewMessage,importHostDiagnostics} from '../src/import-messages';
+configureLocale(()=> 'zh-CN');
+const fallbacks=['This import was requested for manual preview.','The parser did not provide a confidence and ambiguity assessment.','The parser reported low confidence or ambiguity.','The parser did not explain its high-confidence assessment.','Processing reported warnings; review the preview before publishing.','The parser did not account for every original file.','Some originals were not parsed as evidence.','The parsed records passed host validation with high confidence and no ambiguity.','The analysis did not provide a per-file disposition list. Unlisted files must not be assumed to have been parsed.'];
+const job=(extra:Partial<ImportJob>={}):ImportJob=>({id:'generated',name:'Generated',sourceId:'generated',instruction:'',status:'awaiting_confirmation',processingStatus:'preview_ready',createdAt:'2026-10-30T00:00:00Z',updatedAt:'2026-10-30T00:00:00Z',files:[],summary:'',warnings:[],archive:{files:0,bytes:0,expandedFiles:0},progress:{total:0,processed:0,imported:0,duplicates:0},captureIds:[],...extra});
+test('every exact host sentence remains literal when supplied as a low or ambiguous public decision reason',()=>{
+ for(const reason of fallbacks)for(const decision of [{confidence:'low' as const,ambiguous:false,reason},{confidence:'high' as const,ambiguous:true,reason}]){
+  const value=job({reviewDecision:decision,reviewGate:{decision:'confirmation',reason},warnings:[fallbacks[8]]});const before=structuredClone(value);
+  assert.equal(importReviewMessage(value),reason);assert.deepEqual(importHostDiagnostics(value),[]);assert.deepEqual(value,before);
+ }
+});
+test('only proven public host gate branches are localized; manual, warnings and incomplete facts are not guessed',()=>{
+ const high={confidence:'high' as const,ambiguous:false,reason:'Literal parser assessment'},parsed={counts:{parsed:1,attachment:0,container:0,excluded:0,unsupported:0},items:[{fileId:'generated',path:'generated.custom',status:'parsed' as const,reason:'Literal disposition'}]};
+ const files=[{id:'generated',hash:'a'.repeat(64),name:'generated.custom',relativePath:'generated.custom',mimeType:'text/plain',sizeBytes:1,createdAt:'2026-10-30T00:00:00Z'}];
+ const cases:[number,Partial<ImportJob>][]=[[1,{}],[2,{reviewDecision:{confidence:'low',ambiguous:false}}],[3,{reviewDecision:{confidence:'high',ambiguous:false}}],[4,{reviewDecision:high,warnings:['Literal warning']}],[5,{reviewDecision:high}],[6,{reviewDecision:high,files,dispositions:{...parsed,counts:{...parsed.counts,parsed:0,unsupported:1}}}],[7,{reviewDecision:high,dispositions:parsed,files}]];
+ for(const [index,extra]of cases){const value=job({...extra,reviewGate:{decision:index===7?'automatic':'confirmation',reason:fallbacks[index]}});assert.notEqual(importReviewMessage(value),fallbacks[index]);assert.match(importReviewMessage(value)!,/\p{Script=Han}/u);assert.deepEqual(importHostDiagnostics(value),[fallbacks[index]]);}
+ for(const reason of [fallbacks[0],fallbacks[8]]){const value=job({reviewGate:{decision:'confirmation',reason},reviewDecision:{...high,reason},warnings:[fallbacks[8]],dispositions:parsed});assert.equal(importReviewMessage(value),reason);assert.deepEqual(importHostDiagnostics(value),[]);}
+ for(const reason of ['  '+fallbacks[1],fallbacks[1]+' Quoted by the provider.','用户原文：'+fallbacks[1],'<script>Captured original</script>'])assert.equal(importReviewMessage(job({reviewGate:{decision:'confirmation',reason}})),reason);
+});

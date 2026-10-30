@@ -30,14 +30,14 @@ export interface QueryPreparationDependencies {
   lifecycleSettings:()=>LifecycleSettings;
   archiveReader:ContextReader;
   configured:()=>boolean;
-  authority:Pick<ReturnType<typeof createModelEvidenceAuthority>,'assert'|'contextDependencies'|'selectedQueryEvidence'>;
+  authority:Pick<ReturnType<typeof createModelEvidenceAuthority>,'assert'|'contextDependencies'|'selectedQueryEvidence'|'selectedQueryMaterial'>;
   query:(input:QueryInput)=>Promise<QueryResult>;
   qualityStrategy?:QueryQualityStrategy;
 }
 /** Prepare and pin the accepted request under its current coordinator lease. */
 export function createQueryPreparation(dependencies:QueryPreparationDependencies){
   const {store,files,conversations,delegation,executor,modelSettings,working,lifecycleSettings,archiveReader,configured,authority,query,qualityStrategy}=dependencies;
-  const {assert:assertModelEvidence,contextDependencies,selectedQueryEvidence}=authority;
+  const {assert:assertModelEvidence,contextDependencies,selectedQueryEvidence,selectedQueryMaterial}=authority;
   const queryImages=(ids:string[])=>ids.map(id=>{
     const detail=files.detail(id),version=files.version(id),mimeType=detail.item.mimeType;
     if(!detail.hasOriginal||!version.object_hash||!['image/png','image/jpeg','image/webp'].includes(mimeType??'')||detail.sizeBytes<1||detail.sizeBytes>8*1024*1024)throw new StoreError('Query attachment must be an archived image up to 8 MiB',400);
@@ -51,13 +51,15 @@ export function createQueryPreparation(dependencies:QueryPreparationDependencies
       if(saved.configurationFingerprint!==current.fingerprint)throw new StoreError('Query model configuration changed',409);
       assertModelEvidence(saved.prepared);return {...saved.prepared,signal,onProgress};
     }
-    const {conversationId,question,modelProfileId,modelOverride,evidenceIds:selectedIds,anchorEvidenceIds:anchorIds,attachmentIds=[],...selected}=queryWithAttachmentsSchema.parse(body);
+    const {conversationId,question,modelProfileId,modelOverride,evidenceIds:selectedIds,anchorEvidenceIds:anchorIds,anchorMaterialRef,attachmentIds=[],...selected}=queryWithAttachmentsSchema.parse(body);
     const previous=conversationId?conversations.get(conversationId):undefined;
     if(previous&&previous.turnCount>=200)throw new StoreError('Conversation has reached its turn limit; start a new conversation',409);
     const scope:QueryScope={};for(const key of ['after','before','deviceId','timeZone'] as const){const value=key==='timeZone'&&selected.timeZone===undefined?previous?.scope.timeZone:selected[key];if(value!==undefined&&value!==null)scope[key]=value;}
     insightSchema.parse(scope);
     if(selectedIds)scope.evidenceIds=selectedIds;
     if(anchorIds)scope.anchorEvidenceIds=anchorIds;
+    if(anchorMaterialRef)scope.anchorMaterialRef=anchorMaterialRef;
+    selectedQueryMaterial(scope,true);
     const allowedHistoryIds=new Set([...(scope.evidenceIds??[]),...attachmentIds]);
     const selectedScope=JSON.stringify([...(scope.evidenceIds??[])].sort());
     const scopedPrevious=previous&&scope.evidenceIds?{...previous,turns:previous.turns.filter(turn=>

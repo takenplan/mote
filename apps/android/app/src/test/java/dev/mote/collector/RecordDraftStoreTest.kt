@@ -15,6 +15,23 @@ class RecordDraftStoreTest {
         override fun open(bytes: ByteArray) = seal(bytes)
     }
     private fun event(draft: JSONObject) = JSONObject().put("id", UUID.randomUUID().toString()).put("source", "note").put("ocrText", draft.getString("text")).put("capturedAt", "2026-10-25T00:00:00Z").put("privacy", JSONObject().put("excluded", false).put("redacted", false).put("mode", "none"))
+    @Test fun `conversation quote presentation survives restart without changing stored source or wire`() {
+        val directory = folder.newFolder(); val store = RecordDraftStore(directory,cipher)
+        val turn = UUID.randomUUID().toString(); val original = "Question\n\n**Answer** [evidence]"
+        val origin = JSONObject().put("kind","conversation").put("text",original).put("conversationId","conversation").put("messageIds",JSONArray().put(turn))
+        val presentation = NativeConversationQuote.snapshot(original,"Question",listOf("evidence"),"conversation",turn,"https://generated.example")
+        store.edit("My comment",JSONArray(),origin,"My context",presentation)
+        val reopened = RecordDraftStore(directory,cipher); val draft = reopened.draft()
+        assertEquals("Question\n\nAnswer [1]",NativeConversationQuote.display(draft.getJSONObject("origin"),draft.getJSONObject("originPresentation")))
+        val prepared = reopened.prepare("https://generated.example") { value ->
+            event(value).put("metadata",JSONObject().put("noteOrigin",value.getJSONObject("origin")))
+        }
+        assertEquals(original,prepared.getJSONObject("metadata").getJSONObject("noteOrigin").getString("text"))
+        assertEquals(turn,prepared.getJSONObject("metadata").getJSONObject("noteOrigin").getJSONArray("messageIds").getString(0))
+        assertFalse(prepared.getJSONObject("metadata").getJSONObject("noteOrigin").has("originPresentation"))
+        reopened.finish(prepared.getString("id"))
+        assertEquals(presentation.toString(),RecordDraftStore(directory,cipher).record(prepared.getString("id"))!!.getJSONObject("originPresentation").toString())
+    }
     @Test fun historyCompletionRequiresOriginalAttachmentHashAndKeepsDraft() {
         val store=RecordDraftStore(folder.newFolder(),cipher); val bytes=byteArrayOf(1,2,3)
         val attachment=store.stage(bytes,"generated.bin","application/octet-stream")
@@ -123,6 +140,30 @@ class RecordDraftStoreTest {
         reopened.edit("Kept comment", JSONArray(), JSONObject().put("kind", "manual"))
         assertEquals(1, reopened.pendingMedia().length())
         reopened.finishMedia(media.getString("id")); assertEquals(0, reopened.pendingMedia().length())
+    }
+
+    @Test fun ownerDescriptionSurvivesRestartSeparatelyAndDoesNotMakeAnEmptyRecordSubmittable() {
+        val directory = folder.newFolder(); val store = RecordDraftStore(directory, cipher)
+        store.edit("", JSONArray(), JSONObject().put("kind", "manual"), "Only background, not a record")
+        assertThrows(IllegalArgumentException::class.java) { store.prepare("", ::event) }
+        store.edit("My comment", JSONArray(), JSONObject().put("kind", "share").put("text", "Original quote"), "The quoted words belong to another author")
+        val reopened = RecordDraftStore(directory, cipher)
+        assertEquals("My comment", reopened.draft().getString("text"))
+        assertEquals("Original quote", reopened.draft().getJSONObject("origin").getString("text"))
+        assertEquals("The quoted words belong to another author", reopened.draft().getString("description"))
+        assertFalse(directory.listFiles()!!.any { String(it.readBytes()).contains("another author") })
+    }
+    @Test fun changingDescriptionCreatesANewPreparedIdentityAndLengthFailureKeepsTheDraft() {
+        val store = RecordDraftStore(folder.newFolder(), cipher)
+        store.edit("Record", JSONArray(), JSONObject().put("kind", "manual"), "First description")
+        val first = store.prepare("", ::event)
+        store.edit("Record", JSONArray(), JSONObject().put("kind", "manual"), "Corrected description")
+        val second = store.prepare("", ::event)
+        assertNotEquals(first.getString("id"), second.getString("id"))
+        assertEquals("Record", second.getString("ocrText"))
+        assertThrows(IllegalArgumentException::class.java) { store.edit("Record", JSONArray(), JSONObject().put("kind", "manual"), "x".repeat(12001)) }
+        assertEquals("Corrected description", store.draft().getString("description"))
+        store.finish(second.getString("id")); assertEquals("", store.draft().getString("description"))
     }
 
 }

@@ -29,7 +29,13 @@ object SyncSchedule {
     internal fun inventory(context: Context) = TransportInventory(
         context.queue().pendingSync(), context.localSources().pendingSync(), context.fileArchives().pendingSync(),
     )
-    fun pending(context: Context): PendingSync = inventory(context).pending
+    fun pending(context: Context): PendingSync {
+        val pending = inventory(context).pending
+        val settings = Settings(context); val origin = settings.read().server.trimEnd('/')
+        val contexts = context.captureContexts().pending(origin, settings.deviceId, includeUnbound = settings.dataOrigin() == origin)
+        return pending.copy(pendingUpdates = pending.pendingUpdates + contexts.size,
+            oldestAt = listOfNotNull(pending.oldestAt, contexts.minOfOrNull { it.updatedAt }).minOrNull())
+    }
     // Scheduling identity binds current ingress, connection and dispatch policy.
     fun stamp(config: CollectorConfig) = SourceRules.hash(listOf(IngressV2Protocol.VERSION, config.server, config.connectionToken(), config.syncPaused, config.syncMode, config.syncIntervalMinutes, config.syncBatchSize, config.wifiOnly, config.syncChargingOnly, config.syncBatteryNotLow).joinToString("\u0000"))
     fun delay(context: Context, config: CollectorConfig, explicit: Boolean = false): Long? {

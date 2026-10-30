@@ -7,6 +7,24 @@ import org.junit.Test
 import java.util.UUID
 
 class NativeAskEvidenceScopeTest {
+    private val material="material:mat_"+"a".repeat(64)+"@"+"b".repeat(64)
+    @Test fun `exact whole material remains one selection across history and explicit clear`() {
+        val state=JSONObject().put("question","Generated private later question").put("attachments",JSONArray().put(JSONObject().put("id",UUID.randomUUID().toString())))
+        assertTrue(NativeAskEvidenceScope.selectMaterial(state,material))
+        val input=JSONObject();NativeAskEvidenceScope.writeInput(state,input)
+        assertEquals(material,input.getString("anchorMaterialRef"));assertTrue(input.isNull("evidenceIds"));assertTrue(input.isNull("anchorEvidenceIds"))
+        val restored=JSONObject();NativeAskEvidenceScope.restore(restored,JSONObject().put("scope",input));assertEquals(material,NativeAskEvidenceScope.material(restored))
+        val question=state.getString("question");val attachments=state.getJSONArray("attachments").toString()
+        assertTrue(NativeAskEvidenceScope.clear(state));NativeAskEvidenceScope.restore(state,JSONObject().put("scope",input))
+        assertNull(NativeAskEvidenceScope.material(state));assertTrue(state.isNull("anchorMaterialRef"));assertEquals(question,state.getString("question"));assertEquals(attachments,state.getJSONArray("attachments").toString())
+    }
+    @Test fun `material and UUID selections replace one another but cannot rewrite an uncertain request`() {
+        val state=JSONObject();val id=UUID.randomUUID().toString()
+        NativeAskEvidenceScope.select(state,id);NativeAskEvidenceScope.selectMaterial(state,material);assertTrue(state.isNull("anchorEvidenceIds"))
+        val input=JSONObject();NativeAskEvidenceScope.writeInput(state,input);state.put("pending",JSONObject().put("input",input))
+        val before=state.toString();assertFalse(NativeAskEvidenceScope.select(state,id));assertFalse(NativeAskEvidenceScope.clear(state));assertTrue(NativeAskEvidenceScope.selectMaterial(state,material));assertEquals(before,state.toString())
+        state.remove("pending");NativeAskEvidenceScope.selectOnly(state,id);assertTrue(state.isNull("anchorMaterialRef"));assertEquals(id,state.getJSONArray("evidenceIds").getString(0))
+    }
     @Test fun `record navigation cannot alter retryable question or accepted scope`() {
         val first = UUID.randomUUID().toString(); val other = UUID.randomUUID().toString()
         val pending = JSONObject().put("id", UUID.randomUUID().toString()).put("input", JSONObject().put("question", "Generated exact question").put("evidenceIds", JSONArray().put(first)))

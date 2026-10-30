@@ -13,11 +13,12 @@ export function progressLabel(e:QueryRun['events'][number]):string {
   if(e.stage==='tool')return `${tools[e.tool??'']??moteText("读取资料")}${e.phase==='started'?moteText(" · 正在执行"):moteText(" · 返回 {0} 项", e.count??0)}`;
   return {starting:moteText("准备只读查询"),model:moteText("模型正在分析{0}，决定下一步检索或组织回答", e.step!==undefined?moteText(" · 第 {0} 步", e.step+1):''),validating:moteText("校验回答格式和证据引用")}[e.stage];
 }
-export function QueryProgress({run,error,api}:{run:QueryRun;error:string;api?:Api}) {
+export function QueryProgress({run,error,api,compact=false}:{run:QueryRun;error:string;api?:Api;compact?:boolean}) {
   const work=api?<QueryWork api={api} run={run}/>:<WorkProgress progress={queryWorkProgress(run.events,run.status==='completed')}/>;
   const [now,setNow]=useState(Date.now());
   useEffect(()=>{if(run.status!=='running')return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[run.status]);
   const seconds=Math.max(0,Math.floor(((run.status==='running'?now:Date.parse(run.updatedAt))-Date.parse(run.createdAt))/1000));
+  if(compact)return <section className="query-progress-compact" aria-label={moteText('对话执行进度')}><p role={run.status==='failed'?'alert':'status'}>{run.status==='running'?moteText('正在回答'):run.status==='cancelled'?moteText('已停止'):failureMessage(run.execution?.failure??run.error)}<time>{seconds} {moteText('秒')}</time></p>{error&&<p role="alert">{error} {moteText('正在自动重新连接；请勿重复发送。')}</p>}<details><summary>{moteText('运行详情')}</summary>{work}<ol className="query-steps">{run.events.map((e,i)=><li key={e.at+'-'+i}><span>{progressLabel(e)}</span></li>)}</ol></details></section>;
   return <section className="panel query-progress" aria-label={moteText("对话执行进度")}><div className="section-heading"><h3>{run.status==='running'?<LoaderCircle size={18} className="spin"/>:run.status==='completed'?<CheckCircle2 size={18}/>:<AlertCircle size={18}/>} {run.status==='running'?moteText("正在处理"):run.status==='completed'?moteText("回答已归档"):moteText("此次未完成")}</h3><span className="badge muted">{Math.floor(seconds/60)}{' '}{moteText("分")}{' '}{seconds%60}{' '}{moteText("秒")}</span></div>
     <p role={run.status==='failed'?'alert':'status'}>{run.status==='running'?(run.events.length?progressLabel({...run.events.at(-1)!,step:undefined}):moteText("正在启动 Agent…")):run.status==='cancelled'?moteText("已停止"):(run.execution?.failure||run.error)?failureMessage(run.execution?.failure??run.error):moteText("可继续提问。")}</p>
     {run.status==='running'&&<p className="fine-print">{moteText("可以切换页面或刷新，中央节点会继续执行。")}</p>}

@@ -62,3 +62,40 @@ test('deleted and superseded action inputs do not leave global failure alerts or
  f.store.delete(other.id);assert.equal(f.actions.progress().error,null,'retained superseded evidence is information, not a current failure');
  assert.ok(f.store.db.prepare('SELECT 1 FROM captures WHERE id=?').get(stale.id));
 });
+
+for(const outcome of ['ready','changed','blocked'] as const)test(`action dependency ${outcome} preserves waiting, original validity and blocked retry boundaries`,async t=>{
+ const {buildApp}=await import('../src/app.js'),directory=mkdtempSync(join(tmpdir(),'mote-action-semantic-wait-')),entered=deferred(),release=deferred();
+ let semanticCalls=0,actionCalls=0,node:Awaited<ReturnType<typeof buildApp>>;
+ node=await buildApp({dataDir:directory,token:'generated-owner',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:10000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture-model',modelBaseUrl:'https://synthetic.invalid',apiKey:'generated',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async input=>{
+  if(node.executor.get(input.traceContext!.jobId!)?.kind==='context-dag.semantic'){
+   semanticCalls++;entered.resolve();await release.promise;
+   if(outcome==='blocked')throw new ProviderFailure({category:'blocked',code:'provider_quota'});
+   const id=input.evidenceIds![0];return {...empty(),answer:JSON.stringify({summary:'Generated appointment',evidence:[{id,quote:text}],events:[],memoryCandidates:[],actionCues:[{kind:'calendar.create',event,uncertainty:'proposed',evidence:[{id,quote:text}]}]}),citations:[{id,capturedAt:'2026-01-01T00:00:00Z',appName:'Generated',excerpt:text}]};
+  }
+  assert.equal(input.skill,'calendar-extraction');actionCalls++;return answer(input.evidenceIds![0]);
+ }}});
+ t.after(async()=>{release.resolve();await node.app.close();rmSync(directory,{recursive:true,force:true});});await authorizeFixtureModels(node);
+ node.sources.register({id:'fixture',kind:'custom',name:'Generated',deviceId:'fixture',platform:'import'});
+ const record=await node.sources.upsert('fixture',{externalId:'one',revision:'1',observedAt:'2026-01-01T00:00:00Z',kind:'message',layer:'original',text});
+ await node.actions.saveSettings({revision:node.configService.revision,authorizationRevision:node.actions.authorizationRevision(),settings:{enabled:true,timeZone:'UTC',reviewDeviceIds:[]}});
+ node.store.archive.aggregate(32);
+ const segment=node.store.db.prepare("SELECT a.id FROM context_artifacts a JOIN artifact_inputs i ON i.artifact_id=a.id WHERE i.observation_id=? AND a.kind='segment' AND json_extract(a.json,'$.metadata.complete')=1").get(record.id)!;
+ const semantic=node.workflows.enqueue([{name:'semantic',processor:'mote.segment-understanding',inputs:[],artifactInputs:[{id:String(segment.id),revision:node.store.archive.revision(String(segment.id))!}],config:{artifactId:String(segment.id),modelFingerprint:node.featureServices.semanticSelection().fingerprint}}]).semantic;
+ const running=node.workflows.tick();await entered.promise;
+ await node.actions.tick();
+ const original=node.store.db.prepare("SELECT id,operation_id,state,error,available_at FROM execution_steps WHERE kind='actions.extract'").get()!;
+ assert.equal(original.state,'waiting','A live semantic dependency is not changed evidence');assert.equal(actionCalls,0);assert.equal(node.actions.list().length,0);
+ if(outcome==='changed')await node.sources.upsert('fixture',{externalId:'one',revision:'2',observedAt:'2026-01-02T00:00:00Z',kind:'message',layer:'original',text:'Generated changed appointment original.'});
+ release.resolve();await running;
+ assert.equal(node.executor.get(semantic)!.state,outcome==='blocked'?'blocked':outcome==='changed'?'stale':'succeeded');
+ // Let the existing bounded dependency wait expire; do not retry or rewrite its durable state.
+ await new Promise(resolve=>setTimeout(resolve,Math.max(0,Number(original.available_at)-Date.now()+20)));
+ if(outcome==='changed')await node.executor.drain([String(original.id)]);else await node.actions.tick();
+ const settled=node.executor.get(String(original.id))!;
+ assert.equal(settled.operationId,original.operation_id);assert.equal(settled.state,outcome==='ready'?'succeeded':outcome==='changed'?'stale':'blocked');
+ if(outcome==='changed')assert.equal(settled.error,'input_changed','The original validity guard still rejects changed evidence before execution');
+ if(outcome==='blocked')assert.equal(settled.error,'semantic_processing_blocked');
+ assert.equal(semanticCalls,1);assert.equal(actionCalls,outcome==='ready'?1:0);assert.equal(node.actions.list().length,outcome==='ready'?1:0);
+ for(let tick=0;tick<2;tick++){if(outcome==='changed')await node.executor.drain([String(original.id)]);else await node.actions.tick();}
+ assert.equal(semanticCalls,1);assert.equal(actionCalls,outcome==='ready'?1:0);assert.equal(node.actions.list().length,outcome==='ready'?1:0);assert.equal(node.executor.get(String(original.id))!.state,settled.state);
+});

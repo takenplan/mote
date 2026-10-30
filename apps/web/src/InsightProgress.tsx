@@ -8,12 +8,12 @@ const stages={starting:moteText("正在准备回顾"),model:moteText("模型正�
 export function InsightProgress({run,pollError,elapsed,onRetry,onResume,onCancel,cancelling=false}:{onCancel?:()=>void;cancelling?:boolean;run:InsightRun;pollError:string;elapsed:number;onRetry:()=>void;onResume:()=>void}){
   const running=run.status==='running';
   return <section className="panel insight-progress" aria-label={moteText("回顾运行状态")}><div className="section-heading"><div className="progress-title">{running?<LoaderCircle className="spin" size={20}/>:run.status==='completed'?<CheckCircle2 size={20}/>:<AlertCircle size={20}/>}<h2>{running?stages[run.events.at(-1)?.stage??'starting']:run.status==='completed'?moteText("回顾已完成"):run.status==='cancelled'?moteText("回顾已取消"):moteText("回顾未完成")}</h2></div><span className="badge muted">{Math.floor(elapsed/60)}{' '}{moteText("分")}{' '}{elapsed%60}{' '}{moteText("秒")}</span></div>
-    <p role="status">{running?moteText("可离开或刷新页面，回来后仍能查看进度。"):run.status==='cancelled'?moteText("本次回顾已停止，不会继续生成报告。原始资料仍保留。"):(run.execution?.failure||run.error)?failureMessage(run.execution?.failure??run.error):moteText("报告已归档，可在洞察历史中查看。")}</p>
+    <p role="status">{running?moteText("可离开或刷新页面，回来后仍能查看进度。"):run.status==='cancelled'?moteText("本次回顾已停止，不会继续生成报告。原始资料仍保留。"):(run.execution?.failure||run.error)?failureMessage(run.execution?.failure??run.error):moteText("报告已归档，可在发现历史中查看。")}</p>
     <p className="field-note">{run.scope.after?moteText("范围：{0}{1}", dateTime(run.scope.after), run.scope.before?' — '+dateTime(run.scope.before):moteText(" 至现在")):moteText("范围：全部已归档资料")}{' '}{moteText("· 最后更新")}{' '}{dateTime(run.updatedAt)}</p>
     {pollError&&<div className="error-banner" role="alert">{moteText("进度连接暂时中断：")}{pollError}{moteText("。服务器可能仍在运行，正在自动重连。")}<button type="button" className="button" onClick={onResume}>{moteText("重新连接")}</button></div>}
     <ol className="insight-steps">{run.events.map((event,index)=><li key={index}><Clock3 size={14}/><time>{new Date(event.at).toLocaleTimeString(getLocale())}</time><span>{event.stage==='tool'?`${tools[event.tool??'']??event.tool??moteText("读取资料")}${event.phase==='started'?moteText(" · 正在执行"):moteText(" · 返回 {0} 项", event.count??0)}`:stages[event.stage]}</span></li>)}</ol>
     {running&&onCancel&&<button type="button" className="button secondary" disabled={cancelling} onClick={onCancel}>{cancelling?moteText("正在取消…"):moteText("取消回顾")}</button>}
-    {run.status==='failed'&&<button type="button" className="button primary" onClick={onRetry}>{moteText("调整范围后重试")}</button>}
+    {['failed','cancelled'].includes(run.status)&&<button type="button" className="button primary" onClick={onRetry}>{moteText("调整范围后重试")}</button>}
     <p className="field-note">{moteText("这里展示实际运行阶段与检索操作；报告中的结论附有可打开的原文引用。")}</p>
   </section>;
 }

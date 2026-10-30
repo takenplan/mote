@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {AskClient,type AskConversation} from '../src/ask';
-import {prependConversationTurns} from '../src/ask-conversation';
+import {currentTurnCites,prependConversationTurns} from '../src/ask-conversation';
 import {defaultConfig} from '../src/config';
 
 afterEach(()=>vi.unstubAllGlobals());
@@ -39,9 +39,35 @@ it('keeps the current snapshot scope when older turn pages are prepended',()=>{
 it('reads scope unchanged and omits selection fields when continuing the same conversation',async()=>{
  const client=new AskClient(),config={...defaultConfig(),credentialScope:'owner' as const,token:'generated-owner-token'.repeat(3)};
  const value={...page(['1'],null),scope:{evidenceIds:['generated-evidence']}};
- const fetcher=vi.fn(async()=>Response.json(value));vi.stubGlobal('fetch',fetcher);
+ const fetcher=vi.fn(async (_url:string,init?:RequestInit)=>Response.json(init?.method==='POST'?{id,status:'running',events:[]}:value));vi.stubGlobal('fetch',fetcher);
  expect((await client.request(config,'conversation',{id}) as AskConversation).scope).toEqual(value.scope);
  await client.request(config,'start',{id,conversationId:id,question:'Generated follow-up'});
  const body=JSON.parse((fetcher.mock.calls[1] as unknown as [string,RequestInit])[1].body as string);
- expect(body.input.conversationId).toBe(id);expect(body.input).not.toHaveProperty('evidenceIds');expect(body.input).not.toHaveProperty('anchorEvidenceIds');
+ expect(body.input.conversationId).toBe(id);expect(body.input).not.toHaveProperty('evidenceIds');expect(body.input).not.toHaveProperty('anchorEvidenceIds');expect(body.input).not.toHaveProperty('anchorMaterialRef');
+});
+
+
+it('checks current reference availability through the exact conversation before any archive navigation',async()=>{
+ const client=new AskClient(),config={...defaultConfig(),token:'generated-owner-token'.repeat(3)},evidenceId='22222222-2222-4222-8222-222222222222';
+ const fetcher=vi.fn(async()=>new Response(JSON.stringify({id:evidenceId,available:false})));vi.stubGlobal('fetch',fetcher);
+ expect(await client.request(config,'reference',{id:evidenceId,conversationId:id})).toEqual({id:evidenceId,available:false});
+ expect(String(fetcher.mock.calls[0][0])).toBe(config.serverUrl+'/api/conversations/'+id+'/references/'+evidenceId);
+ await expect(client.request(config,'reference',{id:evidenceId,conversationId:'../other'})).rejects.toThrow('Invalid conversation ID');
+ await expect(client.request(config,'reference',{id:'../other',conversationId:id})).rejects.toThrow('Invalid ID');expect(fetcher).toHaveBeenCalledTimes(1);
+ fetcher.mockImplementation(async()=>new Response(JSON.stringify({id:evidenceId,available:'true'})));
+ await expect(client.request(config,'reference',{id:evidenceId,conversationId:id})).rejects.toThrow('Invalid reference availability');
+});
+
+it('requires the exact historical turn to retain its citation even if another turn cites the same record',async()=>{
+ const evidence='22222222-2222-4222-8222-222222222222';
+ const citation={id:evidence,appName:'Generated',capturedAt:'2026-01-01T00:00:00Z',excerpt:'Generated'};
+ const newer={...page(['newer'],'20'),turns:[{...turn('newer'),result:{answer:'Other answer',citations:[citation]}}]};
+ const erased={...page(['older'],null),turns:[{...turn('older'),evidenceDeleted:true as const,result:{answer:'',citations:[]}}]};
+ const load=vi.fn(async(cursor?:string)=>cursor?erased:newer);
+ expect(await currentTurnCites(id,'older',evidence,load)).toBe(false);
+ expect(load.mock.calls.map(call=>call[0])).toEqual([undefined,'20']);
+ const retained={...erased,turns:[{...turn('older'),result:{answer:'Retained answer',citations:[citation]}}]};
+ expect(await currentTurnCites(id,'older',evidence,async cursor=>cursor?retained:newer)).toBe(true);
+ await expect(currentTurnCites(id,'older',evidence,async cursor=>cursor?{...retained,revision:4}:newer)).rejects.toThrow('对话状态已变化');
+ await expect(currentTurnCites(id,'missing',evidence,async()=>newer)).rejects.toThrow('对话状态已变化');
 });

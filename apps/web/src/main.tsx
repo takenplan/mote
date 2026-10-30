@@ -1,3 +1,4 @@
+import {associateChatScope,clearChatReloadDraft} from './chat-drafts';
 import {installGlobalErrorLogging,log} from './logger';
 import { ClientLoginApproval } from './ClientLoginApproval';
 import {consumeLoginTicket,loginRequestId,removeLoginParameter} from './login-handoff';
@@ -7,13 +8,12 @@ ArrowRight,
 Activity as ActivityIcon,
 Database,
 FileText,
+Plus,
 Info,
 LayoutDashboard,
 Link2,
 MessageSquare,
 Monitor,
-RefreshCw,
-Settings2,
 ShieldCheck,
 Sparkles,
 X
@@ -40,7 +40,8 @@ type Capture,
 type Connection,
 type Device,
 type Range,
-type Status
+type Status,
+type Api
 } from "./api";
 import { changeEvidenceRoute,readEvidenceRoute } from './evidence-route';
 import { FeaturePage } from './features/runtime';
@@ -55,18 +56,33 @@ import { isSettingsContext,primaryDestination,WorkspaceNavigation } from './Work
 import { readResource,resources } from './resource-cache';
 import { importQueue } from './import-queue';
 import { clearSession,persistSession,readPeriod,savePeriod,type Period,readSessionLifetime,readStoredSession,saveSessionLifetime,type SessionLifetime } from "./session";
-import { CentralStatusPill,ErrorNotice,EvidenceDialog,LoginDialog,Spinner } from './shell-components';
+import { ErrorNotice,EvidenceDialog,LoginDialog,Spinner } from './shell-components';
 import "./styles.css";
 import './workspace.css';
 import './library.css';
 import './settings-ui.css';
 import './plugin-center.css';
 import './discovery-ui.css';
-import './feature-guide.css';
 import './art-direction.css';
 import './memory-presentation.css';
 import './presentation.css';
-import { confirmNavigation } from './unsaved';
+import './final-web.css';
+import './feature-guide.css';
+import './library-final.css';
+import './recording-reader.css';
+import './device-workspace.css';
+import './agent-final.css';
+import './special-materials-final.css';
+import './activity-final.css';
+import './actions-final.css';
+import './discovery-final.css';
+import './conversation-final.css';
+import './imports-final.css';
+import {QuickNoteDialog} from './QuickNoteDialog';
+import {QuickNoteContext} from './quick-note-context';
+import {enterGuide,guideVisit} from './feature-guide-state';
+import { confirmNavigation,hasUnsavedChanges } from './unsaved';
+import {ImportNavigationContext,clearImportReturn,importOrigin,importOriginOpener,markImportReturn,refreshImportOrigin,rememberImportOrigin,type ImportOrigin} from './import-navigation';
 
 
 installGlobalErrorLogging(window);
@@ -95,28 +111,51 @@ function App() {
   const [clientLogin,setClientLogin]=useState(loginRequestId);
   const [verified, setVerified] = useState(false);
   const [showConnect, setShowConnect] = useState(false);
+  const [quickNoteApi,setQuickNoteApi]=useState<ReturnType<typeof createApi>|null>(null);
+  const closeQuickNote=useCallback(()=>setQuickNoteApi(null),[]);
   const collectionIds = () => webFeatures.collections().map(entry=>entry.id);
   const initialRoute = useRef(readWorkspaceRoute(location.hash,readPage,collectionIds()));
   const [page, setPage] = useState<Page>(initialRoute.current.page);
+  const [routeHash,setRouteHash]=useState(()=>location.hash);
   const settingsContext = isSettingsContext(page);
   const [archiveTab, updateArchiveTab] = useState<ArchiveTab>(initialRoute.current.collection);
   const archiveTabRef=useRef(archiveTab); archiveTabRef.current=archiveTab;
-  const currentHash=useRef(location.hash);
+  const currentHash=useRef(location.hash),currentHistoryState=useRef<unknown>(history.state);
+  const apiRef=useRef<Api|null>(null),preparedImport=useRef<{api:Api;origin:ImportOrigin}|undefined>(undefined),pendingImportReturn=useRef<{api:Api;origin:ImportOrigin}|undefined>(undefined),activeImportParent=useRef<{api:Api;origin:ImportOrigin}|undefined>(undefined),lastScroll=useRef(window.scrollY),allowedImportHash=useRef<string|undefined>(undefined);
   const pageRef = useRef(page); pageRef.current = page;
   useEffect(() => {
     const navigate = () => {
       const next = readWorkspaceRoute(location.hash,readPage,collectionIds());
-      if (location.hash !== currentHash.current && !confirmNavigation()) {
-        history.replaceState(null, '', currentHash.current); return;
+      const allowed=allowedImportHash.current===location.hash;allowedImportHash.current=undefined;
+      if (location.hash !== currentHash.current && !allowed && !confirmNavigation()) {
+        const owner=apiRef.current,parent=owner&&readPage(currentHash.current)==='imports'?importOrigin(owner,history.state,'moteImportParent'):undefined;
+        const before=currentHistoryState.current as {moteEvidenceParent?:unknown;moteEvidenceReturn?:unknown}|null,after=history.state as {moteEvidenceParent?:unknown;moteEvidenceReturn?:unknown}|null;
+        const evidenceBack=readEvidenceRoute(currentHash.current)&&(before?.moteEvidenceParent===location.hash||before?.moteEvidenceReturn===location.hash);
+        const evidenceForward=readEvidenceRoute(location.hash)&&(after?.moteEvidenceParent===currentHash.current||after?.moteEvidenceReturn===currentHash.current);
+        if(owner)clearImportReturn(owner);pendingImportReturn.current=undefined;preparedImport.current=undefined;
+        if(parent&&parent.hash===location.hash||evidenceBack){allowedImportHash.current=currentHash.current;history.forward();}
+        else if(evidenceForward){allowedImportHash.current=currentHash.current;history.back();}
+        else history.replaceState(currentHistoryState.current, '', currentHash.current);
+        return;
       }
+      const prepared=preparedImport.current;
+      if(next.page==='imports'&&readPage(currentHash.current)!=='imports'&&prepared?.api===apiRef.current&&prepared.origin.hash===currentHash.current)history.replaceState({...history.state,moteImportOrigin:prepared.origin.token},'',location.href);
+      preparedImport.current=undefined;
       currentHash.current=location.hash;
+      currentHistoryState.current=history.state;
+      const owner=apiRef.current,parent=owner&&importOrigin(owner,history.state,'moteImportParent');activeImportParent.current=owner&&parent?{api:owner,origin:parent}:undefined;
+      setRouteHash(location.hash);
       setClientLogin(loginRequestId());
       setPage(next.page); updateArchiveTab(next.collection);
       updateEvidenceId(readEvidenceRoute(location.hash));
     };
-    const remember=()=>{currentHash.current=location.hash;};
-    window.addEventListener('hashchange', navigate);window.addEventListener('mote:workspace-state',remember);
-    return () => {window.removeEventListener('hashchange', navigate);window.removeEventListener('mote:workspace-state',remember);};
+    const pop=()=>{const owner=apiRef.current,from=readPage(currentHash.current),next=readPage(location.hash);
+      if(owner&&from!=='imports'&&next==='imports'){const origin=importOrigin(owner,history.state,'moteImportOrigin'),active=activeImportParent.current;if(origin&&active?.api===owner&&active.origin===origin&&!hasUnsavedChanges())refreshImportOrigin(owner,origin,currentHash.current,lastScroll.current);}
+      const origin=owner&&from==='imports'?importOrigin(owner,history.state,'moteImportParent'):undefined;if(owner&&origin&&location.hash===origin.hash){pendingImportReturn.current={api:owner,origin};markImportReturn(owner,origin);}};
+    const remember=()=>{currentHash.current=location.hash;currentHistoryState.current=history.state;setRouteHash(location.hash);};
+    const scroll=()=>{lastScroll.current=window.scrollY;};
+    window.addEventListener('hashchange', navigate);window.addEventListener('popstate',pop);window.addEventListener('mote:workspace-state',remember);window.addEventListener('scroll',scroll,{passive:true});
+    return () => {window.removeEventListener('hashchange', navigate);window.removeEventListener('popstate',pop);window.removeEventListener('mote:workspace-state',remember);window.removeEventListener('scroll',scroll);};
   }, []);
   const [period, setPeriod] = useState<Period>(()=>readPeriod(connection));
   const [status, setStatus] = useState<Status | null>(null);
@@ -136,12 +175,20 @@ function App() {
   const setEvidenceId = useCallback((id:string|null) => {
     updateEvidenceId(changeEvidenceRoute(window,id));
     currentHash.current=location.hash;
+    currentHistoryState.current=history.state;
+    setRouteHash(location.hash);
+  }, []);
+  const openNestedEvidence = useCallback((id:string) => {
+    updateEvidenceId(changeEvidenceRoute(window,id,{returnToCurrent:true}));
+    currentHash.current=location.hash;
+    currentHistoryState.current=history.state;
+    setRouteHash(location.hash);
   }, []);
   const [notice, setNotice] = useState("");
   const [timelineRevision, setTimelineRevision] = useState(0);
   const clearConnection = useCallback(() => {
     connectionGeneration.current++;
-    clearSession();
+    clearSession();clearChatReloadDraft();
     log('auth.session_cleared','info');
     setPeriod("week");
     setConnection(null);
@@ -200,6 +247,19 @@ function App() {
     },
     [connection, unauthorized],
   );
+  apiRef.current=api;
+  useEffect(()=>{
+    if(!api)return;
+    const capture=(event:MouseEvent)=>{
+      if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||!(event.target instanceof Element))return;
+      const anchor=event.target.closest<HTMLAnchorElement>('a[href]');if(!anchor||anchor.target&&anchor.target!=='_self'||anchor.hasAttribute('download'))return;
+      const target=new URL(anchor.href,location.href);if(target.origin!==location.origin||target.pathname!==location.pathname||readPage(target.hash)!=='imports'||readPage(currentHash.current)==='imports')return;
+      const route=readWorkspaceRoute(currentHash.current,readPage,collectionIds());
+      preparedImport.current={api,origin:rememberImportOrigin(api,currentHash.current,window.scrollY,anchor,route.page==='archive'&&['materials','records','memories'].includes(route.collection)&&!hasUnsavedChanges())};
+    };
+    document.addEventListener('click',capture,true);return()=>document.removeEventListener('click',capture,true);
+  },[api]);
+  useEffect(()=>{if(api)associateChatScope(api,connection?.viewScope);},[api,connection?.viewScope]);
   useEffect(() => {
     if (!api || verified) return;
     const controller = new AbortController();
@@ -264,15 +324,40 @@ function App() {
   }, [api, refresh]);
   useEffect(() => {
     if (showConnect||readEvidenceRoute(location.hash)) return;
+    if(pendingImportReturn.current?.api===apiRef.current&&pendingImportReturn.current?.origin.hash===location.hash)return;
     const heading = Array.from(document.querySelectorAll<HTMLElement>(".content h1")).find(element => element.getClientRects().length);
     if (heading) { heading.tabIndex = -1; heading.focus({preventScroll: true}); }
   }, [page, showConnect]);
+  useEffect(()=>{
+    const pending=pendingImportReturn.current;if(!pending||pending.api!==api)return;
+    if(location.hash!==pending.origin.hash){clearImportReturn(api,pending.origin);pendingImportReturn.current=undefined;return;}
+    let done=false;const finish=()=>{
+      if(done||pendingImportReturn.current!==pending||location.hash!==pending.origin.hash)return;
+      const opener=importOriginOpener(pending.origin),heading=document.querySelector<HTMLElement>('.content h1'),content=document.querySelector('.content');if(!heading)return;
+      const view=readPage(pending.origin.hash)==='archive'?new URLSearchParams(pending.origin.hash.split('?')[1]??'').get('view')??'materials':undefined;
+      const expected=view==='materials'?'.library-materials':view==='records'?'.library-time-final':view==='memories'?'.memories-page':readPage(pending.origin.hash)==='sourceCatalog'?'.discovery-source-catalog':undefined;
+      const region=expected?content?.querySelector<HTMLElement>(expected):undefined;if(expected&&region?.dataset.importReturnReady!=='true')return;
+      if(view==='records'&&region?.querySelector('.library-time-group[open][data-import-return-ready="false"]'))return;
+      const settled=Boolean(region?.dataset.importReturnReady==='true'||content?.querySelector('[role="alert"]'));
+      if(pending.origin.opener&&!opener&&!settled)return;
+      if(pending.origin.scroll>document.documentElement.scrollHeight-window.innerHeight&&!settled)return;
+      done=true;clearImportReturn(api,pending.origin);pendingImportReturn.current=undefined;(opener??heading).focus({preventScroll:true});window.scrollTo({top:pending.origin.scroll});observer.disconnect();
+    };
+    const observer=new MutationObserver(()=>finish());observer.observe(document.querySelector('.content')??document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['data-import-return-ready','aria-busy']});
+    const frame=window.requestAnimationFrame(()=>finish());return()=>{observer.disconnect();window.cancelAnimationFrame(frame);};
+  },[api,page,routeHash]);
   function onPage(next: Page) {
     const target=canonicalDestination(next,archiveTabRef.current,collectionIds());
     if(!webFeatures.page(target.page)){setNotice(moteText('当前服务未提供此入口'));return;}
+    const retainImportOrigin=page==='archive'&&['materials','records','memories'].includes(archiveTabRef.current)&&!hasUnsavedChanges();
     if ((target.page !== page || (target.page==='archive'&&target.collection!==archiveTabRef.current)) && !confirmNavigation()) return;
-    history.pushState(null, '', workspaceHash(routes[target.page],target.page==='archive'?target.collection:undefined));
+    if(target.page==='featureGuide'&&page!=='featureGuide'&&api)enterGuide(api,location.hash);
+    const origin=target.page==='imports'&&page!=='imports'&&api?rememberImportOrigin(api,currentHash.current,window.scrollY,document.activeElement,retainImportOrigin):undefined;
+    history.pushState(origin?{moteImportOrigin:origin.token}:null, '', workspaceHash(routes[target.page],target.page==='archive'?target.collection:undefined));
+    activeImportParent.current=undefined;
     currentHash.current=location.hash;
+    currentHistoryState.current=history.state;
+    setRouteHash(location.hash);
     archiveTabRef.current=target.collection; updateArchiveTab(target.collection);
     updateEvidenceId(null);
     setPage(target.page);
@@ -283,7 +368,10 @@ function App() {
     archiveTabRef.current=next; updateArchiveTab(next);
     if(pageRef.current==='archive') {
       history.pushState(null,'',workspaceHash(routes.archive,next,location.hash));
+      activeImportParent.current=undefined;
       currentHash.current=location.hash;
+      currentHistoryState.current=history.state;
+      setRouteHash(location.hash);
     }
   }
   function connected(value: Connection, lifetime: SessionLifetime = sessionLifetime) {
@@ -306,49 +394,33 @@ function App() {
     setSessionLifetime(lifetime);
     if (connection) setConnection(persistSession(connection, lifetime));
   }
+  const notesAvailable=Boolean(webFeatures.page('notes'));
+  const returningImport=api&&page==='imports'?importOrigin(api,history.state,'moteImportOrigin'):undefined;
+  const importReturnLabel=returningImport?readPage(returningImport.hash)==='archive'&&(!new URLSearchParams(returningImport.hash.split('?')[1]??'').get('view')||new URLSearchParams(returningImport.hash.split('?')[1]??'').get('view')==='materials')?'我的资料':'返回':'资料库';
+  const importNavigation={label:importReturnLabel,leave:()=>{if(!confirmNavigation())return;if(returningImport){allowedImportHash.current=returningImport.hash;history.back();}else{allowedImportHash.current='#/library?view=materials';window.location.hash=allowedImportHash.current;}}};
+  const pageLabel=page==='ask'&&new URLSearchParams(routeHash.split('?')[1]??'').has('question')?moteText('需要你补充'):pageLabels[page];
+  useEffect(()=>{if(!notesAvailable)setQuickNoteApi(null);},[notesAvailable]);
+  const openQuickNote=useCallback(()=>{if(!webFeatures.page('notes')){setNotice(moteText('当前服务未提供此入口'));return;}if(api&&verified)setQuickNoteApi(api);else setShowConnect(true);},[api,verified]);
   return (
     <>
+    <QuickNoteContext.Provider value={openQuickNote}>
     <PresentationSurface
-      navigation={layout => <WorkspaceSidebar layout={layout} page={page} onPage={onPage} connection={connection} verified={verified} profile={status?.profile} onConnect={()=>setShowConnect(true)}/>}
+      navigation={layout => <WorkspaceSidebar layout={layout} page={page} onPage={onPage} connection={connection} verified={verified} profile={status?.profile} onConnect={()=>setShowConnect(true)} onRefresh={refresh} refreshing={loading}/>}
       toolbar={
         <header className="topbar">
-          <div>
-            <span className="breadcrumb">
-              <span className="breadcrumb-workspace">{moteText("我的空间")} / </span>
-              <strong>{pageLabels[page]??moteText("当前服务未提供此入口")}</strong>
-            </span>
-          </div>
-          <GlobalRetrieval onPage={onPage}/><div className="topbar-actions"><details className="shell-menu"><summary aria-label={moteText('全部功能')}>{moteText('更多')}</summary><div><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('overview');}}>{moteText('首页')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('featureGuide');}}>{moteText('全部功能')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('about');}}>{moteText('设置')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;setShowConnect(true);}}>{moteText('登录 Mote')}</button></div></details>{!settingsContext&&page!=='featureGuide'&&page!=='notes'&&<button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>}
-            <CentralStatusPill
-              connection={connection}
-              verified={verified}
-              onClick={() => connection && verified ? onPage("about") : setShowConnect(true)}
-            />
-            {connection && (
-              <>
-                <span className="private-label">
-                  <ShieldCheck size={14} />
-                  {moteText("私有节点")}</span>
-                <button className="icon-button mobile-settings" aria-label={moteText('设置')} onClick={()=>onPage('about')}><Settings2 size={18}/></button>
-                <button
-                  className="icon-button"
-                  aria-label={settingsContext?moteText("刷新生效配置"):moteText("刷新资料")}
-                  onClick={refresh}
-                  disabled={loading}
-                >
-                  <RefreshCw size={16} className={loading ? "spin" : ""} />
-                </button>
-              </>
-            )}
-            <button
-              className="avatar"
-              aria-label={connection ? moteText("登录会话") : moteText("登录 Mote")}
-              onClick={() => connection ? onPage("about") : setShowConnect(true)}
-            >
-              {moteText("我")}</button>
+          {api&&verified&&page!=='featureGuide'&&guideVisit(api).returnAvailable&&webFeatures.page('featureGuide')&&<button className="guide-return" onClick={()=>{window.location.hash='#/guide';}}><span aria-hidden="true">← </span>{moteText('全部功能')}</button>}
+            <details className="shell-menu shell-mobile-menu"><summary aria-label={moteText('全部功能')}>{pageLabel??moteText("更多")}</summary><div>{Object.entries({overview:moteText("首页"),archive:moteText("资料库"),sources:moteText("来源"),connections:moteText("AI 接入"),ask:moteText("问一问"),activity:moteText("后台活动")}).map(([target,label])=><button key={target} onClick={event=>{event.currentTarget.closest("details")!.open=false;onPage(target);}}>{label}</button>)}
+              <button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('featureGuide');}}>{moteText('全部功能')}</button>
+              <button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('about');}}>{moteText('设置')}</button>
+              <button onClick={event=>{event.currentTarget.closest('details')!.open=false;setShowConnect(true);}}>{moteText('登录 Mote')}</button>
+              {connection&&<button onClick={refresh} disabled={loading}>{moteText('刷新资料')}</button>}
+            </div></details>
+          <span className="breadcrumb"><strong>{pageLabel??moteText("当前服务未提供此入口")}</strong></span>
+          <div className="topbar-actions"><GlobalRetrieval key={connection?.viewScope??'disconnected'} onPage={onPage}/><button className="button quick-note" disabled={!notesAvailable} title={notesAvailable?undefined:moteText('当前服务未提供此入口')} onClick={openQuickNote} aria-haspopup="dialog"><Plus size={16}/>{moteText("随手记")}</button>
+
           </div>
         </header>}
-      footer={<footer className="footer"><span>{moteText("Mote · 让上下文，有迹可循。")}</span><span>{connection && status ? moteText("{0} 条记录 · {1}", status.storage.captures.toLocaleString(getLocale()), status.agent.configured ? moteText("Agent 就绪") : moteText("等待模型配置")) : moteText("采集 · 汇聚 · 理解")}</span></footer>}
+      footer={null}
     >
         <React.Suspense key={page} fallback={<p role="status" data-page-loading={page}>{moteText("正在读取…")}</p>}><div data-page={page} data-session={!connection?'signed-out':verified?'ready':error?'verification-failed':'verifying'} aria-busy={Boolean(connection&&loading)} className={`content ${settingsContext?'settings-surface':''}`}>
           <div className="workspace-tools">
@@ -359,7 +431,7 @@ function App() {
                     className="period-select"
                     aria-label={moteText("选择时间范围")}
                     value={period}
-                    onChange={(e) => setPeriod(savePeriod(connection,e.target.value))}
+                    onChange={(e) => {if(e.target.value!==period&&confirmNavigation())setPeriod(savePeriod(connection,e.target.value));}}
                   >
                     {Object.entries(periodNames).map(([key, label]) => (
                       <option key={key} value={key}>
@@ -440,7 +512,7 @@ function App() {
                 : api && (
                     <>
                       {!["notes","devices","connections","settings","sources","archive","memories","imports","insights","about"].includes(page) && !status && !error && <Spinner label={moteText("正在读取节点状态…")}/>}
-                      <FeaturePage page={page} props={{api,viewScope:connection.viewScope,status,devices,activity,recent,insights,onPage,onOpen:setEvidenceId,range,rangeSelectionKey:period,archiveTab,setArchiveTab,timelineRevision,refresh,disconnect,sessionLifetime,changeSessionLifetime}}/>
+                      <ImportNavigationContext.Provider value={page==='imports'?importNavigation:null}><FeaturePage page={page} props={{api,viewScope:connection.viewScope,status,devices,activity,recent,insights,onPage,onOpen:setEvidenceId,range,rangeSelectionKey:period,archiveTab,setArchiveTab,timelineRevision,refresh,disconnect,sessionLifetime,changeSessionLifetime}}/></ImportNavigationContext.Provider>
                     </>
                   )}
             </>
@@ -448,6 +520,8 @@ function App() {
         </div>
         </React.Suspense>
     </PresentationSurface>
+    </QuickNoteContext.Provider>
+    {notesAvailable&&quickNoteApi===api&&api&&verified&&<QuickNoteDialog api={api} namespace={window.location.origin} revision={timelineRevision} onSaved={refresh} onClose={closeQuickNote}/>}
       {showConnect && (
         <LoginDialog
           destination={pageLabels[page]??moteText("当前服务未提供此入口")}
@@ -460,6 +534,7 @@ function App() {
           id={evidenceId}
           api={api}
           onOpen={setEvidenceId}
+          onOpenNested={openNestedEvidence}
           onClose={() => setEvidenceId(null)}
           onDeleted={refresh}
         />

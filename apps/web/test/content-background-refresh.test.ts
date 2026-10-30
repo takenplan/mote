@@ -17,7 +17,7 @@ function deferred(){let resolve!:(value:any)=>void,reject!:(error:unknown)=>void
 async function fixture(t:any){
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),before=new Map<string,PropertyDescriptor|undefined>(),apis:Api[]=[];
  for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
- dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
+ dom.window.HTMLElement.prototype.scrollIntoView=()=>{};dom.window.scrollTo=()=>{};
  const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!);
  t.after(async()=>{await act(async()=>{root.unmount();for(const api of apis)importQueue(api).close();});for(const [key,value] of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
  function apiWith(read:(path:string,init?:RequestInit)=>unknown):Api{
@@ -94,21 +94,21 @@ for(const kind of ['capture','material'] as const)test(`Memory selected ${kind} 
  const {root,d,apiWith}=await fixture(t),first=deferred(),refresh=deferred();let refreshing=false;
  const ref=kind==='capture'?'capture:'+id:'material:mat_'+'a'.repeat(64)+'@'+'b'.repeat(64),path=kind==='capture'?'/api/capture-browser/'+id:'/api/materials/mat_'+'a'.repeat(64);
  d.defaultView!.location.hash='#/library?view=memories&'+new URLSearchParams({[kind==='capture'?'memorySource':'memoryMaterial']:ref});
- const value=kind==='capture'?{id,windowTitle:'Generated chosen source',capturedAt:when,ocrText:'Generated text'}:{ref,title:'Generated chosen source',memorySource:{status:'ready',evidenceIds:[id]}};
+ const value=kind==='capture'?{id,windowTitle:'Generated chosen source',libraryVersion:'generated-current-opaque-pin',capturedAt:when,ocrText:'Generated text'}:{ref,title:'Generated chosen source',memorySource:{status:'ready',evidenceIds:[id]}};
  const api=apiWith(key=>key===path?(refreshing?refresh.promise:first.promise):{items:[],nextCursor:null});
- await act(async()=>root.render(memoryView(api)));assert.match(d.querySelector('.memory-source-selection')!.textContent!,/正在读取/);
- await act(async()=>first.resolve(value));const card=d.querySelector('.memory-source-selection')!,title=card.querySelector('strong');
+ await act(async()=>root.render(memoryView(api)));assert.match(d.querySelector('.memory-work-scope-notice')!.textContent!,/正在读取/);
+ await act(async()=>first.resolve(value));const card=d.querySelector('.memory-work-scope-notice')!,title=card.querySelector('strong');
  refreshing=true;await act(async()=>resources(api).get(path).refresh());
- assert.equal(card.querySelector('strong'),title);assert.doesNotMatch(card.textContent!,/正在读取|所选正式资料已变化/);assert.equal(button(d,'提取所选资料的记忆').disabled,true,'version-dependent extraction waits for verification');
+ assert.equal(card.querySelector('strong'),title);assert.doesNotMatch(card.textContent!,/正在读取|所选正式资料已变化/);assert.equal(button(d,'开始提取').disabled,true,'version-dependent extraction waits for verification');
  await act(async()=>refresh.reject(new ApiError('Generated selected source revoked',403)));
- assert.doesNotMatch(card.textContent!,/Generated chosen source/);assert.match(card.textContent!,/Generated selected source revoked/);assert.equal(button(d,'提取所选资料的记忆').disabled,true);
+ assert.doesNotMatch(card.textContent!,/Generated chosen source/);assert.match(card.textContent!,/Generated selected source revoked/);assert.equal(button(d,'开始提取').disabled,true);
 });
 
 for(const populated of [false,true])test(`Insight ${populated?'populated':'empty'} history and compose stay stable during background reads`,async t=>{
  const {root,d,apiWith}=await fixture(t),first=deferred(),refresh=deferred();let refreshing=false;
  const api=apiWith(path=>path==='/api/insights?limit=30'?(refreshing?refresh.promise:first.promise):{items:[]});
  await act(async()=>root.render(insightView(api)));assert.match(d.querySelector('.workspace-list')!.textContent!,/正在读取/);
- await act(async()=>first.resolve({items:populated?[report]:[]}));await act(async()=>button(d,'新建洞察').click());const list=d.querySelector('.workspace-list')!,settled=list.querySelector(populated?'.workspace-select':'p.muted'),compose=d.querySelector('textarea');
+ await act(async()=>first.resolve({items:populated?[report]:[]}));await act(async()=>button(d,'生成回顾').click());const list=d.querySelector('.workspace-list')!,settled=list.querySelector(populated?'.workspace-select':'p.muted'),compose=d.querySelector('textarea');
  refreshing=true;await act(async()=>resources(api).invalidate(path=>path==='/api/insights?limit=30'));
  assert.doesNotMatch(list.textContent!,/正在读取/);assert.equal(list.querySelector(populated?'.workspace-select':'p.muted'),settled);assert.equal(d.querySelector('textarea'),compose);assert.equal(compose!.disabled,false);assert.equal(d.querySelector('.insights-page')!.getAttribute('aria-busy'),'false');
  await act(async()=>refresh.resolve({items:populated?[report]:[]}));assert.equal(list.querySelector(populated?'.workspace-select':'p.muted'),settled);
@@ -127,7 +127,7 @@ test('an Insight completion refreshes history and notifies its shell once',async
  await act(async()=>root.render(insightView(api,{onChanged:()=>changes++})));assert.equal(runReads,1);
  await act(async()=>completion.resolve({...running,status:'completed',result:report}));
  assert.equal(runReads,1,'the running-to-completed effect transition cannot replay the terminal read');assert.equal(historyReads,2);assert.equal(changes,1);assert.doesNotMatch(d.querySelector('.workspace-list')!.textContent!,/正在读取/);
- await act(async()=>historyRefresh.resolve({items:[report]}));assert.match(d.querySelector('.insight-report')!.textContent!,/Generated report body/);assert.equal(changes,1);
+ await act(async()=>historyRefresh.resolve({items:[report]}));assert.equal(d.querySelector('.insight-report'),null,'A background completion does not take the owner out of history');assert.match(d.querySelector('.workspace-list')!.textContent!,/Generated report body/);assert.equal(changes,1);
 });
 
 for(const kind of ['Memory','Insight'] as const)test(`${kind} mounts once at a nonzero shell revision and refreshes once for a later revision`,async t=>{
@@ -165,7 +165,7 @@ for(const populated of [false,true])test(`Import ${populated?'populated':'empty'
  refreshing=true;await act(async()=>root.render(importView(api,{refreshVersion:1})));
  assert.doesNotMatch(list.textContent!,/正在读取/);assert.equal(list.querySelector(populated?'.workspace-select':'p.muted'),settled);assert.equal(d.querySelector('.import-detail'),detail);assert.equal(d.querySelector('.imports-page')!.getAttribute('aria-busy'),'false');
  await act(async()=>refresh.reject(new ApiError('Generated import refresh unavailable',503)));
- assert.match(d.body.textContent!,/Generated import refresh unavailable/);assert.equal(d.querySelector('.import-detail'),detail);
+ assert.match(d.body.textContent!,/中央服务暂不可用（503），请检查节点状态后重试。/);assert.equal(d.querySelector('.import-detail'),detail);
 });
 
 test('Import revocation removes archived content and a different node keeps its first-read loader',async t=>{
@@ -173,7 +173,7 @@ test('Import revocation removes archived content and a different node keeps its 
  const api=apiWith(path=>path==='/api/imports'?(revoked?revocation.promise:{items:[importJob]}):{items:[]});
  await act(async()=>root.render(importView(api)));await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());
  revoked=true;await act(async()=>root.render(importView(api,{refreshVersion:1})));await act(async()=>revocation.reject(new ApiError('Generated imports revoked',403)));
- assert.equal(d.querySelector('.import-detail'),null);assert.doesNotMatch(d.body.textContent!,/Generated import(?!s)/);assert.match(d.body.textContent!,/Generated imports revoked/);
+ assert.equal(d.querySelector('.import-detail'),null);assert.doesNotMatch(d.body.textContent!,/Generated import(?!s)/);assert.match(d.body.textContent!,/请求被拒绝（403），请检查连接权限和入口访问配置。/);
  const nextApi=apiWith(path=>path==='/api/imports'?next.promise:{items:[]});await act(async()=>root.render(importView(nextApi)));
  assert.match(d.querySelector('.workspace-list')!.textContent!,/正在读取/);assert.doesNotMatch(d.querySelector('.workspace-list')!.textContent!,/你的第一份导入/);
  await act(async()=>next.resolve({items:[]}));assert.match(d.querySelector('.workspace-list')!.textContent!,/你的第一份导入/);

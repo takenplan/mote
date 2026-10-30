@@ -30,10 +30,12 @@ test('summary capacity waiting and its canonical retry time remain separate from
  const row={captureId:id,sourceId:'generated',sizeBytes:16,hasOriginal:true,originMissing:false,item:{title:'Generated recording',layer:'original',mimeType:'audio/wav',observedAt:'2026-10-01T00:00:00Z'},job:{state:'succeeded',summary_state:'waiting',execution:executionEnvelope({state:'succeeded',attempts:1}),summaryExecution:executionEnvelope({state:'retry_wait',attempts:0,errorCode:'rate_limited',availableAt:summaryAvailableAt}),summaryAvailableAt},artifacts:[],cancellation:{canCancel:true,wait:null}};
  const api={request:async(path:string)=>path.startsWith('/api/operations/changes')?{ids:[],cursor:0,hasMore:false,reset:false}:path==='/api/file-processing'?null:path==='/api/sources'?{items:[]}:path==='/api/files/'+id?row:{},setAgentTimeout:()=>{}} as Api;
  await act(async()=>root.render(React.createElement(FileDetail,{api,id,onOpen:()=>{}})));
+ await act(async()=>Array.from(dom.window.document.querySelectorAll('button')).find(b=>b.textContent==='处理详情')!.click());
  assert.match(dom.window.document.body.textContent!,/整体处理：已完成；摘要：等待处理/);
  assert.match(dom.window.document.body.textContent!,/模型服务暂时限流/);assert.match(dom.window.document.body.textContent!,/预计重试时间/);
  assert.doesNotMatch(dom.window.document.body.textContent!,/整体处理：处理失败/);
  row.job.summary_state='failed';row.job.summaryExecution=executionEnvelope({state:'failed',attempts:1,errorCode:'storage_full'});
  await act(async()=>root.render(React.createElement(FileDetail,{api:{...api},id,onOpen:()=>{}})));
+ await act(async()=>Array.from(dom.window.document.querySelectorAll('button')).find(b=>b.textContent==='处理详情')!.click());
  assert.match(dom.window.document.body.textContent!,/整体处理：已完成；摘要：处理失败/);assert.match(dom.window.document.body.textContent!,/存储容量已满/);
 });

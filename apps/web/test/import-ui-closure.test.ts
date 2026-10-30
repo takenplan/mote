@@ -8,6 +8,8 @@ import {importQueue} from '../src/import-queue.js';
 import {Imports} from '../src/Imports.js';
 import {ApiError,type Api} from '../src/api.js';
 import {resources} from '../src/resource-cache.js';
+import {confirmNavigation} from '../src/unsaved.js';
+import {pages as importPages} from '../src/features/imports.js';
 configureLocale(()=> 'zh-CN');
 const fixtureApis=new Set<Api>();
 async function fixture(t:any){
@@ -18,14 +20,48 @@ async function fixture(t:any){
  t.after(async()=>{await act(async()=>{root.unmount();for(const api of fixtureApis)importQueue(api).close();fixtureApis.clear();});for(const [key,value] of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
  return {root,d:dom.window.document};
 }
-const button=(d:Document,label:string)=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent?.trim()===label)!;
+const button=(d:Document,label:string)=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent?.trim()===label||b.getAttribute('aria-label')===label)!;
 const now='2026-09-01T08:00:00Z';
 function importJob(extra:Record<string,unknown>={}){return {id:'import-generated',name:'Generated originals',status:'completed',createdAt:now,updatedAt:now,instruction:'',archive:{files:1,bytes:9},warnings:[],files:[],captureIds:['cccccccc-cccc-4ccc-8ccc-cccccccccccc'],progress:{total:1,processed:1,imported:1,duplicates:0},...extra};}
 function apiWith(read:(path:string,init?:RequestInit)=>unknown):Api{const api={request:async(path:string,init?:RequestInit)=>path.startsWith('/api/operations/changes')?{ids:[],cursor:0,hasMore:false,reset:false}:read(path,init),setAgentTimeout:()=>{}} as Api;fixtureApis.add(api);return api;}
 function view(api:Api,extra:Record<string,unknown>={}){return React.createElement(Imports,{api,onOpen:()=>{},onMemories:()=>{},onSettings:()=>{},onChanged:()=>{},...extra});}
-async function select(d:Document,files:File[]){const input=d.querySelector<HTMLInputElement>('input[type=file]')!;Object.defineProperty(input,'files',{value:files,configurable:true});await act(async()=>input.dispatchEvent(new window.Event('change',{bubbles:true})));}
+test('a changed job instruction remains guarded after returning to the imports list',async t=>{
+ const {root,d}=await fixture(t),job=importJob({status:'awaiting_confirmation',instruction:'Original instruction',captureIds:[],preview:{count:1,samples:[]}}),api=apiWith(()=>({items:[job]}));let prompts=0;d.defaultView!.confirm=()=>{prompts++;return false;};
+ await act(async()=>root.render(view(api)));await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());const area=d.querySelector<HTMLTextAreaElement>('[aria-label="格式、作者与归属说明"]')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(area,'Changed unsaved instruction');area.dispatchEvent(new d.defaultView!.Event('input',{bubbles:true}));});await act(async()=>button(d,'返回导入列表').click());
+ assert.equal(confirmNavigation(),false);assert.equal(prompts,1);await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());assert.equal(d.querySelector<HTMLTextAreaElement>('[aria-label="格式、作者与归属说明"]')!.value,'Changed unsaved instruction');
+});
+test('clearing an instruction stays guarded when its job becomes unreadable',async t=>{
+ const {root,d}=await fixture(t),job=importJob({status:'awaiting_confirmation',instruction:'Original instruction',captureIds:[],preview:{count:1,samples:[]}});let revoked=false,prompts=0;
+ const api=apiWith(path=>{if(path==='/api/imports'&&revoked)throw new ApiError('Generated permission revoked',403);return {items:[job]};});d.defaultView!.confirm=()=>{prompts++;return false;};
+ await act(async()=>root.render(view(api)));await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());const area=d.querySelector<HTMLTextAreaElement>('[aria-label="格式、作者与归属说明"]')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(area,'');area.dispatchEvent(new d.defaultView!.Event('input',{bubbles:true}));});await act(async()=>button(d,'返回导入列表').click());
+ revoked=true;await act(async()=>d.querySelector<HTMLButtonElement>('[aria-label="刷新导入记录"]')!.click());assert.doesNotMatch(d.body.textContent!,/Generated originals/);assert.match(d.body.textContent!,/403/);assert.equal(confirmNavigation(),false);assert.equal(prompts,1);
+});
+test('reselecting a failed upload asks before replacing another draft and preserves unrelated job instructions',async t=>{
+ const {root,d}=await fixture(t),job=importJob({status:'awaiting_confirmation',instruction:'Original job instruction',captureIds:[],preview:{count:1,samples:[]}});let decision=false,prompts=0;
+ const api=apiWith((path,init)=>{if(path==='/api/imports'&&!init?.method)return {items:[job]};if(path==='/api/import-uploads'){const body=JSON.parse(String(init?.body));return {id:body.id,partBytes:4,parts:[]};}return {items:[]};});d.defaultView!.confirm=()=>{prompts++;return decision;};
+ await act(async()=>root.render(view(api)));await act(async()=>d.querySelector<HTMLButtonElement>('.import-job-row')!.click());const jobArea=d.querySelector<HTMLTextAreaElement>('[aria-label="格式、作者与归属说明"]')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(jobArea,'Independent unsaved job instruction');jobArea.dispatchEvent(new d.defaultView!.Event('input',{bubbles:true}));});await act(async()=>button(d,'返回导入列表').click());
+ const missing=new File(['generated failure'],'failed-A.txt');Object.defineProperty(missing,'slice',{value:()=>({arrayBuffer:async()=>{throw new DOMException('Generated unreadable file','NotReadableError');}})});let failedId='';
+ await act(async()=>{failedId=importQueue(api).enqueue({source:{kind:'files',files:[missing]},name:'Failed draft A',instruction:'Failed A instruction',sourcePackId:''});});await until(()=>importQueue(api).getSnapshot().entries.some(entry=>entry.id===failedId&&entry.failure?.recovery==='files'));
+ await select(d,[new File(['generated B'],'draft-B.txt')]);const name=d.querySelector<HTMLInputElement>('.import-form>.field-label input')!,area=d.querySelector<HTMLTextAreaElement>('.import-form textarea')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(d.defaultView!.HTMLInputElement.prototype,'value')!.set!.call(name,'Independent draft B');name.dispatchEvent(new d.defaultView!.Event('input',{bubbles:true}));Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(area,'Independent B instruction');area.dispatchEvent(new d.defaultView!.Event('input',{bubbles:true}));});await act(async()=>button(d,'返回导入列表').click());
+ await act(async()=>button(d,'重新选择文件').click());assert.equal(prompts,1);assert.ok(importQueue(api).getSnapshot().entries.some(entry=>entry.id===failedId&&entry.state==='failed'));await act(async()=>button(d,'添加资料').click());assert.equal(d.querySelector<HTMLInputElement>('.import-form>.field-label input')!.value,'Independent draft B');assert.equal(d.querySelector<HTMLTextAreaElement>('.import-form textarea')!.value,'Independent B instruction');assert.match(d.querySelector('.selected-files')!.textContent!,/draft-B.txt/);
+ await act(async()=>button(d,'返回导入列表').click());decision=true;await act(async()=>button(d,'重新选择文件').click());assert.equal(prompts,2);assert.equal(importQueue(api).getSnapshot().entries.some(entry=>entry.id===failedId),false);assert.equal(d.querySelector<HTMLInputElement>('.import-form>.field-label input')!.value,'Failed draft A');assert.equal(d.querySelector<HTMLTextAreaElement>('.import-form textarea')!.value,'Failed A instruction');assert.equal(d.querySelector('.selected-files'),null);
+ await act(async()=>button(d,'返回导入列表').click());await act(async()=>d.querySelector<HTMLButtonElement>('.import-job-row')!.click());assert.equal(d.querySelector<HTMLTextAreaElement>('[aria-label="格式、作者与归属说明"]')!.value,'Independent unsaved job instruction');
+});
+test('changing owner remounts the actual imports page before an old form or file can appear',async t=>{
+ const {root,d}=await fixture(t),old=apiWith(()=>({items:[]})),next=apiWith(()=>({items:[]})),newOwnerCommits:string[]=[];
+ const page=(api:Api)=>React.createElement(React.Profiler,{id:'imports',onRender:()=>{if(api===next)newOwnerCommits.push((d.body.textContent??'')+'|'+[...d.querySelectorAll<HTMLInputElement>('input')].map(input=>input.value).join('|'));}},React.createElement(React.Suspense,{fallback:null},importPages[0].render({api,onPage:()=>{},onOpen:()=>{},setArchiveTab:()=>{},timelineRevision:0,refresh:()=>{}} as any)));
+ await act(async()=>root.render(page(old)));await act(async()=>button(d,'添加资料').click());const input=d.querySelector<HTMLInputElement>('.import-form>.field-label input')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(d.defaultView!.HTMLInputElement.prototype,'value')!.set!.call(input,'Old owner private draft');input.dispatchEvent(new d.defaultView!.Event('input',{bubbles:true}));});await select(d,[new File(['generated'],'old-owner.txt')]);assert.match(d.body.textContent!,/old-owner.txt/);
+ await act(async()=>root.render(page(next)));assert.ok(newOwnerCommits.length);assert.ok(newOwnerCommits.every(text=>!text.includes('Old owner private draft')&&!text.includes('old-owner.txt')),'no new-owner commit renders the old draft');assert.equal(d.querySelector('.import-form'),null);
+});
+async function form(d:Document){if(!d.querySelector('.import-form')){if(button(d,'返回导入列表'))await act(async()=>button(d,'返回导入列表').click());await act(async()=>button(d,'添加资料').click());}}
+async function select(d:Document,files:File[]){await form(d);const input=d.querySelector<HTMLInputElement>('input[type=file]')!;Object.defineProperty(input,'files',{value:files,configurable:true});await act(async()=>input.dispatchEvent(new window.Event('change',{bubbles:true})));}
 async function submit(d:Document){await act(async()=>d.querySelector('form')!.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));}
-async function instruction(d:Document,value:string){await act(async()=>{const input=d.querySelector('textarea')!;Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new window.Event('input',{bubbles:true}));});}
+async function instruction(d:Document,value:string){await form(d);await act(async()=>{const input=d.querySelector('textarea')!;Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new window.Event('input',{bubbles:true}));});}
 async function until(check:()=>boolean){for(let i=0;i<100;i++){if(check())return;await act(async()=>new Promise(resolve=>setTimeout(resolve,10)));}assert.ok(check(),'Generated UI operation did not settle');}
 
 test('media admission distinguishes extraction, search and Memory and retries the existing file',async t=>{
@@ -88,12 +124,12 @@ test('revoked file controls in an import remove retry approval and require a fre
 test('import history failures recover without false empty state, and revoked history is removed',async t=>{
  const {root,d}=await fixture(t);let failure=503;
  const api=apiWith(()=>{if(failure)throw new ApiError('Generated read failure',failure);return {items:[importJob()]};});
- await act(async()=>root.render(view(api)));assert.match(d.body.textContent!,/Generated read failure/);assert.doesNotMatch(d.body.textContent!,/你的第一份导入/);
- failure=0;await act(async()=>button(d,'刷新状态').click());assert.equal(d.querySelector('[role=alert]'),null);assert.match(d.body.textContent!,/Generated originals/);
- failure=403;await act(async()=>d.querySelector<HTMLButtonElement>('[aria-label="刷新导入记录"]')!.click());assert.doesNotMatch(d.body.textContent!,/Generated originals/);assert.match(d.body.textContent!,/Generated read failure/);
+ await act(async()=>root.render(view(api)));assert.match(d.body.textContent!,/中央服务暂不可用（503）/);assert.doesNotMatch(d.body.textContent!,/你的第一份导入/);
+ failure=0;await act(async()=>button(d,'刷新状态').click());assert.equal(d.querySelector('[role=alert]'),null);assert.match(d.body.textContent!,/Generated originals/);assert.ok(d.querySelector('[aria-label="刷新导入记录"]'),'manual refresh remains available in the list toolbar');
+ failure=403;await act(async()=>d.querySelector<HTMLButtonElement>('[aria-label="刷新导入记录"]')!.click());assert.doesNotMatch(d.body.textContent!,/Generated originals/);assert.match(d.body.textContent!,/403/);
 });
 
-test('uploads freeze a batch while the next form stays available, and resume into one import',async t=>{
+test('upload submission opens its exact queued batch while another draft remains independent',async t=>{
  const {root,d}=await fixture(t);const uploads:string[]=[],writes:any[]=[];let first=true,signal:AbortSignal|undefined;
  const api=apiWith((path,init)=>{
   if(path==='/api/imports'&&init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return importJob();}
@@ -104,9 +140,9 @@ test('uploads freeze a batch while the next form stays available, and resume int
   throw Error('Unexpected '+path);
  });
  await act(async()=>root.render(view(api)));await select(d,[new File(['generated'],'original.txt')]);await submit(d);
- assert.equal(button(d,'新建导入').disabled,false);assert.equal(button(d,'服务器目录'),undefined);assert.equal(d.querySelector<HTMLInputElement>('input[type=file]')!.disabled,false);assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.disabled,false);assert.equal(d.querySelectorAll('.selected-files .file-row').length,0);
+ assert.equal(d.querySelector('.import-form'),null,'submission opens the selected upload instead of an empty composer');assert.match(d.querySelector('.import-upload-detail')!.textContent!,/original.txt/);assert.equal(button(d,'添加资料').disabled,false);assert.equal(button(d,'服务器目录'),undefined);
  await act(async()=>button(d,'暂停上传').click());assert.equal(signal!.aborted,true);assert.match(d.body.textContent!,/上传已暂停/);assert.equal(d.querySelectorAll('.import-queue-item').length,1);assert.equal(writes.length,0);
- await select(d,[new File(['generated next draft'],'next-draft.txt')]);await act(async()=>button(d,'继续上传').click());await until(()=>writes.length===1);assert.equal(d.querySelectorAll('.selected-files .file-row').length,1);assert.equal(writes.length,1);assert.deepEqual(writes[0].archivedFileIds,['archived-generated']);assert.equal(writes[0].processing,'automatic');assert.equal(uploads[0],uploads[1]);assert.match(writes[0].requestId,/^[0-9a-f-]{36}$/);assert.match(d.body.textContent!,/记录已保存/);assert.equal(d.querySelector('[role=alert]'),null);
+ await select(d,[new File(['generated next draft'],'next-draft.txt')]);assert.equal(d.querySelector<HTMLInputElement>('input[type=file]')!.disabled,false);assert.equal(d.querySelector<HTMLTextAreaElement>('textarea')!.disabled,false);await act(async()=>button(d,'返回导入列表').click());await act(async()=>d.querySelector<HTMLButtonElement>('.import-queue-item .workspace-select')!.click());await act(async()=>button(d,'继续上传').click());await until(()=>writes.length===1);assert.equal(writes.length,1);assert.deepEqual(writes[0].archivedFileIds,['archived-generated']);assert.equal(writes[0].processing,'automatic');assert.equal(uploads[0],uploads[1]);assert.match(writes[0].requestId,/^[0-9a-f-]{36}$/);assert.match(d.body.textContent!,/记录已保存/);assert.equal(d.querySelector('[role=alert]'),null);await form(d);assert.equal(d.querySelectorAll('.selected-files .file-row').length,1,'the separate next draft survives reading and resuming the first batch');
 });
 
 test('page navigation keeps uploads alive and returning shows the same batch',async t=>{
@@ -127,7 +163,7 @@ test('lost import-create response retries its frozen request while another batch
   throw Error('Unexpected '+path);
  });
  await act(async()=>root.render(view(api)));await select(d,[new File(['one'],'one.txt')]);await instruction(d,guidance);await submit(d);
- await until(()=>writes.length===1);assert.equal(writes[0].instruction,guidance);assert.equal(writes[0].processing,'preview');assert.equal(d.querySelector('textarea')!.value,'');
+ await until(()=>writes.length===1);assert.equal(writes[0].instruction,guidance);assert.equal(writes[0].processing,'preview');assert.equal(d.querySelector('.import-form'),null);await form(d);assert.equal(d.querySelector('textarea')!.value,'');
  await instruction(d,'Generated different guidance for the next batch');await act(async()=>button(d,'重试提交').click());await until(()=>writes.length===2);assert.deepEqual(writes[0],writes[1]);
  await select(d,[new File(['two'],'two.txt')]);await submit(d);await until(()=>writes.length===3);assert.notEqual(writes[1].requestId,writes[2].requestId);assert.equal(writes[2].instruction,'Generated different guidance for the next batch');
  assert.equal(d.querySelectorAll('.import-queue-item').length,2);assert.equal(d.querySelector('.imports-page > [role=alert]'),null);
@@ -136,8 +172,8 @@ test('lost import-create response retries its frozen request while another batch
 test('import guidance is optional and completed detail preserves the exact text as evidence',async t=>{
  const {root,d}=await fixture(t),guidance='Generated scoped authorship guidance.\nQuotes remain third-party: <img src="fixture.invalid">',job=importJob({instruction:guidance});
  const api=apiWith(path=>path==='/api/imports'?{items:[job]}:{items:[]});
- await act(async()=>root.render(view(api)));const input=d.querySelector('textarea')!;
- assert.equal(input.required,false);assert.equal(input.value,'');assert.match(d.querySelector('.import-form')!.textContent!,/格式、作者与归属说明/);assert.match(d.querySelector('.import-form')!.textContent!,/未填写也会保留原件/);assert.match(d.querySelector('.import-form')!.textContent!,/来源限定观察/);
+ await act(async()=>root.render(view(api)));assert.equal(d.querySelector('form'),null,'import opens on the list');await act(async()=>button(d,'添加资料').click());const input=d.querySelector('textarea')!;
+ assert.equal(input.required,false);assert.equal(input.value,'');assert.match(d.querySelector('.import-form')!.textContent!,/资料说明/);assert.match(d.querySelector('.import-form')!.textContent!,/未填写也会保留原件/);assert.match(d.querySelector('.import-form')!.textContent!,/来源限定观察/);
  await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());
  const details=Array.from(d.querySelectorAll('details')).find(item=>item.querySelector('summary')?.textContent==='本次导入说明')!;
  assert.equal(details.querySelector('.file-text')!.textContent,guidance);assert.equal(details.querySelector('img'),null);assert.equal(details.querySelector('textarea'),null);assert.match(details.textContent!,/不会把第三方和 AI 引用整批变成你的表达/);
@@ -159,7 +195,7 @@ test('choosing a Source Pack keeps the single editable guidance field and submit
  await act(async()=>{parsing.value='';parsing.dispatchEvent(new window.Event('change',{bubbles:true}));});assert.equal(d.querySelector('textarea')!.value,guidance);
  await act(async()=>{parsing.value='fixture.pack';parsing.dispatchEvent(new window.Event('change',{bubbles:true}));});
  await select(d,[new File(['Generated fixed-parser original'],'generated-pack.custom')]);await submit(d);await until(()=>writes.length===1);
- assert.equal(writes[0].sourcePackId,'fixture.pack');assert.equal(writes[0].instruction,guidance);assert.equal(writes[0].processing,'automatic');assert.equal(d.querySelector('textarea')!.value,'');
+ assert.equal(writes[0].sourcePackId,'fixture.pack');assert.equal(writes[0].instruction,guidance);assert.equal(writes[0].processing,'automatic');assert.equal(d.querySelector('.import-form'),null);await form(d);assert.equal(d.querySelector('textarea')!.value,'');
 });
 
 test('import detail exposes memory pause, resume and cancel and keeps original evidence navigation',async t=>{
@@ -168,7 +204,7 @@ test('import detail exposes memory pause, resume and cancel and keeps original e
  const api=apiWith((path,init)=>{if(path==='/api/imports')return {items:[importJob({memoryJobId:job.id})]};if(init?.method==='POST'){const action=path.split('/').at(-1)!;actions.push(action);status=action==='pause'?'paused':action==='resume'?'running':'cancelled';}return {...job,status};});
  await act(async()=>root.render(view(api,{onOpen:(id:string)=>opened.push(id)})));await act(async()=>d.querySelector<HTMLButtonElement>('.workspace-select')!.click());
  await act(async()=>button(d,'当前批次结束后暂停').click());await act(async()=>button(d,'继续整理').click());await act(async()=>button(d,'取消未完成方案').click());assert.deepEqual(actions,['pause','resume','cancel']);assert.match(d.body.textContent!,/记忆提取已停止/);
- await act(async()=>button(d,'查看记录 1').click());assert.deepEqual(opened,['capture:cccccccc-cccc-4ccc-8ccc-cccccccccccc']);
+ await act(async()=>button(d,'查看记录').click());assert.deepEqual(opened,['capture:cccccccc-cccc-4ccc-8ccc-cccccccccccc']);
 });
 
 test('running import exposes cancellation, keeps originals and requires explicit retry',async t=>{
@@ -242,7 +278,7 @@ test('a late confirmation success cannot replace the new node or release its pen
  await act(async()=>resolveOld(importJob({name:oldJob.name})));
  assert.match(d.body.textContent!,/New node generated import/);assert.doesNotMatch(d.body.textContent!,/Old node generated import/);
  assert.equal(button(d,'确认并开始导入').disabled,true);assert.equal(changed,0);
- newStored=importJob({name:newJob.name});await act(async()=>resolveNew(newStored));assert.equal(changed,1);assert.match(d.body.textContent!,/记录已保存到中央归档/);
+ newStored=importJob({name:newJob.name});await act(async()=>resolveNew(newStored));assert.equal(changed,1);assert.match(d.body.textContent!,/1 条记录已保存/);
 });
 
 test('confirmation locks only its own job and late completion never steals the next form or another selection',async t=>{
@@ -253,23 +289,23 @@ test('confirmation locks only its own job and late completion never steals the n
  const choose=async(name:string)=>act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.workspace-select')).find(item=>item.querySelector('strong')!.textContent===name)!.click());
  await choose('first');await act(async()=>button(d,'确认并开始导入').click());assert.equal(button(d,'确认并开始导入').disabled,true);
  await choose('second');assert.equal(button(d,'确认并开始导入').disabled,false);await act(async()=>button(d,'确认并开始导入').click());
- await act(async()=>button(d,'新建导入').click());assert.ok(d.querySelector('form'));assert.equal(d.querySelector<HTMLInputElement>('input[type=file]')!.disabled,false);
+ await act(async()=>button(d,'添加资料').click());assert.ok(d.querySelector('form'));assert.equal(d.querySelector<HTMLInputElement>('input[type=file]')!.disabled,false);
  jobs[0]=importJob({id:'first',name:'first'});await act(async()=>resolvers.get('/api/imports/first/confirm')!(jobs[0]));assert.ok(d.querySelector('form'),'Completion keeps the next form visible');
  await choose('second');assert.equal(button(d,'确认并开始导入').disabled,true);jobs[1]=importJob({id:'second',name:'second'});
- await act(async()=>resolvers.get('/api/imports/second/confirm')!(jobs[1]));assert.equal(d.querySelector('.import-detail h2')!.textContent,'second');assert.match(d.body.textContent!,/记录已保存到中央归档/);
+ await act(async()=>resolvers.get('/api/imports/second/confirm')!(jobs[1]));assert.equal(d.querySelector('.import-detail h1')!.textContent,'second');assert.match(d.body.textContent!,/1 条记录已保存/);
 });
 
 test('retired directory intake has no form or edit entry while existing jobs remain inspectable and removable',async t=>{
  const {root,d}=await fixture(t);
  const api=apiWith((path,init)=>{if(init?.method==='POST')throw new ApiError('Generated path missing',422,undefined,'import_directory_missing');return {items:[]};});
  await act(async()=>root.render(view(api)));
- assert.equal(button(d,'服务器目录'),undefined);assert.equal(d.querySelector('input[placeholder="/data/imports/my-notes"]'),null);assert.doesNotMatch(d.querySelector('form')!.textContent!,/服务器目录/);
+ await act(async()=>button(d,'添加资料').click());assert.equal(button(d,'服务器目录'),undefined);assert.equal(d.querySelector('input[placeholder="/data/imports/my-notes"]'),null);assert.doesNotMatch(d.querySelector('form')!.textContent!,/服务器目录/);
  await act(async()=>{importQueue(api).enqueue({source:{kind:'directory',path:'/generated/missing'},name:'Existing directory job',instruction:'',sourcePackId:''});});
  await until(()=>Boolean(button(d,'重试提交')));
  assert.equal(d.querySelector('.imports-page > [role=alert]'),null);assert.equal(d.querySelector<HTMLInputElement>('input[type=file]')!.disabled,false);assert.match(d.querySelector('.import-queue-item')!.textContent!,/目录不存在/);assert.equal(button(d,'修改目录'),undefined);
  await act(async()=>d.querySelector<HTMLButtonElement>('.import-queue-item .workspace-select')!.click());assert.match(d.querySelector('.import-detail')!.textContent!,/\/generated\/missing/);assert.equal(button(d,'修改目录'),undefined);
  await act(async()=>button(d,'移出队列').click());assert.equal(d.querySelectorAll('.import-queue-item').length,0);
- await act(async()=>button(d,'新建导入').click());await select(d,[new File(['generated local'],'local.txt')]);assert.equal(button(d,'加入导入队列').disabled,false);
+ await act(async()=>button(d,'添加资料').click());await select(d,[new File(['generated local'],'local.txt')]);assert.equal(button(d,'加入导入队列').disabled,false);
 });
 
 test('folder drop expands entries before admission, blocks partial submission and displays relative paths',async t=>{
@@ -279,7 +315,7 @@ test('folder drop expands entries before admission, blocks partial submission an
   if(path==='/api/import-uploads'){const input=JSON.parse(String(init!.body));names.push(input.name);return {id:input.id,fileId:'archived:'+input.id,partBytes:4,parts:[]};}
   return {items:[]};
  });
- await act(async()=>root.render(view(api)));
+ await act(async()=>root.render(view(api)));await act(async()=>button(d,'添加资料').click());
  const folder={name:'generated-folder',isDirectory:true,isFile:false,createReader:()=>{let first=true;return {readEntries:(done:typeof read)=>{if(first){first=false;read=done;}else done([]);}};}};
  const event=new window.Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(event,'dataTransfer',{value:{items:[{kind:'file',webkitGetAsEntry:()=>folder,getAsFile:()=>new File(['placeholder'],'generated-folder')}],files:[]}});
  await act(async()=>d.querySelector('.file-drop')!.dispatchEvent(event));assert.equal(button(d,'加入导入队列').disabled,true);assert.match(d.body.textContent!,/正在读取所选文件/);assert.equal(names.length,0);
@@ -288,9 +324,42 @@ test('folder drop expands entries before admission, blocks partial submission an
 });
 
 test('folder picker keeps relative paths and late drop results cannot leak into a different node',async t=>{
- const {root,d}=await fixture(t),api=apiWith(()=>({items:[]}));await act(async()=>root.render(view(api)));
+ const {root,d}=await fixture(t),api=apiWith(()=>({items:[]}));await act(async()=>root.render(view(api)));await act(async()=>button(d,'添加资料').click());
  const picker=d.querySelector<HTMLInputElement>('input[webkitdirectory]')!;const file=new File(['generated'],'same.txt');Object.defineProperty(file,'webkitRelativePath',{value:'picked/nested/same.txt'});Object.defineProperty(picker,'files',{value:[file]});await act(async()=>picker.dispatchEvent(new window.Event('change',{bubbles:true})));
  assert.match(d.querySelector('.selected-files')!.textContent!,/picked\/nested\/same.txt/);
  let read!:(entries:unknown[])=>void;const event=new window.Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(event,'dataTransfer',{value:{items:[{kind:'file',webkitGetAsEntry:()=>({name:'late',isDirectory:true,isFile:false,createReader:()=>({readEntries:(done:typeof read)=>read=done})}),getAsFile:()=>null}],files:[]}});
  await act(async()=>d.querySelector('.file-drop')!.dispatchEvent(event));const nextApi=apiWith(()=>({items:[]}));await act(async()=>root.render(view(nextApi)));await act(async()=>read([]));assert.equal(d.querySelector('.selected-files'),null);assert.equal(d.querySelector('[role=status]'),null);
+});
+
+test('Needs attention includes unsupported originals and renders each existing job as one structured row',async t=>{
+ const{root,d}=await fixture(t),jobs=['completed','unsupported','failed','awaiting_confirmation','needs_configuration','preparing','cancelled'].map(status=>importJob({id:status,name:'Generated '+status,status,captureIds:[]})),api=apiWith(path=>path==='/api/imports'?{items:jobs}:{items:[]});await act(async()=>root.render(view(api)));
+ assert.equal(d.querySelectorAll('.import-job-row').length,7);assert.equal(d.querySelectorAll('.import-job-icon').length,7);assert.equal(d.querySelectorAll('.import-job-copy small').length,7);assert.equal(d.querySelectorAll('.import-job-row>.chevron').length,7);await act(async()=>button(d,'需处理 4').click());assert.equal(d.querySelectorAll('.import-job-row').length,4);assert.match(d.querySelector('.import-queue-list')!.textContent!,/Generated unsupported/);await act(async()=>button(d,'已完成 1').click());assert.equal(d.querySelectorAll('.import-job-row').length,1);assert.match(d.querySelector('.import-job-copy strong')!.textContent!,/Generated completed/);
+});
+test('instruction edits block the old preview; failed prepare keeps the exact draft until the same job is re-previewed',async t=>{
+ const{root,d}=await fixture(t),writes:{path:string;body:any}[]=[];let fail=true,job=importJob({status:'awaiting_confirmation',instruction:'Generated original instruction',captureIds:[],preview:{count:1,samples:[]}});const other=importJob({id:'other',name:'Other generated import',captureIds:[]});const api=apiWith((path,init)=>{if(path==='/api/imports')return{items:[job,other]};if(init?.method==='POST'){const body=init.body?JSON.parse(String(init.body)):undefined;writes.push({path,body});if(path.endsWith('/prepare')){if(fail)throw new ApiError('Generated prepare503',503);job={...job,instruction:body.instruction};return job;}if(path.endsWith('/confirm')){assert.equal(job.instruction,'Generated revised instruction\nQuotes keep their original speaker.');job={...job,status:'completed'};return job;}}return{items:[]};});await act(async()=>root.render(view(api)));await act(async()=>d.querySelector<HTMLButtonElement>('.import-job-row')!.click());assert.equal(button(d,'确认并开始导入').disabled,false);assert.equal(button(d,'重新生成预览').disabled,true);
+ const revised='Generated revised instruction\nQuotes keep their original speaker.';await act(async()=>{const input=d.querySelector<HTMLTextAreaElement>('.import-instruction-edit textarea')!;Object.getOwnPropertyDescriptor(d.defaultView!.HTMLTextAreaElement.prototype,'value')!.set!.call(input,revised);input.dispatchEvent(new window.Event('input',{bubbles:true}));});assert.equal(button(d,'确认并开始导入').disabled,true);await act(async()=>button(d,'确认并开始导入').click());assert.equal(writes.length,0);assert.match(d.querySelector('.confirm-import')!.textContent!,/说明已修改，请先重新生成预览/);await act(async()=>button(d,'重新生成预览').click());assert.equal(writes.length,1);assert.equal(writes[0].path,'/api/imports/'+job.id+'/prepare');assert.deepEqual(writes[0].body,{instruction:revised});assert.equal(d.querySelector<HTMLTextAreaElement>('.import-instruction-edit textarea')!.value,revised);assert.equal(button(d,'确认并开始导入').disabled,true);
+ await act(async()=>button(d,'返回导入列表').click());await act(async()=>d.querySelectorAll<HTMLButtonElement>('.import-job-row')[1].click());await act(async()=>button(d,'返回导入列表').click());await act(async()=>d.querySelector<HTMLButtonElement>('.import-job-row')!.click());assert.equal(d.querySelector<HTMLTextAreaElement>('.import-instruction-edit textarea')!.value,revised);assert.equal(button(d,'确认并开始导入').disabled,true);fail=false;await act(async()=>button(d,'重新生成预览').click());assert.deepEqual(writes[1],writes[0]);assert.equal(button(d,'确认并开始导入').disabled,false);assert.equal(button(d,'重新生成预览').disabled,true);await act(async()=>button(d,'确认并开始导入').click());assert.equal(writes[2].path,'/api/imports/'+job.id+'/confirm');assert.equal(writes[2].body,undefined);assert.match(d.body.textContent!,/0 条记录已保存/);
+});
+test('completed imports expose three archival stages, independent Memory and flat exact record titles',async t=>{
+ const{root,d}=await fixture(t),opened:string[]=[],captureId='cccccccc-cccc-4ccc-8ccc-cccccccccccc',api=apiWith(path=>path==='/api/imports'?{items:[importJob({memoryProgress:{total:1,receipts:1,completed:0,pending:0,running:0,failed:0,waitingForModel:0,paused:0,cancelled:0,disabled:1,unavailable:0,jobIds:[]},preview:{count:1,samples:[{title:'Generated preview',text:'Generated original',kind:'file',attachmentCount:0}]}})]}:path==='/api/capture-browser/'+captureId?{id:captureId,windowTitle:'Generated exact saved original'}:{items:[]});await act(async()=>root.render(view(api,{onOpen:(ref:string)=>opened.push(ref)})));await act(async()=>d.querySelector<HTMLButtonElement>('.import-job-row')!.click());assert.equal(d.querySelectorAll('.import-stage-strip>.import-stage').length,3);assert.equal(d.querySelector('.import-steps'),null);assert.equal(d.querySelector('.import-memory-state')!.textContent,'自动记忆未启用');assert.equal(d.querySelector('.import-memory-status details')!.hasAttribute('open'),false);assert.match(d.querySelector('.import-memory-status[aria-live]')!.textContent!,/自动记忆进度/);assert.equal(d.querySelector('.import-support-preview')!.getAttribute('open'),null);assert.equal(d.querySelector('.import-results')!.closest('details'),null);assert.equal(d.querySelector('.import-result-row strong')!.textContent,'Generated exact saved original');await act(async()=>d.querySelector<HTMLButtonElement>('.import-result-row')!.click());assert.deepEqual(opened,['capture:'+captureId]);
+});
+
+test('archived original reader rejects a changed digest, retries the same file and renders HTML only as literal text',async t=>{
+ const{root,d}=await fixture(t),{ArchivedFileReader}=await import('../src/ArchivedFileReader');const content='<h1>Generated untrusted original</h1><img src="https://fixture.invalid/private">',file={id:'generated-archive',hash:createHash('sha256').update(content).digest('hex'),name:'generated.html',relativePath:'generated.html',mimeType:'text/html',sizeBytes:Buffer.byteLength(content),createdAt:now};let calls=0;const api={...apiWith(()=>({items:[]})),raw:async(path:string)=>{assert.equal(path,'/api/archived-files/'+file.id+'/content');return new Response(++calls===1?'generated mismatched bytes':content);}} as Api;await act(async()=>root.render(React.createElement(ArchivedFileReader,{api,file,onBack:()=>{}})));await until(()=>Boolean(d.querySelector('[role=alert]')));assert.equal(d.querySelector('pre'),null);await act(async()=>button(d,'重试').click());await until(()=>Boolean(d.querySelector('pre')));assert.equal(calls,2);assert.equal(d.querySelector('pre')!.textContent,content);assert.equal(d.querySelector('img'),null);assert.equal(d.querySelector('script'),null);
+});
+test('old owner archive bytes are aborted and cannot replace the new exact file',async t=>{
+ const{root,d}=await fixture(t),{ArchivedFileReader}=await import('../src/ArchivedFileReader');let finish!:(v:Response)=>void,signal:AbortSignal|undefined;const prior='Generated prior owner original',current='Generated current owner original',make=(id:string,body:string)=>({id,hash:createHash('sha256').update(body).digest('hex'),name:id+'.txt',relativePath:id+'.txt',mimeType:'text/plain',sizeBytes:Buffer.byteLength(body),createdAt:now}),pending=new Promise<Response>(resolve=>finish=resolve),oldApi={...apiWith(()=>({items:[]})),raw:async(_path:string,init?:RequestInit)=>{signal=init?.signal as AbortSignal;return pending;}} as Api,newApi={...apiWith(()=>({items:[]})),raw:async()=>new Response(current)} as Api;await act(async()=>root.render(React.createElement(ArchivedFileReader,{api:oldApi,file:make('old',prior),onBack:()=>{}})));await act(async()=>root.render(React.createElement(ArchivedFileReader,{api:newApi,file:make('current',current),onBack:()=>{}})));assert.equal(signal!.aborted,true);await until(()=>d.querySelector('pre')?.textContent===current);await act(async()=>finish(new Response(prior)));assert.equal(d.querySelector('pre')!.textContent,current);assert.doesNotMatch(d.body.textContent!,/prior owner/);
+});
+test('raster archive URLs are revoked on return; SVG has download only and is never fetched for execution',async t=>{
+ const{root,d}=await fixture(t),{ArchivedFileReader}=await import('../src/ArchivedFileReader'),content=Buffer.from('generated raster bytes'),file={id:'raster',hash:createHash('sha256').update(content).digest('hex'),name:'generated.png',relativePath:'generated.png',mimeType:'image/png',sizeBytes:content.length,createdAt:now};let reads=0;const revoked:string[]=[];t.mock.method(URL,'createObjectURL',()=> 'blob:generated-raster');t.mock.method(URL,'revokeObjectURL',value=>revoked.push(value));const api={...apiWith(()=>({items:[]})),raw:async()=>{reads++;return new Response(content);}} as Api;await act(async()=>root.render(React.createElement(ArchivedFileReader,{api,file,onBack:()=>{}})));await until(()=>Boolean(d.querySelector('img')));assert.equal(d.querySelector('img')!.getAttribute('src'),'blob:generated-raster');await act(async()=>root.render(React.createElement(ArchivedFileReader,{api,file:{...file,id:'svg',name:'generated.svg',mimeType:'image/svg+xml'},onBack:()=>{}})));assert.deepEqual(revoked,['blob:generated-raster']);assert.equal(reads,1);assert.equal(d.querySelector('img'),null);assert.equal(d.querySelector('iframe'),null);assert.ok(button(d,'下载原件'));
+});
+
+test('public import DTO preserves exact model reason collisions and unproven warning origins without changing confirmation',async t=>{
+ const {root,d}=await fixture(t),reason='This import was requested for manual preview.',warning='The analysis did not provide a per-file disposition list. Unlisted files must not be assumed to have been parsed.',freeform='模型原句 <img src=x>：This import was requested for manual preview. 保留此话。',job=importJob({status:'awaiting_confirmation',captureIds:[],preview:{count:1,samples:[]},reviewDecision:{confidence:'low',ambiguous:false,reason},reviewGate:{decision:'confirmation',reason},warnings:[warning,freeform]}),writes:string[]=[],api=apiWith((path,init)=>{if(init?.method){writes.push(path);throw Error('No mutation selected');}return path==='/api/imports'?{items:[job]}:{items:[]};});
+ await act(async()=>root.render(view(api)));await until(()=>Boolean(d.querySelector('.import-job-row')));await act(async()=>d.querySelector<HTMLButtonElement>('.import-job-row')!.click());
+ assert.equal('processing' in job,false);assert.equal(d.querySelector('.import-detail-body>.notice')!.textContent,'需要确认 · '+reason);const notes=d.querySelectorAll('.review-notes li');assert.equal(notes[0].textContent,warning);assert.equal(notes[1].textContent,freeform);assert.equal(d.querySelector('.review-notes img'),null);assert.equal(d.querySelector('.import-host-diagnostics'),null);assert.equal(button(d,'确认并开始导入').disabled,false);assert.deepEqual(writes,[]);assert.equal(job.reviewGate!.reason,reason);assert.deepEqual(job.warnings,[warning,freeform]);
+});
+test('a proven host gate is readable with only its exact original in closed run details',async t=>{
+ const {root,d}=await fixture(t),reason='The parser did not provide a confidence and ambiguity assessment.',warning='The analysis did not provide a per-file disposition list. Unlisted files must not be assumed to have been parsed.',job=importJob({status:'awaiting_confirmation',captureIds:[],preview:{count:1,samples:[]},reviewGate:{decision:'confirmation',reason},warnings:[warning]}),api=apiWith(path=>path==='/api/imports'?{items:[job]}:{items:[]});
+ await act(async()=>root.render(view(api)));await until(()=>Boolean(d.querySelector('.import-job-row')));await act(async()=>d.querySelector<HTMLButtonElement>('.import-job-row')!.click());assert.equal(d.querySelector('.import-detail-body>.notice')!.textContent,'需要确认 · 解析未说明置信度与歧义，请核对预览。');assert.equal(d.querySelector('.review-notes li')!.textContent,warning);const technical=d.querySelector<HTMLDetailsElement>('.import-host-diagnostics')!;assert.equal(technical.open,false);assert.deepEqual([...technical.querySelectorAll('pre')].map(e=>e.textContent),[reason]);
 });

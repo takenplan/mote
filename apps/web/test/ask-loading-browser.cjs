@@ -48,12 +48,13 @@ async function run(){
     if(path==='/api/insights'){json(res,{items:[]});return;}
     if(path==='/api/sources'){json(res,{items:[]});return;}
     if(path==='/api/connections'){json(res,{items:[],mcp:{enabled:true,writeEnabled:false,writeSourceIds:[]}});return;}
-    if(path==='/api/library/catalog'){json(res,{schemaVersion:1,types:[],sources:[],items:[],nextCursor:null});return;}
+    if(path==='/api/library/browse'){json(res,{schemaVersion:1,types:[],sources:[],items:[],nextCursor:null});return;}
     if(path==='/api/context/search'){json(res,{items:[{ref:'memory:generated-search-result',title:'Generated searchable memory',snippet:'Generated evidence excerpt',kind:'memory'}],nextCursor:null});return;}
     if(path==='/api/context/read'){json(res,{items:[{id:'generated-search-result',ref:'memory:generated-search-result',kind:'memory',title:'Generated searchable memory',text:'Generated evidence body for retrieval journey',textRange:{offset:0,total:43,nextOffset:null}}],missingRefs:[]});return;}
     if(path==='/api/configuration'){json(res,{profile:'generated-fixture',groups:[]});return;}
     if(path==='/api/status'){json(res,{profile:'generated-fixture',agent:{configured:true,model:'generated-model',provider:'custom',agentTimeoutMs:120000},storage:{captures:0,blobs:0,bytes:0,imageBytes:0,logicalBytes:0,imagesEncrypted:false,indexing:[]},index:{mode:'none',model:null},retentionDays:0,insightIntervalHours:0,serverTime:when});return;}
     if(path==='/api/devices'){json(res,{items:[]});return;}
+    if(path==='/api/devices/first-data'){json(res,{state:'waiting',originalAvailable:false,checkedDevices:0,checkedRecords:0,windowLimited:false});return;}
     if(path==='/api/features'){json(res,{schemaVersion:1,revision:1,features:[],capabilities:['/api/owner-questions','/api/capture-browser'].map(path=>({id:'http:GET:'+path,version:'1',surface:'data',featureId:'generated-fixture',state:'active'}))});return;}
     const collection=path==='/api/media-activity'?'media':path==='/api/activity'?'activity':path==='/api/capture-browser'?'records':null;
     if(collection){
@@ -126,7 +127,8 @@ async function run(){
  async function checkLibraryRefresh({id,selector,row,text,release,rolling}){
   await js(`location.hash=${JSON.stringify('#/library?view='+id)}`);
   await until(()=>counts[id]&&js(`document.querySelector(${JSON.stringify(selector)})?.textContent.includes(${JSON.stringify(text)})`),'loaded '+id+' collection');
-  await until(()=>js(`!document.querySelector('button[aria-label="刷新资料"]')?.disabled`),'global refresh available for '+id);
+  await js(`(()=>{const menu=document.querySelector('.workspace-node-menu');if(menu&&!menu.open)menu.querySelector('summary').click();})()`);
+  await until(()=>js(`document.querySelector('button[aria-label="刷新资料"]')?.getClientRects().length&&!document.querySelector('button[aria-label="刷新资料"]').disabled`),'global refresh available for '+id);
   const initialPath=collectionPaths[id][0],before=counts[id];
   await js(`(()=>{const panel=document.querySelector(${JSON.stringify(selector)}),row=document.querySelector(${JSON.stringify(row)});if(!panel||!row)throw Error('Missing generated collection content');const state=window.__frontendRefreshCheck={panel,row,violations:[],active:true};const check=()=>{if(!state.active)return;const loading=[...document.querySelectorAll('.library-content [role="status"],.library-content .loading')].filter(element=>element.getClientRects().length&&/正在读取|正在找回/.test(element.textContent)).map(element=>element.textContent);const reasons=[...loading,...!panel.isConnected||document.querySelector(${JSON.stringify(selector)})!==panel?['loaded panel replaced']:[],...!row.isConnected||document.querySelector(${JSON.stringify(row)})!==row?['loaded row replaced']:[]];if(reasons.length)state.violations.push(reasons);};state.observer=new MutationObserver(check);state.observer.observe(document.body,{subtree:true,childList:true,attributes:true});state.timer=setInterval(check,16);check();document.querySelector('button[aria-label="刷新资料"]').click();})()`);
   await until(()=>counts[id]>before&&(!rolling||collectionPaths[id].some(path=>path!==initialPath))&&[...pending].some(req=>req.url.startsWith(initialPath.split('?')[0])),'delayed global '+id+' refresh');
@@ -146,7 +148,7 @@ async function run(){
  await until(()=>js(`document.querySelector('[data-page="overview"][data-session="ready"]')`),'default overview');
  await until(()=>js(`document.querySelector('[data-page="overview"] h1')?.textContent==='首页'&&document.querySelector('.central-first-steps')`),'overview onboarding content');
  await delay(80);writeFileSync(join(output,'central-overview.png'),(await wc.capturePage()).toPNG());
- assert.deepEqual(await js(`[...document.querySelectorAll('.sidebar nav button')].map(node=>node.innerText)`),['首页','资料库','来源','AI 接入']);
+ assert.deepEqual(await js(`[...document.querySelectorAll('.sidebar nav button')].map(node=>node.querySelector('span:last-child').textContent)`),['首页','资料库','来源','AI 接入']);
  await js(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'k',metaKey:true,bubbles:true}))`);
  assert.equal(await js(`document.activeElement===document.querySelector('.global-retrieval input')`),true);
  await js(`(()=>{const input=document.querySelector('.global-retrieval input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'generated');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
@@ -157,8 +159,10 @@ async function run(){
  writeFileSync(join(output,'central-search-evidence.png'),(await wc.capturePage()).toPNG());
  await js(`document.querySelector('.library-back').click()`);
  assert.equal(await js(`document.querySelector('.library-browser').classList.contains('has-selection')`),false);
- await js(`[...document.querySelectorAll('.global-retrieval button')].find(node=>node.textContent==='提问').click()`);
- await js(`document.querySelector('.global-retrieval').requestSubmit()`);
+ await js(`location.hash='#/today'`);
+ await until(()=>js(`!!document.querySelector('.home-find input')`),'Home query entry');
+ await js(`(()=>{const input=document.querySelector('.home-find input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'generated');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+ await delay(60);await js(`[...document.querySelectorAll('.home-find button')].find(node=>node.textContent==='问一问').click()`);
  await until(()=>js(`document.querySelector('[data-page="ask"] .conversation-history')&&document.querySelector('textarea[aria-label="向 Mote 提问"]')`),'global Ask full workspace');
  await until(()=>js(`document.querySelector('textarea[aria-label="向 Mote 提问"]')?.value==='generated'`),'global Ask draft handoff without sending');
  assert.equal(await js(`document.querySelector('[role="dialog"]')===null`),true);

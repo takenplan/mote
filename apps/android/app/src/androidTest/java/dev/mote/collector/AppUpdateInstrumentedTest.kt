@@ -37,6 +37,44 @@ class AppUpdateInstrumentedTest {
         } finally { store.prefs.edit().putBoolean("installRequestActive", false).commit(); apk.delete(); part.delete(); unrelated.delete() }
     }
 
+    @Test fun readyPackageDeleteSharesTheInstallRowWithoutGrantingOrRequestingInstallation() {
+        val instrumentation=InstrumentationRegistry.getInstrumentation();val context=instrumentation.targetContext
+        assumeTrue("Explicit generated non-DEV update UI selection",InstrumentationRegistry.getArguments().getString("updateReadyUiFixture")=="true")
+        require(context.packageName.endsWith(".test") || context.packageName.endsWith(".filefixture"))
+        require(RuntimeProfile.current!=RuntimeProfile.DEV && android.os.Build.FINGERPRINT.contains("emu64a"))
+        val store=AppUpdateStore(context);val saved=store.prefs.all.toMap();val settings=Settings(context).read()
+        require(!store.prefs.getBoolean("installRequestActive",false) && !Settings(context).enabled && !ProjectionService.running)
+        val file=File(store.directory,java.security.MessageDigest.getInstance("SHA-256").digest("generated UI deletion".toByteArray()).joinToString("") { "%02x".format(it) }+".apk")
+        require(!file.exists());file.writeText("generated deletion target; never submitted to PackageInstaller")
+        val allowed=context.packageManager.canRequestPackageInstalls()
+        try {
+            store.prefs.edit().putString("state","ready").putLong("availableCode",BuildConfig.VERSION_CODE.toLong()+1).putBoolean("installRequestActive",false).commit()
+            ActivityScenario.launch(AppUpdatesActivity::class.java).awaitUiText("安装更新").use { scenario ->
+                scenario.onActivity { activity ->
+                    fun walk(view:android.view.View):List<android.view.View> = listOf(view)+if(view is android.view.ViewGroup)(0 until view.childCount).flatMap { walk(view.getChildAt(it)) } else emptyList()
+                    val tree=walk(activity.window.decorView)
+                    val install=tree.filterIsInstance<android.widget.Button>().single { it.text.toString()==MoteI18n.text("安装更新") }
+                    val delete=tree.filterIsInstance<android.widget.Button>().single { it.tag=="update-delete-package" }
+                    assertSame(install.parent,delete.parent);assertTrue(delete.isShown);assertTrue(delete.isEnabled)
+                    assertEquals(android.view.View.GONE,tree.single { it.tag=="app-update-settings:content" }.visibility)
+                    delete.performClick()
+                }
+                val deadline=android.os.SystemClock.elapsedRealtime()+20_000
+                while(file.exists() && android.os.SystemClock.elapsedRealtime()<deadline)Thread.sleep(50)
+                assertFalse(file.exists());assertFalse(store.prefs.getBoolean("installRequestActive",false))
+                assertEquals(allowed,context.packageManager.canRequestPackageInstalls());assertEquals(settings,Settings(context).read())
+            }
+        } finally {
+            file.delete()
+            val edit=store.prefs.edit().clear()
+            saved.forEach { (key,value)-> when(value) {
+                is String -> edit.putString(key,value);is Boolean -> edit.putBoolean(key,value);is Long -> edit.putLong(key,value)
+                is Int -> edit.putInt(key,value);is Float -> edit.putFloat(key,value)
+                is Set<*> -> edit.putStringSet(key,value.filterIsInstance<String>().toSet())
+            } };edit.commit()
+        }
+    }
+
     @Test fun actualSignedApkRejectsWrongCertificatePackageDowngradeAndCorruption() {
         val instrumentation = InstrumentationRegistry.getInstrumentation(); val context = instrumentation.targetContext
         val directory = File(context.cacheDir, "update-verification-${System.nanoTime()}").apply { mkdirs() }
@@ -59,10 +97,10 @@ class AppUpdateInstrumentedTest {
     @Test fun nativeUpdatePageDoesNotGrantInstallPermissionOrTriggerNetwork() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val before = context.packageManager.canRequestPackageInstalls(); val store = AppUpdateStore(context); val operation = store.prefs.getString("operation", null)
-        ActivityScenario.launch(AppUpdatesActivity::class.java).awaitUiText(if (BuildConfig.APPLICATION_ID.endsWith(".dev")) "下载 DEV 安装包" else "检查更新").use { scenario -> scenario.onActivity { activity ->
+        ActivityScenario.launch(AppUpdatesActivity::class.java).awaitUiText(if (BuildConfig.APPLICATION_ID.endsWith(".dev")) "打开构建页面" else "检查更新").use { scenario -> scenario.onActivity { activity ->
             val labels = mutableListOf<String>()
             fun walk(view: android.view.View) { if (view is android.widget.TextView) labels += view.text.toString(); if (view is android.view.ViewGroup) repeat(view.childCount) { walk(view.getChildAt(it)) } }
-            walk(activity.window.decorView); assertTrue(labels.contains(if (BuildConfig.APPLICATION_ID.endsWith(".dev")) "下载 DEV 安装包" else "检查更新")); assertFalse(labels.contains("交给系统安装"))
+            walk(activity.window.decorView); assertTrue(labels.contains(if (BuildConfig.APPLICATION_ID.endsWith(".dev")) "打开构建页面" else "检查更新")); assertFalse(labels.contains("交给系统安装"))
         } }
         assertEquals(before, context.packageManager.canRequestPackageInstalls()); assertEquals(operation, store.prefs.getString("operation", null))
     }

@@ -43,7 +43,11 @@ internal object NativePresentationStyles {
     }
     /** Spinner menus and other app-owned popups are separate Windows from Activity decor. */
     fun refreshOwnedWindows(activity: android.app.Activity) {
-        android.view.inspector.WindowInspector.getGlobalWindowViews().forEach { root ->
+        // DecorView can carry a DecorContext whose base is not the Activity.
+        // The Activity owns this window directly, so refresh it before resolving popups.
+        val decor = activity.window.decorView
+        refresh(decor)
+        android.view.inspector.WindowInspector.getGlobalWindowViews().filter { it !== decor }.forEach { root ->
             var owner: android.content.Context = root.context
             while (owner is android.content.ContextWrapper && owner !is android.app.Activity && owner.baseContext !== owner) owner = owner.baseContext
             if (owner === activity) refresh(root)

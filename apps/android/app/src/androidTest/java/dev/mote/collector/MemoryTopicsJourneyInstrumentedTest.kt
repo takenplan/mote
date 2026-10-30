@@ -49,8 +49,9 @@ class MemoryTopicsJourneyInstrumentedTest {
         fail(label + ": " + main { shown().filterIsInstance<TextView>().joinToString(" | ") { it.text.toString() } })
     }
     private fun settled() = (activity() as? CentralActivity)?.isWorking != true
-    private fun click(label: String) { until(label) { main { settled() && shown().filterIsInstance<TextView>().any { it.text.toString() == label && it.isClickable && it.isEnabled } } }; main { shown().filterIsInstance<TextView>().first { it.text.toString() == label && it.isClickable && it.isEnabled }.performClick() } }
-    private fun clickTag(tag: String) { until(tag) { main { settled() && shown().any { it.tag == tag && it.isEnabled } } }; main { shown().single { it.tag == tag }.performClick() } }
+    private fun revealManagement() { if(settled()) shown().filterIsInstance<TextView>().singleOrNull { it.text.toString()==MoteI18n.text("更多")+"  ›"&&it.isClickable&&it.isEnabled }?.performClick() }
+    private fun click(label: String) { until(label) { main { if(settled()&&!text(label))revealManagement();settled() && shown().filterIsInstance<TextView>().any { it.text.toString() == label && it.isClickable && it.isEnabled } } }; main { shown().filterIsInstance<TextView>().first { it.text.toString() == label && it.isClickable && it.isEnabled }.performClick() } }
+    private fun clickTag(tag: String) { until(tag) { main { if(settled()&&shown().none { it.tag==tag })revealManagement();settled() && shown().any { it.tag == tag && it.isEnabled } } }; main { shown().single { it.tag == tag }.performClick() } }
     private fun back() { instrumentation.uiAutomation.executeShellCommand("input keyevent 4").close() }
     private fun open() = ActivityScenario.launch<CentralActivity>(Intent(context, CentralActivity::class.java).putExtra("page", "memories"))
     private fun capture(name: String) = main {
@@ -65,7 +66,7 @@ class MemoryTopicsJourneyInstrumentedTest {
     private fun state() = api.get("/api/__fixture/state")
 
     private fun chooseTree(label: String) {
-        until("tree selector") { main { settled() && shown().filterIsInstance<android.widget.Spinner>().any { it.contentDescription.toString() == "浏览维度" } } }
+        until("tree selector") { main { if(settled()&&shown().filterIsInstance<android.widget.Spinner>().none { it.contentDescription.toString()=="浏览维度" })revealManagement();settled() && shown().filterIsInstance<android.widget.Spinner>().any { it.contentDescription.toString() == "浏览维度" } } }
         main { val spinner = shown().filterIsInstance<android.widget.Spinner>().single { it.contentDescription.toString() == "浏览维度" }; val index = (0 until spinner.adapter.count).single { spinner.adapter.getItem(it).toString() == label }; spinner.setSelection(index) }
         click("浏览维度")
     }

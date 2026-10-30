@@ -8,6 +8,7 @@ import {Overview} from '../src/Overview';
 import {ApiError,type Api,type Status} from '../src/api';
 import {affectedResource} from '../src/operation-feed';
 import {resources} from '../src/resource-cache';
+import {webFeatures} from '../src/features/registry';
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',when='2026-10-20T09:20:00.000Z';
 const candidate={id,deviceId:'generated-phone',deviceName:'Generated phone',source:'note',capturedAt:'2026-01-01T01:00:00.000Z',receivedAt:when};
 const result=(state='ready')=>({state,originalAvailable:state==='ready',checkedDevices:1,checkedRecords:1,windowLimited:false,...(state==='ready'||state==='received_unavailable'?{candidate}:{})});
@@ -25,12 +26,12 @@ function apiWith(first:()=>unknown,other?:(path:string)=>unknown){return {reques
 
 test('pairing, arbitrary catalog content and MCP grant do not complete onboarding; loading is not success',async t=>{
  const f=await fixture(t);let finish!:(value:unknown)=>void;
- const pending=new Promise(done=>finish=done),api=apiWith(()=>pending,path=>path==='/api/connections'?{items:[{scope:'mcp-read'}]}:path.startsWith('/api/library/catalog')?{items:[{id:'unrelated-web-material'}]}:{items:[{id:'source-only'}]});
+ const pending=new Promise(done=>finish=done),api=apiWith(()=>pending,path=>path==='/api/connections'?{items:[{scope:'mcp-read'}]}:path.startsWith('/api/library/browse')?{items:[],nextCursor:null}:{items:[{id:'source-only'}]});
  await f.render(api);
  assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'loading');assert.equal(f.d.querySelector('.central-first-steps .completed'),null);assert.match(f.d.querySelector('[role=status]')!.textContent!,/正在读取采集记录/);
  await act(async()=>finish(result('unverified')));
- assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'unverified');assert.match(f.d.querySelector('.central-first-data')!.textContent!,/最近记录.*尚未验证/);assert.doesNotMatch(f.d.querySelector('.central-first-data')!.textContent!,/原件已保留/);
- await act(async()=>button(f.d,'连接设备').click());assert.deepEqual(f.pages,['deviceConnections']);
+ assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'unverified');assert.match(f.d.querySelector('.central-first-use h2')!.textContent!,/等待设备送来第一份内容/);assert.equal(f.d.querySelectorAll('.first-use-stages .done').length,1);assert.doesNotMatch(f.d.querySelector('.central-first-use')!.textContent!,/原件已保留/);
+ await act(async()=>button(f.d,'刷新状态').click());assert.deepEqual(f.pages,[]);
  await act(async()=>button(f.d,'打开资料库').click());assert.equal(f.pages.at(-1),'archive');assert.deepEqual(f.opened,[]);
 });
 
@@ -38,10 +39,35 @@ test('retained exact device original needs no model or MCP, uses Central receive
  const f=await fixture(t);let fail=false,reads=0;
  const api=apiWith(()=>{reads++;if(fail)throw new ApiError('Generated offline connection',503);return result();},path=>{if(path==='/api/connections'||path==='/api/sources')throw new ApiError('Generated optional service',503);return {items:[]};});
  await f.render(api);assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'ready');assert.equal(f.d.querySelector('.central-first-steps'),null);assert.match(f.d.querySelector('.central-first-data')!.textContent!,/原件已保留/);
+ assert.equal(f.d.querySelector('.central-onboarding')!.closest('details')?.className,'home-extensions');assert.equal(f.d.querySelector<HTMLDetailsElement>('.home-extensions')!.open,false);
  assert.equal(f.d.querySelector('.central-first-data time')!.getAttribute('dateTime'),when);
  await act(async()=>button(f.d,'查看原文').click());await act(async()=>button(f.d,'查看原文').click());assert.deepEqual(f.opened,['capture:'+id,'capture:'+id]);assert.equal(reads,1,'opening is navigation, not upload or model work');
  fail=true;await act(async()=>button(f.d,'刷新').click());await f.tick();assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'error');assert.equal(f.d.querySelector('.central-first-data time'),null);assert.doesNotMatch(f.d.querySelector('.central-first-data')!.textContent!,/原件已保留/);assert.ok(f.d.querySelector('[role=alert]'));
+ assert.equal(f.d.querySelector('.central-onboarding')!.closest('.home-extensions'),null,'failed verification is visible in the primary Home area');
  fail=false;await act(async()=>button(f.d,'刷新').click());await f.tick();assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'ready');
+});
+
+test('Home counts visible browse rows and marks further pages without claiming facet totals',async t=>{
+ const f=await fixture(t),total=()=>f.d.querySelector('.home-summary strong')!.firstChild!.textContent;
+ for(const [catalog,expected] of [[{items:[],sources:[{count:4000}],sourcesTruncated:false,nextCursor:null},'0'],[{items:[],sources:[{count:4000}],sourcesTruncated:true,nextCursor:'more'},'0+']] as const){await f.render(apiWith(()=>result(),path=>path.startsWith('/api/library/browse')?catalog:{items:[]}));assert.equal(total(),expected);assert.match(f.d.querySelector('.home-summary')!.textContent!,/当前可见资料/);}
+ await f.render(apiWith(()=>result(),path=>{if(path.startsWith('/api/library/browse'))throw new ApiError('Generated unavailable catalog',503);return {items:[]};}));
+ assert.equal(total(),'—');assert.match(f.d.querySelector('.home-read-error')!.textContent!,/Generated unavailable catalog/);
+});
+
+test('Home only reads optional feature routes while both the local page and exact server capability exist',async t=>{
+ const f=await fixture(t),reads:string[]=[];
+ const registration=await webFeatures.install({id:'fixture.home-capabilities',version:'1',components:[]},['ask','actions','insights'].map(id=>({surface:'page' as const,entry:{id,route:id==='insights'?'library/insights':id,featureId:'fixture.home-capabilities',render:()=>null}})));
+ t.after(()=>registration.dispose());
+ const optional=['/api/conversations','/api/owner-questions','/api/actions','/api/todos'];
+ const api=(enabled:boolean)=>apiWith(()=>result(),path=>{
+  reads.push(path);
+  if(path==='/api/features')return {schemaVersion:1,revision:1,features:[],capabilities:enabled?optional.map(path=>({id:'http:GET:'+path,version:'1',state:'active',featureId:'fixture.server',surface:'data'})):[]};
+  return {items:[],nextCursor:null};
+ });
+ await f.render(api(false));assert.equal(reads.some(path=>optional.some(prefix=>path.startsWith(prefix))),false);assert.equal(f.d.querySelector('.home-conversations'),null);assert.equal(f.d.querySelector('.home-action-entry'),null);
+ reads.length=0;await f.render(api(true));assert.ok(optional.every(prefix=>reads.some(path=>path.startsWith(prefix))));assert.ok(f.d.querySelector('.home-conversations'));assert.ok(f.d.querySelector('.home-action-entry'));
+ assert.ok(f.d.querySelector('a[href="#/library/insights?insight=new"]'));
+ await act(async()=>registration.dispose());assert.equal(f.d.querySelector('.home-conversations'),null);assert.equal(f.d.querySelector('.home-action-entry'),null);assert.equal(f.d.querySelector('a[href="#/library/insights?insight=new"]'),null,'unloaded report entry cannot silently route to a different page');
 });
 
 test('missing originals remain unavailable; another node cannot inherit a pending or retained result',async t=>{
@@ -49,7 +75,16 @@ test('missing originals remain unavailable; another node cannot inherit a pendin
  const oldApi=apiWith(()=>new Promise(done=>settle=done));await f.render(oldApi);
  const nextApi=apiWith(()=>result('received_unavailable'));await f.render(nextApi);
  await act(async()=>settle(result()));assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'received_unavailable');assert.match(f.d.querySelector('.central-first-data')!.textContent!,/中央已接收.*原件不可用/s);assert.ok(button(f.d,'查看原文').closest('.central-first-steps'),'unavailable originals retain Library navigation but no success action');
- const emptyApi=apiWith(()=>({...result('unverified'),checkedDevices:0,checkedRecords:0,windowLimited:true}));await f.render(emptyApi);assert.equal(f.d.querySelector('.central-first-data time'),null);assert.doesNotMatch(f.d.querySelector('.central-first-data')!.textContent!,/Generated phone/);
+ const emptyApi=apiWith(()=>({...result('unverified'),checkedDevices:0,checkedRecords:0,windowLimited:true}));await f.render(emptyApi);assert.equal(f.d.querySelector('.central-first-data time'),null);assert.doesNotMatch(f.d.querySelector('.central-first-use')!.textContent!,/Generated phone/);assert.match(f.d.querySelector('.central-first-use h2')!.textContent!,/接收结果暂未核实/);
+});
+
+test('background receipt revalidation preserves the original opener until a genuine failure changes availability',async t=>{
+ const f=await fixture(t);let reads=0,finish!:(value:unknown)=>void;
+ const api=apiWith(()=>++reads===1?result():new Promise(resolve=>finish=resolve));
+ await f.render(api);const opener=f.d.querySelector<HTMLButtonElement>('.central-first-data .text-button')!;
+ await act(async()=>button(f.d,'刷新').click());
+ assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'loading');assert.match(f.d.querySelector('.central-first-data')!.textContent!,/正在读取采集记录/);assert.equal(f.d.querySelector('.central-first-data .text-button')===opener,true,'background revalidation must not detach the element that owns reader focus');assert.equal(opener.closest('.home-extensions')?.tagName,'DETAILS');
+ await act(async()=>finish(result()));assert.equal(f.d.querySelector('.central-first-data .text-button')===opener,true);assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'ready');
 });
 
 test('capture/file changes recheck exact availability without polling model/plugin events',async t=>{
@@ -60,4 +95,18 @@ test('capture/file changes recheck exact availability without polling model/plug
  const api=apiWith(()=>result(available?'ready':'received_unavailable'));await f.render(api);available=false;
  await act(async()=>resources(api).invalidate(key=>affectedResource(key,new Set(['capture:'+id]),false)));
  assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'received_unavailable');
+});
+
+test('temporary first-use belongs to the observed Home owner and a late old receipt cannot establish it on a normal archive',async t=>{
+ const f=await fixture(t);let oldReads=0,settle!:(value:unknown)=>void;
+ const oldApi=apiWith(()=>++oldReads===1?result('unverified'):new Promise(resolve=>settle=resolve));await f.render(oldApi);assert.ok(f.d.querySelector('.central-first-use'));
+ await act(async()=>button(f.d,'刷新状态').click());
+ const otherId='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',current=apiWith(()=>({...result(),candidate:{...candidate,id:otherId,deviceName:'Generated current owner'}}),path=>path.startsWith('/api/library/browse')?{items:[{entryType:'capture',ref:'capture:'+otherId,contentAt:when,revision:'generated',capture:{id:otherId,deviceId:'current',deviceName:'Generated current owner',capturedAt:when,source:'note',windowTitle:'Current owner original',textPreview:'Current owner text',durationMs:0}}],nextCursor:null}:{items:[]});
+ await f.render(current);assert.equal(f.d.querySelector('.central-first-use'),null);assert.ok(f.d.querySelector('.home-find'));assert.match(f.d.querySelector('.central-first-data')!.textContent!,/Generated current owner/);
+ await act(async()=>settle(result()));assert.equal(f.d.querySelector('.central-first-use'),null);assert.match(f.d.querySelector('.home-material-list')!.textContent!,/Current owner original/);assert.doesNotMatch(f.d.querySelector('.central-first-data')!.textContent!,/Generated phone/);
+});
+
+// A real HTTP status must be readable while its exact diagnostic stays available on demand.
+test('first receipt503 is unverified with readable status, closed diagnostics and explicit recovery',async t=>{
+ const f=await fixture(t);let fail=false;const api=apiWith(()=>{if(fail)throw new ApiError('Generated first receipt fault',503,undefined,'service_unavailable');return result('waiting');},path=>path.startsWith('/api/library/browse')?{items:[],nextCursor:null}:{items:[]});await f.render(api);fail=true;await act(async()=>button(f.d,'刷新状态').click());await f.tick();assert.equal(f.d.querySelector('[data-onboarding-state]')!.getAttribute('data-onboarding-state'),'error');assert.match(f.d.querySelector('.first-use-heading h2')!.textContent!,/接收结果暂未核实/);const failure=f.d.querySelector('.first-use-failure')!,alert=failure.querySelector('[role=alert]')!;assert.doesNotMatch(alert.textContent!,/service_unavailable|Generated/);assert.match(alert.textContent!,/服务|稍后|重试/);assert.equal(failure.querySelector('details')!.open,false);assert.match(failure.querySelector('pre')!.textContent!,/service_unavailable/);assert.equal(button(f.d,'刷新状态').disabled,false);fail=false;await act(async()=>button(f.d,'刷新状态').click());await f.tick();assert.equal(f.d.querySelector('.first-use-failure'),null);assert.match(f.d.querySelector('.first-use-heading h2')!.textContent!,/等待设备送来第一份内容/);assert.deepEqual(f.opened,[]);
 });

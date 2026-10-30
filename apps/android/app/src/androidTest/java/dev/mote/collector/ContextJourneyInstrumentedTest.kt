@@ -113,18 +113,20 @@ class ContextJourneyInstrumentedTest {
         try {
             settings.save(original.copy(server = "", token = ""), confirmCentralEndpoint = true)
             ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use {
-                clickTag("primary:LIBRARY")
+                until("Home menu available"){main{shown().any{it.contentDescription=="打开菜单"&&it.isClickable}}};main{shown().single{it.contentDescription=="打开菜单"&&it.isClickable}.performClick()};clickTag("menu:资料与记忆")
                 until("Materials and memories are primary Library views") { main {
                     val tabs = shown().singleOrNull { it.tag == "library-primary-views" }
                     tabs != null && views(tabs).filterIsInstance<TextView>().map { it.text.toString() }.containsAll(listOf("我的资料", "我的记忆"))
                 } }
                 capture("materials")
                 main { shown().filterIsInstance<TextView>().single { it.isClickable && it.text.toString() == "我的记忆" }.performClick() }
+                until("Memory tab keeps the final handoff before opening Central") { main { shown().filterIsInstance<TextView>().any { it.isClickable&&it.text.toString()=="查看我的记忆 ↗" } } }
+                main { shown().filterIsInstance<TextView>().single { it.isClickable&&it.text.toString()=="查看我的记忆 ↗" }.performClick() }
                 until("Memory view resolves to the existing Central memory page") { main { activity() is CentralActivity && activity().intent.getStringExtra("page") == "memories" } }
                 capture("memory-connection-required")
                 main { activity().finish() }
-                clickTag("primary:HOME")
-                main { shown().filterIsInstance<TextView>().single { it.isClickable && it.text.toString() == "发现历史" }.performClick() }
+                until("Return to resumed Main Library before dispatching Back") { main { activity() is MainActivity && shown().any { it.tag == "library-primary-views" } } }
+                instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);clickTag("menu:发现历史")
                 until("Discovery resolves to the existing Central insights page") { main { activity() is CentralActivity && activity().intent.getStringExtra("page") == "insights" } }
                 main { activity().finish() }
             }

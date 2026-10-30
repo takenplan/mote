@@ -2,6 +2,11 @@
 
 Date: 2026-10-12. Status: accepted by the owner.
 
+The 2026-10-29 execution authorization extends independent descriptions to
+individual records and capture channels as specified below. The original file and
+folder lifecycle remains unchanged. This is the current format; no old reader,
+dual write or data migration is introduced.
+
 The owner approved a shared Android file-task interface, an audio folder preset,
 and optional descriptions stored as versioned metadata. Editing a source
 description applies to existing and future material without automatically
@@ -77,6 +82,66 @@ acknowledged before newly queued files are sent. Offline edits remain pending an
 obey the existing node binding, authorization and pause-all-sending rules.
 
 ## Discovery and processing
+
+### Individual records and capture channels (2026-10-29)
+
+The design source is the final three-client discussion
+`codex://threads/01a17d84-94a3-7382-b12a-5c656106f534`. The owner separately
+authorized the fields, storage, transport and parsing context in
+`codex://threads/01a1767c-d428-715a-8055-60970a2a00c5`, reply
+`Sentinel_257460f132848191881fe64393bba4c5`. That authorization does not make
+descriptions original evidence, a system instruction or a new processing grant.
+
+A record's optional description travels as `metadata.ownerDescription` (at most
+12,000 UTF-16 code units). It is distinct from note text, mood, attachments and
+`noteOrigin`. A description alone cannot create a note. Native paired clients
+already use owner credentials; standalone collector credentials retain ordinary
+capture submission but cannot submit or read private owner declarations. A denied
+submission must retain the complete local event, including its description.
+
+Ingress removes this transport field before storing canonical captures, FTS or
+device heartbeats. The same receive transaction stores exact prose in the private
+`record_context_declarations` table, with an immutable capture identity, canonical
+capture fingerprint and declaration fingerprint. Absence and empty string mean
+no declaration. A duplicate event must carry exactly the original nonempty
+description; adding, removing or changing it requires a new event identity.
+Local draft edits invalidate their prepared identity without rewriting an already
+queued event. No edit-in-place record-description route is introduced.
+
+Only the exact original and its actual derived excerpts inherit a record
+description. Sharing a file, application or Material does not extend that scope.
+The host emits `recordContextDeclarations` identities and opens exact
+`recordContextStatements` for authorized context reads. Browsing metadata and
+search indexes omit private prose. Material block context is limited to its actual
+members. Private declarations follow encryption, quota accounting and portable
+backup in the current format; missing or unrelated lineage and conflicting
+immutable declarations reject restore. Deleting the original removes its private
+declaration and invalidates derived/current model context. Retaining a historical
+answer does not reopen the deleted description to models.
+
+Capture-channel descriptions retain the source-level existing-and-future scope.
+The owner API is `GET/PATCH /api/devices/:deviceId/capture-context/:channel`, where
+`channel` is `screen`, `structured`, `activity` or `notifications`. PATCH uses the
+existing `{expectedVersion, description}` contract and returns the current
+`SourceContextSnapshot`. GET is read-only and returns version 0 for an undeclared
+registered device/channel. A conflicting draft receives 409; the client keeps its
+draft and reads the current snapshot for review. An unregistered device receives
+404. Neither operation grants a connection or starts capture, sending or models.
+
+The host derives each source ID from the verified device and actual capture source:
+`screen`, `ui_page`, `activity` and `notification`, respectively. Existing screen
+and UI-page source identities are reused. Owner-authored source IDs, source prose
+or metadata cannot make another device's capture inherit a declaration. In mixed
+Materials, channel statements include the exact `captureIds`; a single statement
+does not apply to neighboring members. Source edits/clears version the declaration,
+invalidate affected semantic results and reject late output while preserving
+originals and OCR/ASR. They do not enqueue historical paid processing.
+
+Generated SQLite/HTTP tests cover receive/retry/restart, conflict/denial/quota
+rollback, exact lineage, mixed-member scope, version clearing, late-result fences,
+private encryption, portable restore, and owner/collector/revoked boundaries.
+Agent loopback fixtures cover private paging and evidence fingerprints; these
+checks establish neither native-device UI behavior nor external-model quality.
 
 Read-only source discovery searches source names and description text using queries
 chosen by the model. A matching preview provides a source locator and pinned

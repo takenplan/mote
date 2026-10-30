@@ -1,70 +1,71 @@
 package dev.mote.collector
 
 import android.os.SystemClock
+import android.view.Gravity
+import android.view.View
 import android.widget.LinearLayout
-import org.json.JSONArray
+import android.widget.TextView
+import org.json.JSONObject
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
-/** An independent Central read cannot block the local notebook or upload status. */
-internal class HomeDiscoveryView(private val activity: MoteActivity, private val open: (String?) -> Unit) : LinearLayout(activity) {
-    private val task = UiTask(activity)
-    private var generation = -1L
-    private var origin = ""
-    private var nextRead = 0L
-    private var epoch = 0L
-    private var closed = false
-    private var active = false
-    private val result = LinearLayout(activity).apply { orientation = VERTICAL }
-    init {
-        orientation = VERTICAL
-        addView(result)
-        addView(MoteUi.button(android.widget.Button(activity).apply { text = MoteI18n.text("发现历史"); setOnClickListener { open(null) } }, false))
-    }
-    fun pause() { active = false; epoch++; result.removeAllViews(); nextRead = 0L }
-    fun close() { closed = true; pause(); task.close() }
-    fun refresh() {
-        if (closed) return
-        active = true
-        val access = runCatching { CentralAccess.resolve(activity) }.getOrElse { error -> epoch++; generation = -1L; result.removeAllViews(); showError(error); return }
-        if (access.generation != generation || access.server != origin) { epoch++; result.removeAllViews(); nextRead = 0L; generation = access.generation; origin = access.server }
-        if (access.client == null) { result.removeAllViews(); return }
-        if (task.busy || SystemClock.elapsedRealtime() < nextRead) return
-        val stamp = epoch
-        nextRead = SystemClock.elapsedRealtime() + 5000
-        if (result.childCount == 0) { label(MoteI18n.text("正在读取…")); result.getChildAt(0).tag = "discovery-loading" }
-        task.start("", {}, {
-            val page = access.client.get("/api/insights?limit=30")
-            val after = CentralAccess.resolve(activity)
-            check(after.generation == access.generation && after.server == access.server && after.client != null) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
-            page
-        }) { outcome ->
-            if (closed || !active || stamp != epoch || activity.isDestroyed || activity.isFinishing) return@start
-            val current = runCatching { CentralAccess.resolve(activity) }.getOrNull()
-            if (current == null || current.generation != generation || current.server != origin || current.client == null) { result.removeAllViews(); nextRead = 0L; return@start }
-            outcome.onSuccess { page ->
-                result.removeAllViews()
-                val finding = InsightPresentation.featured(page.optJSONArray("items") ?: JSONArray())
-                if (finding != null) {
-                    val id = InsightPresentation.id(finding)!!
-                    val title = InsightPresentation.title(finding)
-                    label(title, NativeFontRole.SECTION)
-                    label(InsightPresentation.preview(finding))
-                    label(finding.optString("createdAt"), NativeFontRole.SUPPORT)
-                    result.addView(MoteUi.button(android.widget.Button(activity).apply {
-                        text = MoteI18n.text("查看发现"); tag = "home-discovery:$id"; contentDescription = title
-                        setOnClickListener { open(id) }
-                    }, false))
-                }
-            }.onFailure(::showError)
+/** Existing archived results only. This independent read never generates a report. */
+internal class HomeDiscoveryView(private val activity: MoteActivity, private val present: (Boolean) -> Unit = {}, private val open: (String?) -> Unit) : LinearLayout(activity) {
+    private val task=UiTask(activity)
+    private var generation=-1L
+    private var origin=""
+    private var nextRead=0L
+    private var epoch=0L
+    private var closed=false
+    private var active=false
+    private var rendered=""
+    init { orientation=VERTICAL;visibility=View.GONE;tag="home-existing-discovery" }
+    private fun clear(){removeAllViews();rendered="";visibility=View.GONE;present(false)}
+    fun pause(){active=false;epoch++;clear();nextRead=0L}
+    fun close(){closed=true;pause();task.close()}
+    fun refresh(){
+        if(closed)return
+        active=true
+        val access=runCatching{CentralAccess.resolve(activity)}.getOrNull()
+        if(access==null){epoch++;clear();return}
+        if(access.generation!=generation||access.server!=origin){epoch++;clear();nextRead=0L;generation=access.generation;origin=access.server}
+        if(access.client==null){clear();return}
+        if(task.busy||SystemClock.elapsedRealtime()<nextRead)return
+        val stamp=epoch;nextRead=SystemClock.elapsedRealtime()+5000
+        task.start("",{}, {
+            val page=access.client.get("/api/insights?limit=30")
+            val after=CentralAccess.resolve(activity)
+            check(after.generation==access.generation&&after.server==access.server&&after.client!=null)
+            InsightPresentation.featured(page.getJSONArray("items"))
+        }){outcome->
+            if(closed||!active||stamp!=epoch||activity.isDestroyed||activity.isFinishing)return@start
+            val selected=runCatching{CentralAccess.resolve(activity)}.getOrNull()
+            if(selected==null||selected.generation!=generation||selected.server!=origin||selected.client==null){clear();nextRead=0L;return@start}
+            val finding=outcome.getOrNull()
+            if(finding==null){clear();return@start}
+            if(rendered==finding.toString())return@start
+            clear();rendered=finding.toString()
+            val id=requireNotNull(InsightPresentation.id(finding))
+            fun current()=active&&!closed&&stamp==epoch&&runCatching{CentralAccess.resolve(activity).let{it.client!=null&&it.generation==generation&&it.server==origin}}.getOrDefault(false)
+            val heading=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL}
+            heading.addView(label(MoteI18n.text("最近结果"),NativeFontRole.META).apply{MoteUi.type(this,12)},LayoutParams(0,-2,1f))
+            heading.addView(MoteUi.action(android.widget.Button(activity).apply{text=MoteI18n.text("发现历史");tag="home-discovery-history";setOnClickListener{if(current())open(null)}},MoteUi.ButtonRole.TEXT).apply{MoteUi.type(this,10);MoteUi.textColor(this,NativeColorRole.MUTED)})
+            addView(heading)
+            val card=LinearLayout(activity).apply{
+                orientation=VERTICAL;setPadding(activity.moteDp(19),activity.moteDp(19),activity.moteDp(19),activity.moteDp(19));background=MoteUi.clickable(activity,NativeColorRole.SURFACE,7,true)
+                tag="home-discovery:$id";isFocusable=true;setOnClickListener{if(current())open(id)}
+            }
+            val whenText=finding.optString("createdAt").ifBlank{finding.optJSONObject("artifact")?.optString("createdAt").orEmpty()}
+            val date=runCatching{DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(MoteI18n.locale()).withZone(ZoneId.systemDefault()).format(Instant.parse(whenText))}.getOrDefault(whenText)
+            card.addView(label(MoteI18n.text("发现")+" · "+date,NativeFontRole.META))
+            card.addView(label(InsightPresentation.title(finding),NativeFontRole.SECTION).apply{MoteUi.type(this,17);NativePresentationStyles.bind(this,"home-result-title"){(it as TextView).apply{typeface=android.graphics.Typeface.create(android.graphics.Typeface.create(MoteTheme.fontFamily(false),android.graphics.Typeface.NORMAL),500,false);setLineSpacing(0f,1.7f)}}})
+            val formatted=JSONObject(finding.toString()).put("answer",NativeAnswerPresentation.format(finding.optString("answer"),emptyList()).text)
+            card.addView(label(InsightPresentation.preview(formatted),NativeFontRole.SUPPORT))
+            card.addView(label(MoteI18n.text("查看结果与依据 →"),NativeFontRole.ACTION).apply{MoteUi.textColor(this,NativeColorRole.ACCENT)})
+            addView(card,LayoutParams(-1,-2).apply{bottomMargin=activity.moteDp(26)});visibility=View.VISIBLE;present(true)
         }
     }
-    private fun label(value: String, role: NativeFontRole = NativeFontRole.BODY) {
-        result.addView(android.widget.TextView(activity).apply { text = value; MoteUi.type(this, role); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, activity.moteDp(6), 0, activity.moteDp(6)) })
-    }
-    private fun showError(error: Throwable) {
-        result.findViewWithTag<android.widget.TextView>("discovery-loading")?.let(result::removeView)
-        if (error is CentralFailure && error.status in setOf(401, 403, 404, 410)) result.removeAllViews()
-        result.findViewWithTag<android.widget.TextView>("discovery-error")?.let(result::removeView)
-        label(error.message ?: MoteI18n.text("资料暂不可读取，请稍后重试。"), NativeFontRole.SUPPORT)
-        result.getChildAt(result.childCount - 1).tag = "discovery-error"
-    }
+    private fun label(value:String,role:NativeFontRole)=TextView(activity).apply{text=value;MoteUi.type(this,when(role){NativeFontRole.META->10;NativeFontRole.SUPPORT->12;NativeFontRole.ACTION->11;else->role.size()});MoteUi.textColor(this,if(role==NativeFontRole.META||role==NativeFontRole.SUPPORT)NativeColorRole.MUTED else NativeColorRole.INK);setPadding(0,activity.moteDp(5),0,activity.moteDp(5))}
 }

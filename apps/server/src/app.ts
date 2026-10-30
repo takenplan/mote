@@ -840,12 +840,17 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   queryRuns=new DelegatedQueryRuns(store,delegation,{
     contextTime:()=>freezeSemanticContextTime(dependencies?.semanticContextTime),
     resolveInput:raw=>{
-      const input=queryWithAttachmentsSchema.parse(raw);if(!input.conversationId)return input;
-      const previous=conversations.get(input.conversationId).scope;
+      const input=queryWithAttachmentsSchema.parse(raw);
+      const previous=input.conversationId?conversations.get(input.conversationId).scope:undefined;
       // Freeze resolved selection in the accepted run, before asynchronous preparation.
-      if(input.evidenceIds)return {...input,anchorEvidenceIds:null};
-      if(input.anchorEvidenceIds)return {...input,evidenceIds:null};
-      return {...input,...(input.evidenceIds===undefined&&previous.evidenceIds?{evidenceIds:[...previous.evidenceIds]}:{}),...(input.anchorEvidenceIds===undefined&&previous.anchorEvidenceIds?{anchorEvidenceIds:[...previous.anchorEvidenceIds]}:{})};
+      const selected=input.evidenceIds?{...input,anchorEvidenceIds:null,anchorMaterialRef:null}:
+        input.anchorEvidenceIds?{...input,evidenceIds:null,anchorMaterialRef:null}:
+        input.anchorMaterialRef?{...input,evidenceIds:null,anchorEvidenceIds:null}:
+        {...input,...(input.evidenceIds===undefined&&previous?.evidenceIds?{evidenceIds:[...previous.evidenceIds]}:{}),...(input.anchorEvidenceIds===undefined&&previous?.anchorEvidenceIds?{anchorEvidenceIds:[...previous.anchorEvidenceIds]}:{}),...(input.anchorMaterialRef===undefined&&previous?.anchorMaterialRef?{anchorMaterialRef:previous.anchorMaterialRef}:{})};
+      if(selected.anchorMaterialRef&&!evidenceReader.queryMaterialReference(selected.anchorMaterialRef,{
+        ...(selected.after?{after:selected.after}:{}),...(selected.before?{before:selected.before}:{}),...(selected.deviceId?{deviceId:selected.deviceId}:{})
+      }))throw Object.assign(new StoreError(moteText('参考原件暂不可用，请清除参考后继续。'),409),{code:'context_evidence_restricted'});
+      return selected;
     },
     prepare:prepareDelegatedQuery,
     query:input=>runQueryQualityExperiment(input,dependencies?.queryQualityExperiment??'base',(next,stage)=>queryAgent({...next,traceContext:{...next.traceContext,phase:'quality.'+stage}},'query',stage==='base'?'conversations':'query.'+stage),qualityCheckpoint(input)),
@@ -855,12 +860,12 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       assertModelEvidence(prepared);
       assertSourceContextDependencies(sourceContexts,result.sourceContextDependencies);
       delegation.recordEvidence(work.id,[...(result.evidenceDependencies?.ids??[]),...result.citations.map(citation=>citation.id)]);
-      const previous=conversationId?conversations.get(conversationId):undefined,scope:QueryScope={};for(const key of ['after','before','deviceId','timeZone','evidenceIds','anchorEvidenceIds'] as const)if(prepared[key]!==undefined)Object.assign(scope,{[key]:prepared[key]});
+      const previous=conversationId?conversations.get(conversationId):undefined,scope:QueryScope={};for(const key of ['after','before','deviceId','timeZone','evidenceIds','anchorEvidenceIds','anchorMaterialRef'] as const)if(prepared[key]!==undefined)Object.assign(scope,{[key]:prepared[key]});
       if(prepared.historicalSelection)Object.assign(scope,prepared.historicalSelection);
       return conversations.append(previous,{question,...scope,attachments:prepared.directImages?.filter(image=>attachmentIds.includes(image.id)).map(({id,name,mimeType})=>({id,name,mimeType}))},result);
     },
     failure:(body,error)=>{
-      const {conversationId,question,evidenceIds,anchorEvidenceIds,...selected}=queryWithAttachmentsSchema.parse(body),scope:QueryScope={...(evidenceIds?{evidenceIds}:{}),...(anchorEvidenceIds?{anchorEvidenceIds}:{})};for(const key of ['after','before','deviceId','timeZone'] as const)if(selected[key]!==undefined&&selected[key]!==null)scope[key]=selected[key]!;
+      const {conversationId,question,evidenceIds,anchorEvidenceIds,anchorMaterialRef,...selected}=queryWithAttachmentsSchema.parse(body),scope:QueryScope={...(evidenceIds?{evidenceIds}:{}),...(anchorEvidenceIds?{anchorEvidenceIds}:{}),...(anchorMaterialRef?{anchorMaterialRef}:{})};for(const key of ['after','before','deviceId','timeZone'] as const)if(selected[key]!==undefined&&selected[key]!==null)scope[key]=selected[key]!;
       const failure=safeError(error);return conversations.appendFailure(conversationId?conversations.get(conversationId):undefined,{question,...scope},{code:failure.category,message:failure.message});
     },
   });

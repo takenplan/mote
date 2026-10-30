@@ -44,6 +44,14 @@ export class QueueFullError extends Error {
   constructor() { super(moteText("本地队列已达上限，采集已停止；上传后请手动重新开始")); }
 }
 
+/** Reports completed queue writes; it does not add rollback or checkpoints. */
+export class QueueImportFailure extends Error {
+  constructor(readonly report: {phase:'validation'|'saving'|'cleanup'; imported:number; total?:number; currentRecordUnconfirmed:boolean}, cause:unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), {cause});
+    this.name='QueueImportFailure';
+  }
+}
+
 export function imageHash(image: Buffer): string { return createHash('sha256').update(image).digest('hex'); }
 export function retryDelay(attempts: number, random = Math.random): number {
   return Math.round(Math.min(15 * 60_000, 2000 * 2 ** Math.min(attempts - 1, 10)) * (0.8 + random() * 0.4));
@@ -458,6 +466,7 @@ export class DurableQueue {
     return this.exclusive(async () => {
       this.assertReady();
       const staging = await mkdtemp(join(tmpdir(), 'mote-queue-import-'));
+      let imported=0,total:number|undefined,phase:'validation'|'saving'|'cleanup'='validation',currentRecordUnconfirmed=false;
       try {
         await chmod(staging, 0o700);
         await archiveWork.run({ kind: 'archive-prepare', path, staging }, progress);
@@ -476,18 +485,26 @@ export class DurableQueue {
         if(usage.depth>this.limits.maxQueueEvents||usage.bytes>this.limits.maxQueueBytes)throw new QueueFullError();
         // Validate the entire backup, conflicts and capacity before the first queue mutation.
         const writtenBlobs = new Set([...this.records.values()].map(r => r.blobHash));
-        let completed = 0;
+        total=unique.length;phase='saving';
         for (const record of unique) {
+          currentRecordUnconfirmed=true;
           if (record.blobHash && !writtenBlobs.has(record.blobHash)) {
             await atomicWrite(this.blobPath(record.blobHash), await readFile(join(staging, 'blobs', record.blobHash + '.jpg')));
             writtenBlobs.add(record.blobHash);
           }
           await atomicWrite(this.eventsPath(record.event.id), JSON.stringify(record));
           this.records.set(record.event.id, record); this.cachedStats = undefined;
-          progress?.({ message: moteText("正在保存导入记录"), completed: ++completed, total: unique.length });
+          imported++;currentRecordUnconfirmed=false;
+          progress?.({ message: moteText("正在保存导入记录"), completed: imported, total: unique.length });
         }
-        return unique.length;
-      } finally { await rm(staging, { recursive: true, force: true }); }
+        phase='cleanup';
+        await rm(staging, {recursive:true,force:true});
+        return imported;
+      } catch(cause) {
+        // A failed atomic write may have renamed the current event before fsync failed.
+        // Only successfully completed writes are counted; this is a lower bound.
+        throw new QueueImportFailure({phase,imported,...(total===undefined?{}:{total}),currentRecordUnconfirmed},cause);
+      } finally { await rm(staging, { recursive: true, force: true }).catch(()=>{}); }
     });
   }
   async exportArchive(): Promise<QueueArchive> {

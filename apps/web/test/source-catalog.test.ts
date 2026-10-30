@@ -67,7 +67,8 @@ async function fixture(t:import('node:test').TestContext,options:{capabilities:F
   };
   const workAvailable=()=>assert.equal(resolveDiscoveryTarget({pageId:'activity',href:'#/activity',requires:[activityId]},{pages:webFeatures.pages(),collections:webFeatures.collections(),inventory:currentInventory}).state,'available');
   const refreshSources=async()=>{await act(async()=>resources(api).invalidate(key=>key==='/api/sources'||key==='/api/connectors/status'));};
-  return {d:dom.window.document,reads,pageCalls,render,updateInventory,workAvailable,refreshSources,setLocale:(value:'zh-CN'|'en')=>{locale=value;}};
+  const openRecorders=async()=>{await act(async()=>card(dom.window.document,'录音与转写').click());};
+  return {d:dom.window.document,reads,pageCalls,render,openRecorders,updateInventory,workAvailable,refreshSources,setLocale:(value:'zh-CN'|'en')=>{locale=value;}};
 }
 
 function card(d:Document,title:string){
@@ -93,14 +94,14 @@ test('recording discovery does not fetch connector status when its local page is
 
 test('the global status transport is read without fictional HTTP capabilities and an empty registry is legitimate',async t=>{
  const f=await fixture(t,{capabilities:[capability(activityId)],emptyStatus:true});
- await f.render();assert.equal(f.reads.filter(path=>path==='/api/connectors/status').length,1);
+ await f.render();await f.openRecorders();assert.equal(f.reads.filter(path=>path==='/api/connectors/status').length,1);
  assert.equal(f.d.querySelector('a[href*="provider="]'),null);
  assert.equal(f.d.querySelector('section[aria-label="录音数据源"] [role=alert]'),null);
 });
 
 test('a failed global status read shows its actual read error',async t=>{
  const f=await fixture(t,{capabilities:[capability(activityId)],statusError:true});
- await f.render();assert.equal(f.reads.filter(path=>path==='/api/connectors/status').length,1);
+ await f.render();await f.openRecorders();assert.equal(f.reads.filter(path=>path==='/api/connectors/status').length,1);
  assert.match(f.d.querySelector('section[aria-label="录音数据源"] [role=alert]')?.textContent??'',/Generated connector status read failed/);
  assert.equal(f.d.querySelector('a[href*="provider="]'),null);
 });
@@ -109,6 +110,7 @@ test('registered recording providers link to the actual recording route with the
   const f=await fixture(t,{capabilities:[capability(activityId),capability(providerDetailId)]});
   await f.render();
   assert.equal(f.reads.filter(path=>path==='/api/connectors/status').length,1);
+  await f.openRecorders();
   const link=card(f.d,recorder.label!) as HTMLAnchorElement;
   assert.equal(link.tagName,'A');
   assert.equal(link.getAttribute('href'),'#/generated/recordings?provider='+encodeURIComponent(provider));
@@ -130,14 +132,14 @@ for(const [name,detail] of [
   const f=await fixture(t,{capabilities:[capability(activityId),...(detail?[detail]:[])]});
   await f.render();
   assert.equal(f.reads.filter(path=>path==='/api/connectors/status').length,1);
-  disabled(card(f.d,recorder.label!));
+  await f.openRecorders();disabled(card(f.d,recorder.label!));
   assert.equal(f.d.querySelector('a[href*="provider="]'),null);
 });
 
 test('a custom status key that differs from recordingManifest identity is not treated as a supported provider detail route',async t=>{
  const statusKey='generated-custom-status';
  const f=await fixture(t,{capabilities:[capability(activityId),capability('connector:'+statusKey)],statusKey});
- await f.render();disabled(card(f.d,recorder.label!));
+ await f.render();await f.openRecorders();disabled(card(f.d,recorder.label!));
  assert.equal(f.d.querySelector('a[href*="provider="]'),null);
 });
 
@@ -149,7 +151,7 @@ for(const scenario of ['local Coding missing','remote Coding missing','remote Co
   assert.equal(f.reads.some(path=>path.startsWith('/api/coding/uploads')),false,'catalog discovery only reads capability inventory');
   f.workAvailable();
   await f.render('guide');
-  const guide=f.d.querySelector<HTMLElement>('[data-capability-id="A15"] .guide-unit-links')!;
+  const guide=f.d.querySelector<HTMLElement>('[data-capability-id="A15"]')!;
   assert.equal(guide.querySelector('a[href]'),null,'The full Guide preserves the same Coding availability boundary');
   assert.ok(guide.querySelector('[aria-disabled="true"]'));
 });
@@ -170,7 +172,7 @@ test('compatible Coding discovery opens Coding sync status and every internal li
   assert.equal(location.hash,'#/library?view=coding-status');
   assert.deepEqual(f.pageCalls,[]);
   await f.render('guide');
-  const guide=f.d.querySelector<HTMLAnchorElement>('[data-capability-id="A15"] .guide-unit-links a')!;
+  const guide=f.d.querySelector<HTMLAnchorElement>('[data-capability-id="A15"] a.guide-unit-link')!;
   assert.ok(guide,'The full Guide exposes the installed Coding destination');
   await act(async()=>guide.click());
   assert.equal(location.hash,coding.getAttribute('href'),'Both entrypoints reach the same specific status view');
@@ -187,7 +189,7 @@ test('unregistered source destinations render disabled cards with no Today fallb
 test('SourceCatalog and the full Guide render English after a locale switch without changing capability or group identities',async t=>{
   const f=await fixture(t,{capabilities:[capability(activityId),capability(codingId),capability(providerDetailId)],coding:true});
   await f.render();
-  assert.match(f.d.body.textContent!,/新增数据源/);
+  assert.match(f.d.body.textContent!,/添加来源/);
   f.setLocale('en');
   await f.render();
   assert.doesNotMatch(f.d.body.textContent!,/\p{Script=Han}/u);
@@ -201,36 +203,30 @@ test('SourceCatalog and the full Guide render English after a locale switch with
   assert.match(f.d.body.textContent!,/全部功能/);
 });
 
-for(const [title,setup,summary] of [
-  ['Gmail 邮件','gmail','连接 Gmail（只读）'],
-  ['Google Calendar','google','连接 Google Calendar'],
-  ['MCP 资料服务','mcp','其他 Chatbot 与 MCP'],
-] as const)test('the '+setup+' setup link opens its requested section once and source refresh does not reopen it after an owner closes it',async t=>{
-  const f=await fixture(t,{capabilities:[capability(activityId)]});
-  await f.render();
-  await act(async()=>card(f.d,title).click());
-  assert.equal(location.hash,'#/connections?setup='+setup);
-  await f.render('sources');
-  assert.equal(f.d.querySelector<HTMLElement>('.add-source-panel')!.hidden,false);
-  const details=Array.from(f.d.querySelectorAll<HTMLDetailsElement>('details')).find(element=>element.querySelector('summary')?.textContent===summary);
-  assert.ok(details,summary);
-  assert.equal(details.open,true,'the accepted setup link opens its destination');
-  await act(async()=>{
-    details.open=false;
-    details.dispatchEvent(new f.d.defaultView!.Event('toggle'));
-  });
-  const before=f.reads.filter(path=>path==='/api/connectors/status').length;
-  await f.refreshSources();
-  assert.ok(f.reads.filter(path=>path==='/api/connectors/status').length>before,'the setup components receive refreshed source data');
-  assert.equal(details.open,false,'refresh preserves the owner’s closed section');
-  assert.equal(location.hash,'#/connections?setup='+setup);
+for(const [title,setup,component] of [
+ ['Gmail 邮件','gmail','.gmail-connector'],['Google Calendar','google','.google-connector'],['MCP 资料服务','mcp','.mcp-import-connector'],
+] as const)test('the '+setup+' setup opens its actual primary form and neither data refresh nor returning to Sources reopens closed UI',async t=>{
+ const f=await fixture(t,{capabilities:[capability(activityId)]});await f.render();await act(async()=>card(f.d,title).click());assert.equal(location.hash,'#/connections?setup='+setup);await f.render('sources');
+ assert.equal(f.d.querySelector<HTMLElement>('.add-source-panel')!.hidden,false);const panel=f.d.querySelector<HTMLElement>(component)!;assert.ok(panel);assert.equal(panel.hidden,false);assert.ok(panel.querySelector('form,section'));
+ const details=panel.querySelector<HTMLDetailsElement>('details')!;assert.ok(details);await act(async()=>{details.open=true;details.dispatchEvent(new f.d.defaultView!.Event('toggle'));});await act(async()=>{details.open=false;details.dispatchEvent(new f.d.defaultView!.Event('toggle'));});
+ const before=f.reads.filter(path=>path==='/api/connectors/status').length;await f.refreshSources();assert.ok(f.reads.filter(path=>path==='/api/connectors/status').length>before);assert.equal(details.open,false,'refresh preserves owner-closed preparation/auth fields');
+ const back=f.d.querySelector<HTMLButtonElement>('.connector-back')!;await act(async()=>back.click());assert.equal(f.d.querySelector<HTMLElement>('.add-source-panel')!.hidden,true);assert.equal(new URLSearchParams(location.hash.split('?')[1]).get('setup'),null);await f.refreshSources();assert.equal(f.d.querySelector<HTMLElement>('.add-source-panel')!.hidden,true,'source refresh cannot reopen owner-closed setup');
 });
 
 test('recording discovery shows a saved binding and disabled sync with known runtime failure without probing credentials',async t=>{
  const status=structuredClone(recorder);status.connected=true;status.authorization={revision:'generated',environment:{installed:false,configured:false,error:'generated_cli_missing'}};
  const f=await fixture(t,{capabilities:[capability(providerDetailId)],recorderStatus:status});await f.render();
- const recording=card(f.d,status.label!);
- assert.equal(recording.querySelector('.badge')?.textContent,'已保存账号绑定');assert.equal(recording.querySelector('.badge.green'),null);
- assert.equal(recording.querySelector('.recording-sync-status')?.textContent,'录音同步未启用 · 运行环境需要处理');
+ await f.openRecorders();const recording=card(f.d,status.label!);
+ assert.equal(recording.querySelector('small')?.textContent,'已保存账号绑定 · 录音同步未启用 · 运行环境需要处理');assert.equal(recording.querySelector('.badge.green'),null);
  assert.ok(!f.reads.some(path=>/\/(check|login|sync|connect)$/.test(path)));
+});
+
+
+test('the default catalog is nine compact entries with recording providers one explicit level below and More folded',async t=>{
+ const f=await fixture(t,{capabilities:[capability(activityId),capability(providerDetailId)]});await f.render();
+ const entries=()=>[...f.d.querySelectorAll('.source-catalog-final>.discovery-source-grid>.source-catalog-entry h3')].map(node=>node.textContent);
+ assert.deepEqual(entries(),['手机与电脑','Coding Agent 会话','文件与文件夹','飞书文档与日历','录音与转写','Gmail 邮件','Google Calendar','外部文件 / NAS 引用','MCP 资料服务']);
+ assert.equal(f.d.querySelector<HTMLDetailsElement>('.source-catalog-more')!.open,false);assert.equal(f.d.querySelector('a[href*="provider="]'),null);
+ await f.openRecorders();assert.ok(f.d.querySelector('a[href*="provider=generated-recorder"]'));
+ await act(async()=>f.d.querySelector<HTMLButtonElement>('.source-catalog-back')!.click());assert.equal(entries().length,9);assert.equal(f.d.querySelector('a[href*="provider="]'),null);
 });

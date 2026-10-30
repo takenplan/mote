@@ -57,7 +57,7 @@ class FirstDeviceDataInstrumentedTest {
         } }
         instrumentation.waitForIdleSync()
     }
-    private fun clickText(label: String) = click("Reach native action $label") { it is TextView && it.text.toString() == label }
+    private fun clickText(label: String) = click("Reach native action $label") { it is TextView && (it.text.toString() == label || it.contentDescription?.toString() == label) }
     private fun screenshot(name: String) = main {
         val roots = WindowInspector.getGlobalWindowViews().filter { it.isShown && it.hasWindowFocus() && it.width > 0 && it.height > 0 }
         val root = roots.firstOrNull { views(it).filterIsInstance<TextView>().any { label -> label.isShown && label.text.toString() == "基于这条记录提问" } } ?: activity().window.decorView
@@ -75,7 +75,8 @@ class FirstDeviceDataInstrumentedTest {
         return CentralClient(fixture.getString("url"), fixture.getString("token"))
     }
     private fun openOriginal(id: String) {
-        click("Open Library") { it.tag == "primary:LIBRARY" }
+        main { (activity() as MainActivity).openGeneratedMenu() }
+        click("Open Library") { it.tag == "menu:资料与记忆" }
         click("Open the exact saved record") { it.tag == "library-record:$id" }
         until("The native original reader shows the saved text") { main {
             WindowInspector.getGlobalWindowViews().filter { it.hasWindowFocus() }.any { root ->
@@ -85,10 +86,8 @@ class FirstDeviceDataInstrumentedTest {
         } }
     }
     private fun returnFromOriginal() {
-        clickText("关闭详情")
-        until("Return to the focused record list") { main { activityOrNull() is CaptureRecordsActivity && activity().window.decorView.hasWindowFocus() } }
-        instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-        until("Return to the original main Activity before closing its scenario") { main { activityOrNull() is MainActivity && activity().window.decorView.hasWindowFocus() } }
+        clickText("返回上一页")
+        until("Return to the same native main library") { main { activityOrNull() is MainActivity && activity().window.decorView.hasWindowFocus() } }
     }
 
     @Test fun connectSaveSendAndConfirmSameOriginal() {
@@ -103,20 +102,19 @@ class FirstDeviceDataInstrumentedTest {
             until("Invitation entry loads") { main { visible().filterIsInstance<EditText>().any { it.hint.toString() == "粘贴 JSON 或 mote://connect…" } } }
             main {
                 visible().filterIsInstance<EditText>().single { it.hint.toString() == "粘贴 JSON 或 mote://connect…" }.setText(invitation.toString())
-                visible().filterIsInstance<CheckBox>().single().isChecked = true
             }
-            clickText("解析并核对节点"); clickText("确认连接此节点"); clickText("取消")
+            clickText("核对连接"); clickText("返回修改")
             assertFalse("Cancelling confirmation must leave the device unconnected", settings.read().hasSyncConnection())
-            clickText("确认连接此节点"); clickText("连接")
+            clickText("核对连接"); clickText("确认连接")
             until("Actual invitation exchange saves this device connection") { settings.read().hasSyncConnection() }
             until("The connection UI confirms completion") { main { visible().filterIsInstance<TextView>().any { it.text.toString().startsWith("连接成功：") } } }
             screenshot("connected")
         }
         assertEquals(owner.server, settings.read().server)
         ActivityScenario.launch(MainActivity::class.java).use {
-            click("Global new record action") { it.tag == "global-record-action" }
-            until("Native editor loads") { main { activityOrNull() is RecordEditorActivity && visible().filterIsInstance<EditText>().singleOrNull()?.isEnabled == true } }
-            main { visible().filterIsInstance<EditText>().single().setText(text) }
+            click("Global new record action") { it.tag == "home-record-action" }
+            until("Native editor loads") { main { activityOrNull() is RecordEditorActivity && visible().filterIsInstance<EditText>().singleOrNull { it.contentDescription=="正在想什么" }?.isEnabled == true } }
+            main { visible().filterIsInstance<EditText>().single { it.contentDescription=="正在想什么" }.setText(text) }
             until("Draft survives privately before Save") { context.recordDraftStore().draft().getString("text") == text }
             val originalEditor = main { activity() }
             main { originalEditor.recreate() }
@@ -124,13 +122,14 @@ class FirstDeviceDataInstrumentedTest {
             assertEquals("Opening/recreating the editor must not create a record", 0, context.queue().depth())
             screenshot("draft-restored"); clickText("保存")
             until("Explicit Save creates one pending record and returns home") { context.queue().pendingSync().count == 1 && main { activityOrNull() is MainActivity } }
+            screenshot("first-local-receipt")
             val record = context.queue().peek()!!; val id = record.getString("id")
             assertEquals(text, record.getString("ocrText")); assertEquals(settings.deviceId, record.getString("deviceId"))
             assertEquals("waiting", owner.get("/api/devices/first-data").getString("state"))
             openOriginal(id); screenshot("local-original")
             returnFromOriginal()
-            click("Return home") { it.tag == "primary:HOME" }
-            clickText("查看状态与操作"); clickText("立即同步")
+            main { (activity() as MainActivity).openGeneratedHome() }
+            clickText("查看状态"); until("Actual native send page") { main { activityOrNull() is SyncQueueActivity && visible().any { it.tag=="sync-send-now" && it.isEnabled } } }; clickText("立即同步")
             until("Real WorkManager receives a valid upload acknowledgement", 120000) { context.queue().pendingSync().count == 0 }
             val state = owner.get("/api/devices/first-data")
             assertEquals("ready", state.getString("state")); assertTrue(state.getBoolean("originalAvailable"))
@@ -140,6 +139,7 @@ class FirstDeviceDataInstrumentedTest {
             val remote = owner.get("/api/capture-browser/$id")
             assertEquals(id, remote.getString("id")); assertEquals(text, remote.getString("ocrText"))
             assertEquals("The retained local original survives successful upload", text, context.queue().capture(id)!!.getString("ocrText"))
+            clickText("返回上一页"); until("Return home after actual upload") { main { activityOrNull() is MainActivity } }
             openOriginal(id); screenshot("confirmed-original")
             File(context.filesDir, "first-data-result.json").writeText(JSONObject().put("id", id).put("deviceId", settings.deviceId).put("text", text).put("candidate", candidate).toString())
             returnFromOriginal()

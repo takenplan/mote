@@ -1,0 +1,22 @@
+/** Manual generated UI fixture. Recorded traces are controlled, with no model invocation. */
+import {join,resolve} from 'node:path';
+import {existsSync} from 'node:fs';
+import {randomBytes,randomUUID} from 'node:crypto';
+import {buildApp} from '../../server/src/app.js';
+const [directory,webRoot]=process.argv.slice(2);if(!directory||!webRoot)throw Error('Private profile and Web root required');
+const token=randomBytes(32).toString('hex'),noteId=randomUUID(),runId=randomUUID(),pagedRunId=randomUUID();let modelCalls=0;
+const runtime=await buildApp({dataDir:join(directory,'data'),token,tokenPath:'generated',host:'127.0.0.1',port:0,profile:'dev',diagnosticsEnabled:true,agentTraceEnabled:true,logLevel:'warn',maxStorageBytes:10_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{webRoot:resolve(webRoot),backgroundWorker:false,agent:{configured:false,query:async()=>{modelCalls++;throw Error('Inspector fixture must not call models');},close:async()=>{}}});
+runtime.app.addHook('onRequest',async(req,reply)=>{if(req.url.startsWith('/api/agent-view/events?')&&existsSync(join(directory,'read-fault')))return reply.code(503).send({error:'service_unavailable',message:'Generated record read unavailable'});});
+const text='Generated exact original: the recorded output must open this unchanged source.';
+const created=await runtime.app.inject({method:'POST',url:'/api/notes',headers:{authorization:'Bearer '+token},payload:{id:noteId,text,deviceId:'generated-inspector',deviceName:'Generated Inspector',platform:'import',capturedAt:'2026-10-29T01:00:00Z'}});if(created.statusCode!==201)throw Error(created.body);
+const trace=(type:string,payload:unknown,run=runId,extra:Record<string,unknown>={})=>runtime.diagnostics.agentTrace({type,runId:run,payload,...extra});
+trace('context.assembled',{prompt:JSON.stringify({request:'Generated recorded question <script>window.generatedUnsafe=true</script>',timeZone:'UTC',untrustedMemoryLeads:[]})});
+trace('instructions.assembled',{system:'Generated recorded instructions'});
+trace('tool.completed',{result:{items:[{id:noteId,text}]}},runId,{tool:'material_read',status:'succeeded'});
+trace('model.completed',{response:'Generated recorded output <img src=x onerror="window.generatedUnsafe=true">'});
+trace('run.completed',{citations:[noteId]},runId,{status:'succeeded'});
+for(let index=0;index<103;index++)trace('tool.completed',{result:{items:[{text:'Generated retained tool segment '+index}]}},pagedRunId,{tool:'material_read',status:'succeeded'});
+trace('model.completed',{response:'Generated output on the retained next page'},pagedRunId);
+trace('run.completed',{citations:[noteId]},pagedRunId,{status:'succeeded'});
+await runtime.app.listen({host:'127.0.0.1',port:0});const address=runtime.app.server.address();if(!address||typeof address==='string')throw Error('Loopback port required');console.log(JSON.stringify({origin:'http://127.0.0.1:'+address.port,token,runId,pagedRunId,noteId,text,generatedOnly:true,modelCalls}));
+process.once('SIGTERM',()=>{void runtime.app.close().then(()=>process.exit(0));});

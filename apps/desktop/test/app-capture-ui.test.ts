@@ -34,7 +34,7 @@ it('lets the owner choose independent channels, keeps drafts through status refr
   ui.setStatus(status('denied'));
   expect(el<HTMLInputElement>('.app-capture-detail [data-channel=structured]').checked).toBe(true);
   expect(el<HTMLInputElement>('.app-capture-detail [data-channel=screenshots]').checked).toBe(false);
-  expect(el('.app-capture-list').textContent).toContain('结构化内容');
+  expect(el('.app-capture-list').textContent).toContain('结构化解析');
   change('[data-app-inherit]',true);expect(ui.readRules()).toEqual({});
   change('#default-collection [data-channel=screenshots]',true);
   expect(el<HTMLInputElement>('.app-capture-detail [data-channel=screenshots]').checked).toBe(true);

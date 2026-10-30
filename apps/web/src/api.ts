@@ -25,6 +25,9 @@ export interface FileEvidence {
   overlap?: boolean;
 }
 export interface Capture {
+  /** Existing owner reader's immutable original or Material anchor version. */
+  libraryVersion?: string;
+  deletion?: {available:boolean;kind:'capture'|'file'|null};
   evidencePresentation?: import('@mote/shared').SourceTextFormat;
   requiresMaterialForMemory?: boolean;
   memoryMaterialRef?: string;

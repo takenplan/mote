@@ -24,15 +24,15 @@ class StorageActivity : MoteActivity() {
     private lateinit var inventory: TextView
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        body = moteDetailPage(title = MoteI18n.text("图片保存位置"))
-        text(body, MoteI18n.text("本机保存待同步与保留期内的记录和图片。中央确认上传后仍可回看，到期才清理。"))
-        text(body, MoteI18n.text("选择内部应用空间，或系统提供的本机／存储卡应用空间。迁移会自动暂停处理、复制并验证已有记录，然后继续原来的采集与同步。草稿、设置及来源缓存保留在内部空间。"))
-        inventory = TextView(this).apply { textSize = 15f }; body.addView(inventory)
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(content)
-        text(body, MoteI18n.text("记录和索引为 JSON，图片保留原始格式。这些是本应用专用目录，不是共享相册；卸载应用会删除本机文件。移除存储卡后会停止使用该位置并提示，不会切到空目录；重新连接后可恢复。"))
+        body = moteDetailPage(title = MoteI18n.text("本机存储位置"))
+        inventory = SecondaryUi.text(body, MoteI18n.text("正在读取本机同步状态…"), muted = true)
+        content = SecondaryUi.column(body)
+        val details = SecondaryUi.disclosure(body, MoteI18n.text("迁移时会发生什么"), "storage-migration-details")
+        text(details, MoteI18n.text("选择内部应用空间，或系统提供的本机／存储卡应用空间。迁移会自动暂停处理、复制并验证已有记录，然后继续原来的采集与同步。草稿、设置及来源缓存保留在内部空间。"))
+        text(details, MoteI18n.text("记录和索引为 JSON，图片保留原始格式。这些是本应用专用目录，不是共享相册；卸载应用会删除本机文件。移除存储卡后不会自动改到空目录。"))
         MoteUi.styleTree(body)
     }
-    override fun onResume() { super.onResume(); localStateJob = observeLocalState { inventory.text = it.storageLabel() }; handler.post(poll); refresh() }
+    override fun onResume() { super.onResume(); localStateJob = observeLocalState { inventory.text = it.active?.let { count -> MoteI18n.text("本机保留 {0} 条 · 待发 {1} 条", count.records, count.pending) } ?: it.imageLabel() }; handler.post(poll); refresh() }
     override fun onPause() { localStateJob?.cancel(); localStateJob = null; handler.removeCallbacks(poll); super.onPause() }
     private fun text(parent: LinearLayout, value: String, size: Float = 15f) {
         parent.addView(TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(8), 0, moteDp(8)); MoteUi.textColor(this, NativeColorRole.INK) })
@@ -50,16 +50,21 @@ class StorageActivity : MoteActivity() {
             runOnUiThread {
                 working = false; if (isDestroyed) return@runOnUiThread
                 config = settings.getOrNull(); content.removeAllViews()
-                selected.getOrNull()?.let { location -> text(content, MoteI18n.text("当前保存位置\n{0}", location.path)) }
+                selected.getOrNull()?.let { location ->
+                    val currentCard = SecondaryUi.column(content, card = true)
+                    SecondaryUi.text(currentCard, MoteI18n.text("当前保存位置"), muted = true)
+                    SecondaryUi.text(currentCard, choices.getOrNull()?.firstOrNull { it.id == location.baseId }?.title ?: MoteI18n.text("本机存储位置"), heading = true)
+                    val path = SecondaryUi.disclosure(currentCard, MoteI18n.text("查看实际目录"), "storage-current-path")
+                    text(path, location.path)
+                }
                 current.exceptionOrNull()?.let { text(content, MoteI18n.text("位置不可用：{0}\n已保留原位置，请重新连接原介质后重试。", it.message)) }
                 choices.onSuccess { entries ->
                     for (choice in entries) {
-                        content.addView(Button(this).apply {
-                            val chosen = selected.getOrNull()?.baseId == choice.id
-                            text = MoteI18n.text("{0}{1}\n可用 {2}\n{3}", choice.title, if (chosen) MoteI18n.text("（当前）") else "", size(choice.availableBytes), choice.base.absolutePath)
-                            isAllCaps = false; isEnabled = config != null && current.isSuccess && !chosen && !ConnectionGuard.reconfiguring()
-                            setOnClickListener { confirm(choice) }
-                        })
+                        val chosen = selected.getOrNull()?.baseId == choice.id
+                        SecondaryUi.row(content, choice.title + if (chosen) MoteI18n.text("（当前）") else "", MoteI18n.text("可用 {0}", size(choice.availableBytes))) { confirm(choice) }.apply {
+                            tag = "storage-choice:${choice.id}"
+                            isEnabled = config != null && current.isSuccess && !chosen && !ConnectionGuard.reconfiguring()
+                        }
                     }
                 }.onFailure { text(content, MoteI18n.text("无法读取系统存储位置：{0}", it.message)) }
                 content.addView(Button(this).apply { text = MoteI18n.text("刷新存储状态"); setOnClickListener { refresh() } })
@@ -76,7 +81,7 @@ class StorageActivity : MoteActivity() {
     private fun migrate(choice: QueueStorageChoice) {
         val current = config ?: return
         working = true; content.removeAllViews()
-        migrationLabel = TextView(this).apply { text = MoteI18n.text("正在迁移并验证记录，请保持存储介质连接…"); content.addView(this) }
+        migrationLabel = SecondaryUi.text(content, MoteI18n.text("正在迁移并验证记录，请保持存储介质连接…")).apply { tag="storage-migration-progress"; accessibilityLiveRegion=android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE }
         content.addView(android.widget.ProgressBar(this))
         RuntimeSettings.apply(this, current, change = { QueueStorage(applicationContext).migrate(choice.id) }) { result ->
             migrationLabel = null; working = false; if (isDestroyed) return@apply

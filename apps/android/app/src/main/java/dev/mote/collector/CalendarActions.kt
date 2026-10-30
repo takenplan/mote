@@ -31,18 +31,32 @@ object CalendarActionRules {
     fun description(id: String, event: JSONObject, operation: String? = null) = MoteI18n.text("{0}\n\n#Mote · 由 Mote 创建\n{1}", event.getString("description"), marker(id) + (operation?.let { "\n[Mote-operation:${UUID.fromString(it)}]" } ?: "")).trim()
 }
 
-class CalendarActions(private val context: Context, private val foreground: Boolean = false) {
+class CalendarActions(private val context: Context, private val foreground: Boolean = false, private val sessionIdentity: Pair<String, Long>? = null) {
     companion object { private val executionLock = Any() }
     private val settings = Settings(context)
+    private val selectedClient = sessionIdentity?.let { expected -> CentralAccess.resolve(context).also { check((it.server to it.generation) == expected) }.client }
+    private val selectedDeviceId = settings.deviceId
+    private fun checkSession() {
+        sessionIdentity?.let { expected ->
+            val current = CentralAccess.resolve(context)
+            check((current.server to current.generation) == expected && settings.deviceId == selectedDeviceId) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
+        }
+    }
     fun permissions() = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     private fun request(path: String, body: JSONObject? = null): JSONObject {
+        checkSession()
+        if (sessionIdentity != null && !path.startsWith("/api/managed-calendar") && !path.startsWith("/api/device-action-capabilities")) {
+            val client = selectedClient ?: error(MoteI18n.text("请先登录中央节点，各页面会共用这次登录。"))
+            return (if (body == null) client.get(path) else client.post(path, body)).also { checkSession() }
+        }
         if (path.startsWith("/api/managed-calendar") || path.startsWith("/api/device-action-capabilities")) return deviceRequest(path, body)
         if (foreground) CentralAccess.resolve(context).client?.let { return if (body == null) it.get(path) else it.post(path, body) }
         return deviceRequest(path, body)
     }
     private fun deviceRequest(path: String, body: JSONObject? = null): JSONObject {
-        val c = settings.read(); c.validateConnection()
+        checkSession(); val c = settings.read(); c.validateConnection()
         val (status, value) = HttpJson.request(if (body == null) "GET" else "POST", c.server.trimEnd('/') + path, body, c.connectionToken())
+        checkSession()
         if (status !in 200..299 || value == null) throw IllegalStateException(if (status == 403) MoteI18n.text("请在中央「行动」设置中授权此设备，或登录中央管理会话。") else MoteI18n.text("中央日程操作未完成（{0}），请刷新重试", status))
         return value
     }
@@ -96,7 +110,7 @@ class CalendarActions(private val context: Context, private val foreground: Bool
         fun requirePermission() { check(permissions()) { MoteI18n.text("日历权限不可用，请先连接日历") } }
         val action = if (managedOperationId != null) journal.claim(id, managedOperationId, ::requirePermission) ?: return@sync
             else { requirePermission(); request("/api/actions/$id/claim", JSONObject().put("deviceId", settings.deviceId)) }
-        if (managedOperationId != null) require(action.getString("operationId") == managedOperationId && action.getString("kind") == "calendar.create")
+        if (managedOperationId != null) require(action.getString("operationId") == managedOperationId && action.getString("kind") in listOf("calendar.create", "calendar.update", "calendar.cancel"))
         require(action.getString("id") == id && action.getString("kind") in listOf("calendar.create", "calendar.update", "calendar.cancel"))
         require(action.getJSONObject("target").getString("deviceId") == settings.deviceId)
         if (action.getString("status") == "succeeded") return@sync
@@ -133,17 +147,21 @@ class CalendarActions(private val context: Context, private val foreground: Bool
                             val oldDescription = CalendarActionRules.description(related.getString("actionId"), expected, related.optString("operationId").takeIf { it.isNotEmpty() })
                             check(current["title"] == expected.getString("title") && current["dtstart"] == oldTimes.first.toString() && current["dtend"] == oldTimes.second.toString() && current["allDay"] == (if (expected.getBoolean("allDay")) "1" else "0") && current["eventLocation"] == expected.getString("location") && current["description"] == oldDescription && current["rrule"].isNullOrEmpty() && current["rdate"].isNullOrEmpty()) { MoteI18n.text("系统日历已被修改，请重新核实") }
                             context.contentResolver.query(CalendarContract.Attendees.CONTENT_URI, arrayOf("_id"), "event_id=?", arrayOf(existingId.toString()), null)?.use { check(it.count == 0) { MoteI18n.text("不修改包含参与人的日程") } } ?: error(MoteI18n.text("无法核实日程参与人"))
-                            save("attempting")
-                            val selection = "calendar_id=? AND title=? AND dtstart=? AND dtend=? AND allDay=? AND coalesce(eventLocation,'')=? AND coalesce(description,'')=? AND deleted=0"
-                            val args = arrayOf(calendarId.toString(), expected.getString("title"), oldTimes.first.toString(), oldTimes.second.toString(), if (expected.getBoolean("allDay")) "1" else "0", expected.getString("location"), oldDescription)
-                            val changed = if (action.getString("kind") == "calendar.cancel") context.contentResolver.delete(uri, selection, args) else {
+                            checkSession(); save("attempting")
+                            // Calendar Provider accepts a selection on the collection URI,
+                            // not on /events/<id>. Keep identity and the observed original
+                            // in the same predicate so a concurrent edit cannot be overwritten.
+                            val selection = "_id=? AND calendar_id=? AND title=? AND dtstart=? AND dtend=? AND allDay=? AND coalesce(eventLocation,'')=? AND coalesce(description,'')=? AND coalesce(rrule,'')='' AND coalesce(rdate,'')='' AND deleted=0"
+                            val args = arrayOf(existingId.toString(), calendarId.toString(), expected.getString("title"), oldTimes.first.toString(), oldTimes.second.toString(), if (expected.getBoolean("allDay")) "1" else "0", expected.getString("location"), oldDescription)
+                            checkSession()
+                            val changed = if (action.getString("kind") == "calendar.cancel") context.contentResolver.delete(CalendarContract.Events.CONTENT_URI, selection, args) else {
                                 check(end > Instant.now().toEpochMilli()) { MoteI18n.text("日程已过期") }
                                 val values = ContentValues().apply {
                                     put(CalendarContract.Events.TITLE, event.getString("title")); put(CalendarContract.Events.DTSTART, start); put(CalendarContract.Events.DTEND, end)
                                     put(CalendarContract.Events.EVENT_TIMEZONE, if (event.getBoolean("allDay")) "UTC" else event.getString("timeZone")); put(CalendarContract.Events.ALL_DAY, if (event.getBoolean("allDay")) 1 else 0)
                                     put(CalendarContract.Events.EVENT_LOCATION, event.getString("location")); put(CalendarContract.Events.DESCRIPTION, CalendarActionRules.description(related.getString("actionId"), event, operation))
                                 }
-                                context.contentResolver.update(uri, values, selection, args)
+                                context.contentResolver.update(CalendarContract.Events.CONTENT_URI, values, selection, args)
                             }
                             check(changed == 1) { MoteI18n.text("原日程已改变，请核实修改结果") }
                         }
@@ -157,7 +175,7 @@ class CalendarActions(private val context: Context, private val foreground: Bool
                 else {
                     check(existing.isEmpty() && CalendarActionRules.mutationAllowed(action, previous)) { MoteI18n.text("上次保存结果不明，请在系统日历核实；不会重复创建") }
                     check(end > Instant.now().toEpochMilli()) { MoteI18n.text("日程已过期") }
-                    save("attempting")
+                    checkSession(); save("attempting")
                     val values = ContentValues().apply {
                         put(CalendarContract.Events.CALENDAR_ID, calendarId); put(CalendarContract.Events.TITLE, event.getString("title"))
                         put(CalendarContract.Events.DTSTART, start); put(CalendarContract.Events.DTEND, end)
@@ -165,6 +183,7 @@ class CalendarActions(private val context: Context, private val foreground: Bool
                         put(CalendarContract.Events.ALL_DAY, if (event.getBoolean("allDay")) 1 else 0)
                         put(CalendarContract.Events.EVENT_LOCATION, event.getString("location")); put(CalendarContract.Events.DESCRIPTION, CalendarActionRules.description(id, event, operation))
                     }
+                    checkSession()
                     val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values) ?: error(MoteI18n.text("保存结果不明"))
                     externalId = ContentUris.parseId(uri).toString()
                 }

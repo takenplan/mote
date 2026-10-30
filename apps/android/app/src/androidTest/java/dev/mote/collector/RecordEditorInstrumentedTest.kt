@@ -48,11 +48,40 @@ class RecordEditorInstrumentedTest {
             .putExtra(Intent.EXTRA_TEXT, "Generated third-party original").putExtra(Intent.EXTRA_STREAM, uri)
         ActivityScenario.launch<RecordEditorActivity>(intent).use { scenario ->
             waitUntil("Shared image must be durably staged") { context.recordDraftStore().draft().getJSONArray("attachments").length() == 1 }
-            scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<EditText>().single().setText("My separate generated comment") }
+            scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<EditText>().single { it.contentDescription == "正在想什么" }.setText("My separate generated comment") }
+            scenario.onActivity { activity ->
+                views(activity.window.decorView).single { it.contentDescription == "资料说明（选填）" }.performClick()
+                views(activity.window.decorView).filterIsInstance<EditText>().single { it.tag == "record-description" }.setText("This is a saved third-party quotation, not my own experience")
+            }
+            waitUntil("Independent description must persist privately") { context.recordDraftStore().draft().optString("description") == "This is a saved third-party quotation, not my own experience" }
             waitUntil("Comment must persist privately") { context.recordDraftStore().draft().getString("text") == "My separate generated comment" }
             scenario.recreate()
             waitUntil("Restored editor must load") { var ready = false; scenario.onActivity { activity -> ready = views(activity.window.decorView).filterIsInstance<EditText>().any { it.isEnabled && it.text.toString() == "My separate generated comment" } }; ready }
-            scenario.onActivity { screenshot(it, "editor-shared-image") }
+            scenario.onActivity { activity ->
+                val quote = views(activity.window.decorView).filterIsInstance<TextView>().single { it.tag == "record-origin-fulltext" }
+                assertTrue("Shared original starts open",quote.isShown)
+                assertEquals("Generated third-party original",quote.text.toString())
+                val composer = views(activity.window.decorView).filterIsInstance<EditText>().single { it.contentDescription == "正在想什么" }
+                assertEquals("我的补充",composer.hint.toString())
+                assertEquals("保存分享",views(activity.window.decorView).filterIsInstance<TextView>().single { it.tag == "detail-title" }.text.toString())
+                val quotePosition=IntArray(2); val composerPosition=IntArray(2); quote.getLocationOnScreen(quotePosition); composer.getLocationOnScreen(composerPosition)
+                assertTrue("Original precedes my separate supplement",quotePosition[1]+quote.height <= composerPosition[1])
+                assertEquals("未保存的草稿",views(activity.window.decorView).filterIsInstance<TextView>().single { it.tag == "record-draft-state" }.text.toString())
+                screenshot(activity, "editor-shared-image")
+                views(activity.window.decorView).single { it.tag == "record-origin-toggle" }.performClick()
+            }
+            scenario.recreate()
+            waitUntil("Collapsed source restores with the separate supplement") { var restored=false; scenario.onActivity { activity ->
+                val quote=views(activity.window.decorView).singleOrNull { it.tag == "record-origin-fulltext" } as? TextView
+                restored=quote?.visibility == android.view.View.GONE && views(activity.window.decorView).filterIsInstance<EditText>().any { it.isEnabled && it.text.toString() == "My separate generated comment" }
+            }; restored }
+            scenario.onActivity { activity ->
+                views(activity.window.decorView).single { it.tag == "record-origin-toggle" }.performClick()
+                assertEquals("Generated third-party original",views(activity.window.decorView).filterIsInstance<TextView>().single { it.tag == "record-origin-fulltext" && it.isShown }.text.toString())
+            }
+            MoteAppearance.select(context,AppearancePreference.DARK); instrumentation.waitForIdleSync()
+            scenario.onActivity { screenshot(it,"editor-shared-image-dark") }
+            MoteAppearance.select(context,AppearancePreference.LIGHT); instrumentation.waitForIdleSync()
             assertEquals("Shared record is never saved on opening or recreation", 0, context.queue().depth())
             scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<TextView>().single { it.text.toString() == "保存" }.performClick() }
             waitUntil("Explicit save must enter durable offline queue") { context.queue().depth() == 1 }
@@ -60,35 +89,86 @@ class RecordEditorInstrumentedTest {
         val event = context.queue().peek()!!
         assertEquals("My separate generated comment", event.getString("ocrText"))
         assertEquals("Generated third-party original", event.getJSONObject("metadata").getJSONObject("noteOrigin").getString("text"))
+        assertEquals("This is a saved third-party quotation, not my own experience", event.getJSONObject("metadata").getString("ownerDescription"))
         val saved = context.recordDraftStore().record(event.getString("id"))!!.getJSONArray("attachments").getJSONObject(0)
         assertArrayEquals(originalBytes, context.recordDraftStore().bytes(saved.getString("id")))
         assertEquals("image/jpeg", saved.getString("mime"))
         assertEquals("", context.recordDraftStore().draft().getString("text"))
         file.delete()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            waitUntil("Home must be rendered") { var ready = false; scenario.onActivity { ready = views(it.window.decorView).any { view -> view.tag == "primary:HOME" } }; ready }
-            scenario.onActivity { screenshot(it, "home"); views(it.window.decorView).single { view -> view.tag == "primary:LIBRARY" }.performClick() }
+            waitUntil("Home must be rendered") { var ready = false; scenario.onActivity { ready = views(it.window.decorView).any { view -> view.tag == "home-record-action" } }; ready }
+            scenario.onActivity { screenshot(it, "home"); it.openGeneratedMenu(); views(it.window.decorView).single { view -> view.tag == "menu:资料与记忆" }.performClick() }
             scenario.onActivity { screenshot(it, "library") }
         }
     }
     @Test fun recordStopPreviewKeepsActualEncodedAudioDraft() {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("recordEditorFixture") == "true")
         require(Build.FINGERPRINT.contains("emu64a") && context.packageName.endsWith(".dev"))
+        MoteI18n.select(context,"zh-CN")
         instrumentation.uiAutomation.grantRuntimePermission(context.packageName, android.Manifest.permission.RECORD_AUDIO)
         ActivityScenario.launch(RecordEditorActivity::class.java).use { scenario ->
-            waitUntil("Editor loaded") { var ready = false; scenario.onActivity { ready = views(it.window.decorView).filterIsInstance<EditText>().singleOrNull()?.isEnabled == true }; ready }
-            scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<TextView>().single { it.text.toString() == "录音" }.performClick() }
+            waitUntil("Editor loaded") { var ready = false; scenario.onActivity { ready = views(it.window.decorView).filterIsInstance<EditText>().singleOrNull { it.contentDescription == "正在想什么" }?.isEnabled == true }; ready }
+            scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<TextView>().single { it.contentDescription == "录音" }.performClick() }
             Thread.sleep(1300)
-            scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<TextView>().single { it.text.toString() == "停止录音" }.performClick() }
+            scenario.onActivity { activity ->
+                assertTrue(views(activity.window.decorView).single { it.tag == "record-leave-notice" }.isShown)
+                screenshot(activity,"editor-recording")
+            }
+            scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<TextView>().single { it.contentDescription == "停止录音" }.performClick() }
             waitUntil("Stopped audio persisted") { context.recordDraftStore().draft().getJSONArray("attachments").let { it.length() > 0 && it.getJSONObject(it.length() - 1).getString("mime") == "audio/mp4" } }
             val files = context.recordDraftStore().draft().getJSONArray("attachments"); val audio = files.getJSONObject(files.length() - 1)
             val temp = File(context.cacheDir, "generated-audio-check.m4a"); temp.writeBytes(context.recordDraftStore().bytes(audio.getString("id")))
             val metadata = android.media.MediaMetadataRetriever(); metadata.setDataSource(temp.absolutePath)
             assertTrue(metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)!!.toLong() > 0); metadata.release(); temp.delete()
             waitUntil("Audio preview button ready") { var ready = false; scenario.onActivity { ready = views(it.window.decorView).filterIsInstance<TextView>().any { view -> view.text.toString() == "播放" } }; ready }
+            scenario.onActivity { activity -> assertFalse(views(activity.window.decorView).single { it.tag == "record-leave-notice" }.isShown) }
             scenario.onActivity { activity -> views(activity.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "播放" }.performClick(); screenshot(activity, "editor-audio-preview") }
             scenario.recreate()
             waitUntil("Audio retained after recreation") { context.recordDraftStore().draft().getJSONArray("attachments").toString().contains(audio.getString("id")) }
+        }
+    }
+    @Test fun incomingShareKeepsThePriorDraftUntilExplicitReplacement() {
+        guard()
+        context.recordDraftStore().edit("Generated prior private text",org.json.JSONArray(),org.json.JSONObject().put("kind","manual"),"Generated prior private description")
+        fun shared()=ActivityScenario.launch<RecordEditorActivity>(Intent(context,RecordEditorActivity::class.java).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Generated incoming quoted original"))
+        fun choose(label:String) {
+            waitUntil("Existing draft choice $label") { var found=false;instrumentation.runOnMainSync { found=android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<TextView>().any { it.isShown && it.isClickable && it.text.toString()==label } };found }
+            instrumentation.runOnMainSync { android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views).filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString()==label }.performClick() }
+        }
+        shared().use { scenario ->
+            choose("继续编辑")
+            waitUntil("Prior text stays visible") { var found=false;scenario.onActivity { a -> found=views(a.window.decorView).filterIsInstance<EditText>().any { it.isEnabled && it.text.toString()=="Generated prior private text" } };found }
+            assertEquals("Generated prior private description",context.recordDraftStore().draft().getString("description"));assertEquals("",context.recordDraftStore().draft().getJSONObject("origin").optString("text"))
+            scenario.onActivity { screenshot(it,"share-existing-continued") }
+        }
+        shared().use { scenario ->
+            choose("替换草稿")
+            waitUntil("Explicitly accepted original is separate") { context.recordDraftStore().draft().getJSONObject("origin").optString("text")=="Generated incoming quoted original" }
+            val draft=context.recordDraftStore().draft();assertEquals("",draft.getString("text"));assertEquals("",draft.getString("description"));assertEquals(0,context.queue().depth())
+            scenario.onActivity { a ->
+                assertTrue(views(a.window.decorView).filterIsInstance<TextView>().single { it.tag=="record-origin-fulltext" }.isShown)
+                screenshot(a,"share-existing-replaced")
+            }
+        }
+    }
+    @Test fun leavingAnActualRecordingStopsItAndKeepsAnEncodedPrivateDraft() {
+        guard();instrumentation.uiAutomation.grantRuntimePermission(context.packageName,android.Manifest.permission.RECORD_AUDIO)
+        ActivityScenario.launch(RecordEditorActivity::class.java).use { scenario ->
+            waitUntil("Editor loaded") { var ready=false;scenario.onActivity { ready=views(it.window.decorView).filterIsInstance<EditText>().singleOrNull { it.contentDescription=="正在想什么" }?.isEnabled==true };ready }
+            scenario.onActivity { a ->
+                views(a.window.decorView).filterIsInstance<EditText>().single { it.contentDescription=="正在想什么" }.setText("Generated draft before leaving recording")
+                views(a.window.decorView).filterIsInstance<TextView>().single { it.contentDescription=="录音" }.performClick()
+            }
+            Thread.sleep(1300)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            waitUntil("Leaving stores the stopped audio") { context.recordDraftStore().draft().getJSONArray("attachments").length()==1 }
+            val draft=context.recordDraftStore().draft();assertEquals("Generated draft before leaving recording",draft.getString("text"))
+            val audio=draft.getJSONArray("attachments").getJSONObject(0);val file=File(context.cacheDir,"generated-left-recording.m4a");file.writeBytes(context.recordDraftStore().bytes(audio.getString("id")))
+            val metadata=android.media.MediaMetadataRetriever();try{metadata.setDataSource(file.absolutePath);assertTrue(metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)!!.toLong()>0)}finally{metadata.release();file.delete()}
+            assertEquals(0,context.queue().depth());scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            waitUntil("Stopped draft returns with playback") { var found=false;scenario.onActivity { a -> found=views(a.window.decorView).filterIsInstance<TextView>().any { it.text.toString()=="播放" && it.isShown } };found }
+            scenario.onActivity { a -> assertFalse(views(a.window.decorView).any { it.contentDescription=="停止录音" });screenshot(a,"recording-left-and-returned") }
+            scenario.recreate();waitUntil("Stopped original survives recreation") { context.recordDraftStore().draft().getJSONArray("attachments").optJSONObject(0)?.optString("id")==audio.getString("id") }
         }
     }
     @Test fun synchronizeOfflineRecordThroughRealWorkManagerAndVerifyOriginalBytes() {
@@ -132,7 +212,7 @@ class RecordEditorInstrumentedTest {
         val originalBytes = originals.map { store.bytes(it.getString("id")) }
         val before = context.queue().dedupeIds().toSet()
         ActivityScenario.launch(RecordEditorActivity::class.java).use { scenario ->
-            waitUntil("Current mixed native draft must load") { var ready = false; scenario.onActivity { ready = views(it.window.decorView).filterIsInstance<EditText>().singleOrNull()?.isEnabled == true }; ready }
+            waitUntil("Current mixed native draft must load") { var ready = false; scenario.onActivity { ready = views(it.window.decorView).filterIsInstance<EditText>().singleOrNull { it.contentDescription == "正在想什么" }?.isEnabled == true }; ready }
             assertEquals("Opening the mixed draft must never save it", before, context.queue().dedupeIds().toSet())
             scenario.onActivity { activity -> screenshot(activity, "editor-mixed-before-save"); views(activity.window.decorView).filterIsInstance<TextView>().single { it.text.toString() == "保存" }.performClick() }
             waitUntil("One explicit save creates exactly one mixed durable record") { (context.queue().dedupeIds().toSet() - before).size == 1 && store.draft().getJSONArray("attachments").length() == 0 }

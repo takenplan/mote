@@ -27,7 +27,7 @@ internal object GeneratedWindowRendering {
             "正在读取草稿…", "正在连接本机存储，文件整理将在后台继续…", "正在读取来源…", "正在读取内容…",
             "正在读取详情…", "记录已读取，正在加载图片…", "正在读取 App 与时间…", "加载预览…",
             "正在读取运行状态…", "正在读取已保存连接…", "正在读取存储位置…", "正在读取日志…",
-            "正在读取本机同步状态…", "正在读取本机统计…", "正在生成压缩预览…", "正在读取日程建议…").map { MoteI18n.text(it) }.toSet() +
+            "正在读取本机同步状态…", "正在读取本机统计…", "正在生成压缩预览…", "正在读取日程建议…", "正在读取已安装应用…").map { MoteI18n.text(it) }.toSet() +
             listOf("本机记录", "中央归档").map { MoteI18n.text("正在读取{0}…", MoteI18n.text(it)) }
         return views(root).filterIsInstance<TextView>().none { it.isShown && it.text.toString() in pending }
     }
@@ -112,7 +112,9 @@ internal object GeneratedWindowRendering {
                 val isolated = Bitmap.createBitmap(button.width, button.height, Bitmap.Config.ARGB_8888)
                 try {
                     button.draw(Canvas(isolated))
-                    val expectedBorder = MoteUi.controlBorder
+                    val primary = button.isEnabled && button.getTag(R.id.mote_button_role) == MoteUi.ButtonRole.PRIMARY
+                    val expectedBorder = if (primary) MoteTheme.primaryBackground else MoteUi.controlBorder
+                    geometry.put("pixelEdgeContract", if (primary) "enabled primary solid fill" else "outlined control border")
                     val tolerance = 32 // Allows edge anti-aliasing while separating #8090a5 from the white surface.
                     val rows = minOf(button.height, maxOf(4, button.context.moteDp(2) + 1))
                     val center = button.width / 2
@@ -144,7 +146,7 @@ internal object GeneratedWindowRendering {
                                 else errors += "Top border lost at button($x,$y)/app($appX,$appY): child=${rgba(childPixel)}, overlay=${appPixel?.let(::rgba)}, maxRgbDifference=$difference"
                             }
                         }
-                        if (columnBorderSamples == 0) errors += "Isolated button.draw has no control border in top $rows rows at x=$x"
+                        if (columnBorderSamples == 0) errors += "Isolated button.draw has no expected ${if (primary) "primary fill" else "control border"} in top $rows rows at x=$x"
                     }
                     geometry.put("topEdgePixels", JSONObject().put("comparison", "button.draw versus actual overlay.draw in the application window bitmap")
                         .put("expectedControlBorder", rgba(expectedBorder)).put("rgbTolerance", tolerance).put("minimumAlpha", 192)
@@ -166,6 +168,51 @@ internal object GeneratedWindowRendering {
         require(base.width > 0 && base.height > 0 && base.isShown)
         check(hasNoPendingLabels(base) && overlays.all(::hasNoPendingLabels)) { "An unfinished native surface cannot be a ready scene: $name" }
         val (page, state, marker) = when (name) {
+            "home-recent" -> Triple("home", "content", "周五评审需要准备什么？")
+            "home-menu" -> Triple("manage", "content", "我的 Mote")
+            "ask-retained-draft" -> Triple("ask", "draft", "生成的未发送草稿")
+            "home-history-error" -> Triple("home", "error", "对话暂不可读取，请稍后重试。")
+            "home-first-use-draft" -> Triple("home", "first-use", "先记下一件事。")
+            "capture-context-local" -> Triple("capture", "local-context", "采集来源说明")
+            "ask-turn-details" -> Triple("ask", "turn-details", "本轮详情")
+            "home-connected-empty" -> Triple("home", "connected-empty", "已连接你的 Mote")
+            "connection-entry" -> Triple("connection", "empty", "把记录接到一起")
+            "connection-review" -> Triple("connection", "review", "这是你的 Mote 吗？")
+            "connection-default-light", "connection-default-dark", "connection-collapsed-draft-light", "connection-new-owner-default" -> Triple("connection", "default-disclosure", "扫码或导入邀请")
+            "connection-manual-draft-dark" -> Triple("connection", "private-unsaved-draft", "Generated unsaved connection name")
+            "about-profile-light", "about-profile-dark", "about-profile-english-dark" -> Triple("about", "actual-build-profile", "Mote · ${RuntimeProfile.current.name}")
+            "permissions-live-tint-dark", "permissions-live-tint-light" -> Triple("permissions", "actual-theme-role", "采集权限")
+            "p06-microphone-denied-dark", "p06-camera-denied-dark", "p06-dark-restored-quote-and-supplement" -> Triple("record", "retained-shared-draft", "Generated retained personal supplement")
+            "p24-settings-top-dark", "p24-settings-bottom-dark" -> Triple("settings", "stopped", "偏好与本机维护")
+            "p24-device_options-top-dark", "p24-device_options-bottom-dark" -> Triple("device-options", "stopped", "外观与语言")
+            "p31-real-generated-calendar-picker-dark" -> Triple("sources", "real-calendar-picker", "Generated final picker calendar")
+            "p31-selected-calendar-scope-dark" -> Triple("sources", "paused-calendar-draft", "Generated calendar scope, no event collection")
+            "p31-cancel-keeps-exact-calendar-dark" -> Triple("sources", "cancelled-calendar-edit", "这台手机的来源")
+            "p36-another-central-valid-zip-rejected-dark" -> Triple("backup", "wrong-central", "备份无法导入：备份属于不同中央节点，请先连接原节点")
+            "p37-local-metadata-json-success-dark" -> Triple("backup", "metadata-exported", "导出文件已生成")
+            "p37-local-metadata-json-write-failure-dark" -> Triple("backup", "metadata-write-failed", "备份未能生成")
+            "p27-notification-granted-return-dark", "p27-usage-granted-return-dark" -> Triple("permissions", "actual-grant-return", "采集权限")
+            "p11-central-unconnected-dark" -> Triple("materials", "disconnected", "中央资料库暂不可用。连接中央后，可浏览已归档的资料；文件和随手记仍可在本机保存和查看。")
+            "p11-empty-materials-dark", "p11-empty-materials-light", "p11-empty-materials-message-dark" -> Triple("central-library", "actual-empty", "当前范围内暂无条目。没有列出不代表不存在。")
+            "p11-empty-memories-dark", "p11-empty-memories-light", "p11-empty-memories-message-dark", "p11-memory-return-dark" -> Triple("memories", "actual-empty", "当前筛选下没有匹配的记忆。可切换内容分类或调整筛选条件。")
+            "p11-memory-management-more-dark" -> Triple("memories", "explicit-more", "记忆主题")
+            "p11-existing-extraction-entry-dark" -> Triple("memories", "existing-extraction-entry", "开始提取")
+            "gap-library-local-light", "gap-library-local-dark", "gap-library-central-unavailable-dark" -> Triple("library","real-location-choice","我的资料")
+            "gap-library-exact-original-dark" -> Triple("reader","exact-local-original","Generated exact local library original")
+            "gap-library-memory-handoff-dark" -> Triple("library","memory-handoff","查看中心整理的记忆。")
+            "gap-processing-language-en", "gap-processing-language-zh-CN" -> Triple("processing","retained-language-draft","JPEG 质量")
+            "gap-actions-owner-denied-withdrawn-dark", "gap-actions-owner-late-read-rejected-dark" -> Triple("actions","former-owner-withdrawn","日程")
+            "gap-processing-default-light", "gap-processing-default-dark" -> Triple("processing","default-hierarchy","JPEG 质量")
+            "gap-diagnostics-default-light", "gap-diagnostics-default-dark", "gap-diagnostics-advanced-draft-dark" -> Triple("diagnostics","current-range-and-retained-draft","诊断与支持")
+            "gap-actions-calendar-light", "gap-actions-calendar-dark" -> Triple("actions","calendar-default","尚未发现日程。上传资料或继续采集后会自动分析。")
+            "gap-actions-todo-draft-dark" -> Triple("actions","same-owner-todo-draft","Generated retained Todo draft")
+            "gap-actions-session-withdrawn-dark" -> Triple("actions","session-withdrawn","待办")
+            "final-settings" -> Triple("settings", "content", "偏好与本机维护")
+            "final-device-options" -> Triple("device-options", "content", "外观与语言")
+            "final-appearance" -> Triple("appearance", "content", "切换只影响界面，已有输入、附件和授权保留。")
+            "final-permissions" -> Triple("permissions", "content", "授权后仍需明确开始。")
+            "final-capture-range" -> Triple("capture", "content", "应用时长、截图与结构化内容分别选择。")
+            "final-observations" -> Triple("capture", "observations", "通知与设备信息")
             "feishu-preview" -> Triple("lark", "content", "实际发现的文档")
             "feishu-archived" -> Triple("lark", "content", "已归档 2 篇文档 · 6 条活动线索 · 0 项待处理 · 0 项失败")
             "home" -> Triple("home", "empty", "还没有内容。选一个动作，留下第一份资料。")
@@ -202,8 +249,8 @@ internal object GeneratedWindowRendering {
             "rollout-storage-location" -> Triple("rollout-storage-location", "content", "图片保存位置")
             "rollout-statistics" -> Triple("rollout-statistics", "content", "统计中心")
             "rollout-activity-statistics" -> Triple("rollout-activity-statistics", "content", "采集与存储详情")
-            "rollout-logs" -> Triple("rollout-logs", "content", "日志中心")
-            "rollout-dedupe" -> Triple("rollout-dedupe", "content", "图片去重诊断")
+            "rollout-logs" -> Triple("rollout-logs", "content", "本地日志")
+            "rollout-dedupe" -> Triple("rollout-dedupe", "content", "去重对比诊断")
             "rollout-compression" -> Triple("rollout-compression", "content", "图片压缩预览")
             "rollout-bulk-dedupe" -> Triple("rollout-bulk-dedupe", "content", "本机图片批量去重")
             "rollout-legacy-sources" -> Triple("rollout-legacy-sources", "content", "已支持的来源")
@@ -229,7 +276,7 @@ internal object GeneratedWindowRendering {
                 when (centralPage) {
                     "overview" -> Triple(centralPage, "content", "模型已配置")
                     "files" -> Triple(centralPage, "empty", "当前范围内暂无条目。没有列出不代表不存在。")
-                    "notes" -> Triple(centralPage, "restriction", "图片和录音会先归档。是否提取文字或转写录音取决于中央处理设置；请在资料库查看状态。每个附件最多 50 MiB。")
+                    "notes" -> Triple(centralPage, "content", "已经留下的心绪与杂事")
                     else -> Triple(centralPage, "content", title)
                 }
             } else error("A new generated scene needs an explicit readiness contract: $name")

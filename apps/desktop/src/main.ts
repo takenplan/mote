@@ -1,10 +1,13 @@
+import {canSendFromTray,showTraySendFailure} from './tray-send';
 import {centralMemoryTopics,centralMemoryTopicPage,centralMemoryTopicDetail,centralMemoryTopicEvidence} from './memory-topics';
+import {describeBackupFile} from './queue-backup-identity';
 import {ChromeCaptureBridge} from './chrome-bridge';
+import {CHROME_EXTENSION_ID} from './chrome-constants';
 import {registerChromeNativeHost} from './chrome-registration';
 import {appearancePreference,resolveColorScheme,linearUiTheme,type AppearancePreference} from '@mote/shared';
 import { connectionToken, loginRequest, loginVerifier } from './login-session';
 import { SyncHistory, type SyncHistoryQuery, type SyncHistoryContentQuery } from './sync-history';
-import { localContentPage, localContentDetail, centralContentPage } from './content-library';
+import { localContentPage, localContentDetail, centralContentPage, centralSourceContentPage } from './content-library';
 import { randomUUID } from 'node:crypto';
 import { syncContent, readCentralContent } from './sync-content';
 import { AskController } from './ask-controller';
@@ -29,7 +32,7 @@ import { NoteDraftStore, type NoteDraft } from './note-draft';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { openCentralBrowser,validateCentralWorkId } from './central-browser';
-import { showCentral as navigateCentral, type BrowserLogin } from './central-navigation';
+import { showCentral as navigateCentral, prepareBrowserSession, pollBrowserLogin, type BrowserLogin } from './central-navigation';
 import {centralWorkActivity} from './work-activity';
 import { join, resolve } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
@@ -48,7 +51,7 @@ import { createChromiumUpdateFetch } from './electron-update-fetch';
 import { acknowledgeInstalledUpdate } from './update-install';
 import { QueueStorage } from './queue-storage';
 import { SettingsCoordinator } from './settings-coordinator';
-import { DurableQueue } from './queue';
+import { QueueImportFailure, DurableQueue } from './queue';
 import { BackgroundJobs } from './background-jobs';
 import {ensureStorageFormat} from './storage-format';
 import { browseCaptures, captureDetail, captureImage, type BrowseRequest, type CaptureLocation } from './capture-browser';
@@ -132,18 +135,19 @@ function encryptedStorageAvailable(): boolean {
 }
 let browserLogin: BrowserLogin | undefined;
 let ensureBrowserLogin: (()=>Promise<void>)|undefined;
-async function showCentral(page?: string, evidenceId?: string,workId?:string): Promise<void> {
+async function showCentral(page?: string, evidenceId?: string,workId?:string,conversationId?:string): Promise<void> {
   return navigateCentral({
     settings: () => settings,
+    authorizationGeneration: () => collector.status().authorizationGeneration ?? 0,
     browserLogin: () => browserLogin,
     ensureBrowserLogin: async () => { await ensureBrowserLogin?.(); },
     platform: process.platform,
     launchChrome: url => promisify(execFile)('/usr/bin/open', ['-a', 'Google Chrome', url]),
     openDefault: url => shell.openExternal(url),
-  }, page, evidenceId, workId);
+  }, page, evidenceId, workId,conversationId);
 }
 function showWindow(): void { window?.show(); window?.focus(); }
-function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings' | 'central'): void {
+function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings' | 'central' | 'capture-start'): void {
   if (page === 'notes') { void openQuickNote?.(); return; }
   showWindow(); window?.webContents.send('mote:navigate', page);
 }
@@ -169,8 +173,8 @@ function updateUi(status: Status): void {
     { label: moteText("随手记"), click: () => showClientPage('notes') },
     { label: moteText("打开中央仓库"), click: () => showClientPage('central') },
     { label: moteText("设置…"), click: () => showClientPage('settings') },
-    { label: status.running ? moteText("停止采集") : moteText("开始采集"), click: () => { if(status.running){collector.stop();void serialize(()=>collector.settleCapture());}else void serialize(()=>collector.start()).catch(error=>dialog.showErrorBox(moteText("无法开始采集"),(error as Error).message)); } },
-    { label: moteText("立即发送"), enabled: !status.config.syncPaused, click: () => { void serialize(async()=>{await localSources?.sync(true);await collector.retry();}).catch(error=>dialog.showErrorBox(moteText("立即发送"),(error as Error).message)); } },
+    { label: status.running ? moteText("停止采集") : moteText("开始采集"), click: () => { if(status.running){collector.stop();void serialize(()=>collector.settleCapture());}else showClientPage('capture-start'); } },
+    { label: moteText("立即发送"), enabled: canSendFromTray(status), click: () => { void serialize(async()=>{await localSources?.sync(true);await collector.retry();}).catch(error=>showTraySendFailure(error,options=>dialog.showMessageBox(options))); } },
     { type: 'separator' },
     { label: moteText("退出 Mote（停止采集和上传）"), click: () => app.quit() },
   ]));
@@ -256,7 +260,7 @@ else {
     };
     openQuickNote=async()=>{
       if(quickNoteWindow&&!quickNoteWindow.isDestroyed()){quickNoteWindow.show();quickNoteWindow.focus();return;}
-      const noteWindow=new BrowserWindow({width:480,height:560,minWidth:380,minHeight:420,title:moteText('随手记'),backgroundColor:appearanceBackground(),webPreferences:{preload:join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:developmentProfile}});
+      const noteWindow=new BrowserWindow({width:580,height:466,useContentSize:true,minWidth:380,minHeight:420,title:moteText('随手记'),backgroundColor:appearanceBackground(),webPreferences:{preload:join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:developmentProfile}});
       quickNoteWindow=noteWindow;
       noteWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
       noteWindow.webContents.on('will-navigate',event=>event.preventDefault());
@@ -284,7 +288,7 @@ else {
       renameSync(languageFile + '.tmp', languageFile);
       preferredLanguage = next; refreshApplicationMenu(); updateUi(clientStatus());
       // Renderer navigation is blocked; only this trusted IPC may reload its fixed page.
-      setTimeout(() => window?.webContents.reload(), 20);
+      setTimeout(() => {window?.webContents.reload();if(quickNoteWindow&&!quickNoteWindow.isDestroyed())quickNoteWindow.webContents.reload();}, 20);
       return languageState();
     });
     // Retain authored keys: a renderer locale change does not restart the main process.
@@ -307,6 +311,7 @@ else {
         if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'STARTED', {operation:channel});
         try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt,operation:channel }); return result; }
         catch (error) { if (stage) void events.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt,operation:channel,errorName:safeErrorName(error) }); throw error; }
+        finally { if (operationLabels[channel] && !quitting) updateUi(clientStatus()); }
       });
     };
     const requireRecovery = (message: string): void => { recoveryRequired = message; collector.requireRecovery(message); void localSources!.close(); };
@@ -386,6 +391,15 @@ else {
     handle('mote:captures-browse', input => browseWithConnection(config => browseCaptures(queue, config, input as BrowseRequest)));
     handle('mote:captures-detail', (location, id) => browseWithConnection(config => captureDetail(queue, config, location as CaptureLocation, id as string)));
     handle('mote:captures-image', (location, id, thumbnail) => browseWithConnection(config => captureImage(queue, config, location as CaptureLocation, id as string, thumbnail as boolean)));
+    let chromePermissionCheck:{id:string;controller:AbortController}|undefined;
+    handle('mote:chrome-permissions',async id=>{
+      if(typeof id!=='string'||!/^([0-9a-f]{8}-)([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id))throw Error('Invalid Chrome check identity');
+      chromePermissionCheck?.controller.abort();const check={id,controller:new AbortController()},origins=[...settings.chromeOrigins];chromePermissionCheck=check;
+      try{const result=await chromeCaptureBridge?.permissionStatus(origins,check.controller.signal)??{state:'disconnected' as const,origins:[]};return JSON.stringify(settings.chromeOrigins)===JSON.stringify(origins)?result:{state:'stale',origins:[]};}
+      finally{if(chromePermissionCheck===check)chromePermissionCheck=undefined;}
+    });
+    handle('mote:chrome-permissions-cancel',id=>{const check=chromePermissionCheck;if(check&&check.id===id)check.controller.abort();});
+    handle('mote:chrome-extensions',async()=>{if(process.platform!=='darwin')throw Error('Chrome capture requires macOS');await promisify(execFile)('open',['-a','Google Chrome',`chrome://extensions/?id=${CHROME_EXTENSION_ID}`]);});
     handle('mote:chrome-setup',async()=>{
       if(process.platform!=='darwin')throw Error('Chrome capture requires macOS');
       const extensionDirectory=app.isPackaged?join(process.resourcesPath,'chrome-extension'):join(__dirname,'..','chrome-extension');
@@ -410,10 +424,14 @@ else {
     handle('mote:coding-agents', () => discoverCodingAgents());
     handle('mote:source-coding', (provider, options) => serialize(() => { if (provider !== 'claude' && provider !== 'codex' && provider !== 'kimi') throw new Error(moteText("不支持的 Coding Agent")); return localSources!.addCodingAgent(provider, options); }));
     handle('mote:sources', () => localSources!.status());
+    handle('mote:source-archived-content',(id,cursor)=>browseWithConnection(config=>{const source=localSources!.status().find(row=>row.source.id===id)?.source;if(!source||typeof id!=='string')throw Error('Invalid source');return centralSourceContentPage(config,source,cursor as string|undefined);}));
+    handle('mote:source-pending-content',id=>{if(typeof id!=='string'||!localSources!.status().some(row=>row.source.id===id))throw Error('Invalid source');return localContentPage(queue,localSources!,0,undefined,id);});
+    handle('mote:source-context',id=>serialize(()=>{if(typeof id!=='string')throw Error('Invalid source');return localSources!.sourceContext(id);}));
+    handle('mote:source-context-save',(id,input)=>serialize(()=>{if(typeof id!=='string')throw Error('Invalid source');return localSources!.saveSourceContext(id,input);}));
     handle('mote:source-sync', async () => { const scan = localSources!.sync(true); await collector.retry(); await scan; await collector.retry(); });
     handle('mote:action-calendar-connect', () => serialize(() => nativeCalendarActions({...settings},helperPath,dataDirectory).connectAndDeliver(()=>settings.syncPaused===true)));
     handle('mote:calendar-authorize', () => serialize(() => localSources!.authorizeCalendar()));
-    handle('mote:source-calendar', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("日历选择无效")); await localSources!.addCalendar(id, options); }));
+    handle('mote:source-calendar', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("日历选择无效")); return localSources!.addCalendar(id, options); }));
     handle('mote:source-update', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("来源选择无效")); await localSources!.update(id, options); }));
     const sourceSelections = new SourceSelectionController((path, options) => localSources!.addFiles(path, options));
     handle('mote:source-select', mode => serialize(async () => {
@@ -429,9 +447,9 @@ else {
     handle('mote:memory-topic-page',input=>browseWithConnection(config=>centralMemoryTopicPage(config,input as import('./memory-topics').TopicQuery)));
     handle('mote:memory-topic-evidence',(memoryId,evidenceId)=>browseWithConnection(config=>centralMemoryTopicEvidence(config,memoryId as string,evidenceId as string,()=>{if(settings!==config)throw Error(moteText('连接已改变，请刷新采集记录'));})));
     handle('mote:memory-topic-detail',id=>browseWithConnection(config=>centralMemoryTopicDetail(config,id as string)));
-    handle('mote:content-central', cursor => browseWithConnection(config=>centralContentPage(config,cursor as string|undefined)));
+    handle('mote:content-central', (cursor,query) => browseWithConnection(config=>centralContentPage(config,cursor as string|undefined,query as string|undefined)));
     handle('mote:content-central-detail',(id,offset,image)=>browseWithConnection(config=>{if(typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id)||offset!==undefined&&(!Number.isSafeInteger(offset)||Number(offset)<0))throw Error('Invalid content reference');return readCentralContent(config,{key:id,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false},Number(offset??0),image===true);}));
-    handle('mote:content-local', offset => localContentPage(queue,localSources!,offset as number|undefined));
+    handle('mote:content-local', (offset,query) => localContentPage(queue,localSources!,offset as number|undefined,query as string|undefined));
     handle('mote:content-local-detail', (key,image) => browseWithConnection(() => localContentDetail(queue,localSources!,key as string,image as boolean|undefined).catch(async error=>{
       if(typeof key!=='string')throw error;const parts=key.split(':');const receiptKey=parts[0]==='queue'?parts[1]:parts[0]==='source'?require('node:crypto').createHash('sha256').update(`${parts[1]}\0${parts[2]}`).digest('hex'):undefined;
       const id=receiptKey?syncHistory.receivedCapture(settings,receiptKey):undefined;if(!id)throw error;return readCentralContent(settings,{key:receiptKey!,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false,...(parts[0]==='source'?{sourceId:parts[1]}:{})},0,image===true);
@@ -463,12 +481,17 @@ else {
       await writeFile(selected.filePath, JSON.stringify({...buildSupportBundle(profile, app.getVersion(), clientStatus(), logs.events),...logs}, null, 2), { mode: 0o600 });
       return { canceled: false };
     });
-    handle('mote:central', async (page, evidenceId) => {
+    handle('mote:central', async (page, evidenceId,conversationId) => {
       if (evidenceId !== undefined && typeof evidenceId !== 'string') throw new Error('Invalid evidence reference');
-      await showCentral(typeof page === 'string' ? page : undefined, evidenceId);
+      if(conversationId!==undefined&&(typeof conversationId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(conversationId)))throw Error('Invalid conversation identity');
+      await showCentral(typeof page === 'string' ? page : undefined, evidenceId,undefined,conversationId);
     });
     handle('mote:central-work',async workId=>showCentral('activity',undefined,validateCentralWorkId(workId)));
     handle('mote:quick-note', () => openQuickNote?.());
+    handle('mote:quick-note-size', expanded => {
+      if (typeof expanded !== 'boolean') throw new Error('Invalid quick-note size');
+      if (quickNoteWindow && !quickNoteWindow.isDestroyed()) quickNoteWindow.setContentSize(quickNoteWindow.getContentSize()[0], expanded ? 594 : 466);
+    });
     handle('mote:note-draft', () => noteDrafts.get());
     handle('mote:note-draft-update', input => trackNote(noteDrafts.update(input as NoteDraft)));
     handle('mote:note', input => trackNote(serialize(async () => {
@@ -539,21 +562,25 @@ else {
         throw error;
       }
       loginGeneration++;updateUi(clientStatus());
+      const installed=settings, installedGeneration=collector.status().authorizationGeneration;
       if(requested.token&&requested.token!==credential)await loginRequest(requested,'/api/login/logout',{},requested.token).catch(()=>{});
+      if(settings!==installed||collector.status().authorizationGeneration!==installedGeneration)throw Error(moteText('登录会话已变更，请重新打开中央页面。'));
     };
-    ensureBrowserLogin=async()=>{const current=settings;if(connectionToken(current)&&(await testConnection(current)).credential.id==='owner')await installLogin(current.token!,current.authSessionOnly?0:2592000000);};
-    browserLogin=async(page,evidenceId,durationMs=2592000000,workId)=>{
+    ensureBrowserLogin=()=>prepareBrowserSession({settings:()=>settings,authorizationGeneration:()=>collector.status().authorizationGeneration??0,inspect:current=>testConnection(current),install:installLogin});
+    browserLogin=async(page,evidenceId,durationMs=2592000000,workId,conversationId)=>{
       if(![0,86400000,604800000,2592000000].includes(durationMs))throw Error('Invalid lifetime');
       const requested=settings,generation=++loginGeneration,{verifier,challenge}=loginVerifier();
       const {id}=await loginRequest(requested,'/api/login/requests',{serverUrl:requested.serverUrl,deviceId:requested.deviceId,deviceName:requested.deviceName,platform:currentPlatform,challenge,durationMs});
-      await openCentralBrowser(requested.serverUrl,page,process.platform,url=>promisify(execFile)('/usr/bin/open',['-a','Google Chrome',url]),url=>shell.openExternal(url),evidenceId,undefined,id,workId);
-      const deadline=Date.now()+10*60000;
-      while(Date.now()<deadline&&generation===loginGeneration&&settings===requested&&!quitting){
-        const grant=await loginRequest(requested,'/api/login/poll',{id,verifier});
-        if(grant.ready){await installLogin(grant.token,durationMs,generation);await loginRequest(requested,'/api/login/ack',{id,verifier}).catch(()=>{});return;}
-        await new Promise(resolve=>setTimeout(resolve,1500));
-      }
-      throw Error(moteText('登录会话已变更，请重新打开中央页面。'));
+      const ensureCurrent=()=>{if(settings!==requested||generation!==loginGeneration||quitting)throw Error(moteText('登录会话已变更，请重新打开中央页面。'));};
+      ensureCurrent();
+      await openCentralBrowser(requested.serverUrl,page,process.platform,url=>{ensureCurrent();return promisify(execFile)('/usr/bin/open',['-a','Google Chrome',url]);},url=>{ensureCurrent();return shell.openExternal(url);},evidenceId,undefined,id,workId,conversationId);
+      await pollBrowserLogin({
+        current:()=>generation===loginGeneration&&settings===requested&&!quitting,
+        poll:()=>loginRequest(requested,'/api/login/poll',{id,verifier}),
+        install:token=>installLogin(token,durationMs,generation),
+        acknowledge:()=>loginRequest(requested,'/api/login/ack',{id,verifier}).catch(()=>{}),
+        wait:()=>new Promise(resolve=>setTimeout(resolve,1500)),
+      });
     };
     let authCheck:Promise<unknown>|undefined;let nextAuthCheck=0;
     const authTimer=setInterval(()=>{
@@ -598,19 +625,31 @@ else {
       const selected=await dialog.showSaveDialog(window!,{defaultPath:'mote-local-metadata.json'});
       if(!selected.canceled&&selected.filePath)await writeFile(selected.filePath,JSON.stringify(queue.exportMetadata()),{mode:0o600});
     });
+    handle('mote:capture-context',channel=>localSources!.captureContext(channel as import('./source-manager').CaptureContextChannel));
+    handle('mote:capture-context-save',(channel,input)=>serialize(()=>localSources!.saveCaptureContext(channel as import('./source-manager').CaptureContextChannel,input)));
     handle('mote:export-queue', async () => {
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出已脱敏待上传队列（包含个人资料）"), defaultPath: `mote-queue-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'Mote queue archive', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePath) return { canceled: true };
+      const selectedFile=await describeBackupFile(selected.filePath);
+      backgroundJobs.progress('mote:export-queue',{message:moteText('正在导出队列'),file:{name:selectedFile.name,path:selectedFile.path}});updateUi(clientStatus());
       await queue.exportArchiveFile(selected.filePath, value => backgroundJobs.progress('mote:export-queue', value));
-      return { canceled: false, path: selected.filePath };
+      return { canceled: false, path: selected.filePath, file:await describeBackupFile(selected.filePath) };
     });
     handle('mote:import-queue', () => serialize(async () => {
       const selected = await dialog.showOpenDialog(window!, { title: moteText("导入 Mote 电脑端队列备份"), properties: ['openFile'], filters: [{ name: 'Mote queue archive', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePaths[0]) return { canceled: true };
       const path = selected.filePaths[0];
-      const imported = await queue.importArchiveFile(path, value => backgroundJobs.progress('mote:import-queue', value));
-      updateUi(clientStatus()); void collector.upload();
-      return { canceled: false, imported };
+      const file=await describeBackupFile(path);
+      backgroundJobs.progress('mote:import-queue',{message:moteText('正在校验备份'),file});updateUi(clientStatus());
+      try {
+        const imported = await queue.importArchiveFile(path, value => backgroundJobs.progress('mote:import-queue', value));
+        updateUi(clientStatus()); void collector.upload();
+        return { canceled: false, state:'imported', imported, file };
+      } catch(error) {
+        updateUi(clientStatus());
+        if(error instanceof QueueImportFailure)return {canceled:false,state:'incomplete',...error.report,error:error.message,file};
+        throw error;
+      }
     }));
     tray = new Tray(trayIcon());
     tray.on('click', showWindow);

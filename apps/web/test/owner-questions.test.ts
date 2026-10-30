@@ -43,7 +43,7 @@ test('authored choice submits one revisioned answer, prevents double submission 
  const {root,d}=await fixture(t),writes:any[]=[],opens:string[]=[],pending=deferred();let current=structuredClone(generated);
  const api={request:async(path:string,init?:RequestInit)=>{if(init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return pending.promise;}return current;}} as Api;
  await act(async()=>root.render(React.createElement(OwnerQuestionConversation,{api,id:generated.id,onOpen:ref=>opens.push(ref)})));
- assert.equal(d.querySelector('details')?.open,true);await act(async()=>button(d,'查看原始记录').click());assert.equal(opens[0],generated.evidence[0].ref);
+ assert.equal(d.querySelector('details')?.open,false);await act(async()=>button(d,'查看原始记录').click());assert.equal(opens[0],generated.evidence[0].ref);
  await act(async()=>button(d,'我是讲述者').click());assert.equal(d.querySelector('textarea')!.value,generated.choices[0].answer);
  await act(async()=>{send(d).click();send(d).click();});assert.equal(writes.length,1);
  assert.equal(writes[0].choiceId,'narrator');assert.equal(writes[0].answer,undefined);assert.equal(writes[0].expectedRevision,1);assert.match(writes[0].requestId,/^[a-f0-9-]{36}$/);
@@ -62,7 +62,7 @@ test('unknown closes and defer remains answerable, without attaching a draft to 
  const api={request:async(_path:string,init?:RequestInit)=>{if(init?.method==='POST'){const reply=JSON.parse(String(init.body));writes.push(reply);current={...current,state:reply.action==='unknown'?'closed':reply.action==='answer'?'answered':'deferred',revision:current.revision+1};}return current;}} as Api;
  await act(async()=>root.render(React.createElement(OwnerQuestionConversation,{api,id:generated.id,onOpen:()=>{}})));
  await act(async()=>button(d,'我是回应的人').click());await act(async()=>button(d,'稍后再说').click());assert.equal(writes[0].action,'defer');assert.equal(writes[0].choiceId,undefined);assert.equal(writes[0].answer,undefined);assert.match(d.body.textContent!,/其他工作继续/);assert.ok(d.querySelector('textarea'));
- await act(async()=>button(d,'我也不知道，结束这次追问').click());assert.equal(writes[1].action,'unknown');assert.equal(writes[1].expectedRevision,2);assert.equal(d.querySelector('textarea'),null);assert.match(d.body.textContent!,/本次不再追问/);
+ await act(async()=>button(d,'我也不知道').click());assert.equal(writes[1].action,'unknown');assert.equal(writes[1].expectedRevision,2);assert.equal(d.querySelector('textarea'),null);assert.match(d.body.textContent!,/本次不再追问/);
  await act(async()=>button(d,'我有新信息了').click());assert.ok(d.querySelector('textarea'));assert.equal(writes.length,2);
  await act(async()=>button(d,'我是讲述者').click());await act(async()=>send(d).click());assert.equal(writes[2].expectedRevision,3);assert.equal(writes[2].action,'answer');assert.equal(d.querySelector('textarea'),null);
 });
@@ -95,22 +95,22 @@ test('question entry pagination reads only the requested material and opens Ask 
  assert.equal(new URLSearchParams(reads[0].split('?')[1]).get('materialId'),'generated-material');assert.equal(new URLSearchParams(reads[0].split('?')[1]).get('state'),'open,deferred,closed,answered');assert.equal(d.querySelector('a')!.getAttribute('href'),ownerQuestionRoute(generated.id));
  await act(async()=>button(d,'继续展开').click());assert.equal(new URLSearchParams(reads[1].split('?')[1]).get('cursor'),'next');
 });
-test('question history stays absent while an empty page polls and displays new questions without flashing retained results',async t=>{
+test('empty question history retains final filters while polling without flashing stale rows',async t=>{
  const {root,d}=await fixture(t);t.mock.timers.enable({apis:['setTimeout']});const reads:ReturnType<typeof deferred>[]=[];
  const api={request:async()=>{const read=deferred();reads.push(read);return read.promise;}} as Api;
  await act(async()=>root.render(React.createElement(OwnerQuestionLinks,{api,history:true})));
  assert.match(d.querySelector('[role="status"]')!.textContent!,/正在读取/);assert.equal(reads.length,1);
- await act(async()=>reads[0].resolve({items:[],nextCursor:null}));assert.equal(d.querySelector('.owner-question-history'),null);
+ await act(async()=>reads[0].resolve({items:[],nextCursor:null}));assert.match(d.querySelector('.owner-question-history')!.textContent!,/没有待回答的问题/);
  for(let index=1;index<=2;index++){
-  await act(async()=>t.mock.timers.tick(5000));assert.equal(reads.length,index+1);assert.equal(d.querySelector('.owner-question-history'),null,'a pending empty refresh does not resurrect the section');
-  await act(async()=>reads[index].resolve({items:[],nextCursor:null}));assert.equal(d.querySelector('.owner-question-history'),null);
+  await act(async()=>t.mock.timers.tick(5000));assert.equal(reads.length,index+1);assert.match(d.querySelector('.owner-question-history')!.textContent!,/待回答/);assert.equal(d.querySelector('.owner-question-history a'),null,'a pending empty refresh does not resurrect a stale row');
+  await act(async()=>reads[index].resolve({items:[],nextCursor:null}));assert.match(d.querySelector('.owner-question-history')!.textContent!,/没有待回答的问题/);
  }
- await act(async()=>t.mock.timers.tick(5000));assert.equal(d.querySelector('.owner-question-history'),null);
+ await act(async()=>t.mock.timers.tick(5000));assert.match(d.querySelector('.owner-question-history')!.textContent!,/没有待回答的问题/);
  await act(async()=>reads[3].resolve({items:[generated],nextCursor:null}));const link=d.querySelector('.owner-question-history a')!;assert.equal(link.getAttribute('href'),ownerQuestionRoute(generated.id));
  await act(async()=>t.mock.timers.tick(5000));assert.equal(d.querySelector('.owner-question-history a'),link);assert.equal(d.querySelector('[role="status"]'),null,'refreshing a loaded page does not show initial loading');
  await act(async()=>reads[4].resolve({items:[{...generated,title:'更新后的合成问题'}],nextCursor:null}));assert.equal(d.querySelector('.owner-question-history a'),link);assert.match(link.textContent!,/更新后的合成问题/);
  await act(async()=>t.mock.timers.tick(5000));assert.equal(d.querySelector('.owner-question-history a'),link);
- await act(async()=>reads[5].resolve({items:[],nextCursor:null}));assert.equal(d.querySelector('.owner-question-history'),null,'answered questions leave the pending history after the read completes');
+ await act(async()=>reads[5].resolve({items:[],nextCursor:null}));assert.equal(d.querySelector('.owner-question-history a'),null,'answered questions leave the pending list after the read completes');assert.match(d.querySelector('.owner-question-history')!.textContent!,/没有待回答的问题/);
 });
 test('empty question links preserve initial failure retry and background refresh errors',async t=>{
  const {root,d}=await fixture(t);t.mock.timers.enable({apis:['setTimeout']});let fail=true,reads=0,pending:ReturnType<typeof deferred>|undefined;
@@ -118,9 +118,9 @@ test('empty question links preserve initial failure retry and background refresh
  await act(async()=>root.render(React.createElement(OwnerQuestionLinks,{api,history:true})));
  assert.match(d.querySelector('[role="alert"]')!.textContent!,/Generated question read failure/);assert.equal(reads,1);
  pending=deferred();await act(async()=>button(d,'重试').click());assert.match(d.querySelector('[role="status"]')!.textContent!,/正在读取/);assert.equal(reads,2);
- await act(async()=>pending!.resolve({items:[],nextCursor:null}));pending=undefined;assert.equal(d.querySelector('.owner-question-history'),null);
+ await act(async()=>pending!.resolve({items:[],nextCursor:null}));pending=undefined;assert.match(d.querySelector('.owner-question-history')!.textContent!,/没有待回答的问题/);
  await act(async()=>t.mock.timers.tick(5000));assert.match(d.querySelector('[role="alert"]')!.textContent!,/Generated question read failure/);assert.equal(reads,3);
- fail=false;pending=deferred();await act(async()=>button(d,'重试').click());assert.equal(d.querySelector('.owner-question-history'),null,'retrying a known empty page does not show a loading section');assert.equal(reads,4);
+ fail=false;pending=deferred();await act(async()=>button(d,'重试').click());assert.equal(d.querySelector('.owner-question-history a'),null,'retrying a known empty page retains its filters without stale rows');assert.equal(reads,4);
  await act(async()=>pending!.resolve({items:[generated],nextCursor:null}));assert.ok(d.querySelector('.owner-question-history a'));assert.equal(d.querySelector('[role="alert"]'),null);
 });
 test('an empty question page with a next cursor keeps its pagination control during refresh',async t=>{
@@ -139,7 +139,7 @@ test('answered replies stay reachable from Material and Activity context without
   const link=d.querySelector<HTMLAnchorElement>('a')!;assert.ok(link);assert.equal(link.getAttribute('href'),ownerQuestionRoute(answered.id));assert.match(link.textContent!,/已回答/);
  }
  await act(async()=>root.render(React.createElement(OwnerQuestionConversation,{api,id:answered.id,onOpen:()=>{}})));
- assert.match(d.querySelector('.conversation-messages')!.textContent!,/这份资料里，讲述工作压力的是我/);assert.equal(d.querySelector('textarea'),null);
+ assert.match(d.querySelector('.owner-question-dialogue')!.textContent!,/这份资料里，讲述工作压力的是我/);assert.equal(d.querySelector('textarea'),null);
  await act(async()=>root.render(React.createElement(OwnerQuestionLinks,{api,history:true})));assert.equal(d.querySelector('a'),null);assert.equal(new URLSearchParams(reads.at(-1)!.split('?')[1]).get('state'),'open,deferred');
 });
 test('Activity contribution follows operation children across regrouped public work IDs',async t=>{
@@ -188,4 +188,94 @@ test('server capability removal closes the question view and capability fetch er
  mode='removed';await act(async()=>resources(api).get('/api/features').refresh());assert.equal(d.querySelector('textarea'),null);assert.match(d.body.textContent!,/Generated capability unavailable/);assert.equal(detailReads,before);
  mode='error';await act(async()=>resources(api).get('/api/features').refresh());assert.equal(d.querySelector('textarea'),null);assert.match(d.body.textContent!,/Generated feature transport failure/);assert.ok(button(d,'重试'));
  mode='active';await act(async()=>button(d,'重试').click());assert.ok(d.querySelector('textarea'));
+});
+
+
+test('final history filters retain the host scope and reset pending pagination before showing all record states',async t=>{
+ const {root,d}=await fixture(t),reads:string[]=[];
+ const completed={...generated,id:'00000000-0000-4000-8000-000000000002',title:'Generated answered source',state:'answered' as const},obsolete={...generated,id:'00000000-0000-4000-8000-000000000003',title:'',state:'obsolete' as const};
+ const api={request:async(path:string)=>{reads.push(path);const q=new URLSearchParams(path.split('?')[1]);return {items:q.get('state')!.includes('obsolete')?[generated,completed,obsolete]:[generated],nextCursor:q.get('cursor')||q.get('state')!.includes('obsolete')?null:'pending-next'};}} as Api;
+ await act(async()=>root.render(React.createElement(OwnerQuestionLinks,{api,history:true,materialId:'generated-material'})));
+ await act(async()=>button(d,'继续展开').click());assert.equal(new URLSearchParams(reads.at(-1)!.split('?')[1]).get('cursor'),'pending-next');
+ await act(async()=>button(d,'全部记录').click());const all=new URLSearchParams(reads.at(-1)!.split('?')[1]);assert.equal(all.get('materialId'),'generated-material');assert.equal(all.get('cursor'),null);assert.deepEqual(all.get('state')!.split(','),['open','deferred','answered','closed','obsolete']);
+ assert.equal(d.querySelectorAll('.owner-question-history a').length,3);assert.match(d.querySelector('.owner-question-history')!.textContent!,/已失效/);assert.equal(button(d,'全部记录').getAttribute('aria-pressed'),'true');
+ await act(async()=>button(d,'待回答').click());assert.equal(new URLSearchParams(reads.at(-1)!.split('?')[1]).get('state'),'open,deferred');assert.equal(d.querySelectorAll('.owner-question-history a').length,1);
+});
+
+test('follow-up checks the exact original work before navigation and preserves the question on missing work',async t=>{
+ const {root,d,w}=await fixture(t),reads:string[]=[];let missing=true;
+ const answered={...generated,state:'answered' as const,revision:2,continuationId:'opaque-provider-continuation'};
+ const api={request:async(path:string)=>{reads.push(path);if(path.startsWith('/api/work-activity/')){if(missing)throw new ApiError('Generated missing original work',404);return {id:answered.workId};}return answered;}} as Api;
+ await act(async()=>root.render(React.createElement(OwnerQuestionConversation,{api,id:answered.id,onOpen:()=>{}})));
+ const originalHash=w.location.hash;await act(async()=>button(d,'查看后续处理').click());assert.equal(w.location.hash,originalHash);assert.match(d.body.textContent!,/后续活动暂不可读取/);assert.match(d.body.textContent!,/讲述工作压力/);assert.equal(d.querySelector<HTMLAnchorElement>('.owner-question-followup a')!.getAttribute('href'),'#/activity');
+ assert.equal(reads.at(-1),'/api/work-activity/'+encodeURIComponent(answered.workId));assert.equal(reads.some(path=>path.includes(answered.continuationId)),false);
+ missing=false;await act(async()=>d.querySelector<HTMLButtonElement>('.owner-question-followup button')!.click());assert.equal(new URLSearchParams(w.location.hash.split('?')[1]).get('work'),answered.workId);assert.equal(w.location.hash.split('?')[0],'#/activity');
+});
+
+test('late work lookups cannot navigate after the question revision changes',async t=>{
+ const {root,d,w}=await fixture(t),read=deferred();let current={...generated,state:'answered' as const,revision:2},signal:AbortSignal|undefined;
+ const api={request:async(path:string,init?:RequestInit)=>{if(path.startsWith('/api/work-activity/')){signal=init?.signal as AbortSignal;return read.promise;}return current;}} as Api;
+ await act(async()=>root.render(React.createElement(OwnerQuestionConversation,{api,id:generated.id,onOpen:()=>{}})));await act(async()=>button(d,'查看后续处理').click());
+ const hash=w.location.hash;current={...current,state:'obsolete' as any,revision:3};await act(async()=>resources(api).get('/api/owner-questions/'+generated.id).refresh());assert.equal(signal?.aborted,true);assert.equal(d.querySelector('textarea'),null);assert.match(d.body.textContent!,/这个问题已失效/);
+ await act(async()=>read.resolve({id:generated.workId}));assert.equal(w.location.hash,hash);assert.equal(d.querySelector('.owner-question-followup'),null);
+});
+
+test('supplemental replies use explicit form actions and initially folded evidence without chat-send controls',async t=>{
+ const {root,d}=await fixture(t),api={request:async()=>generated} as Api;
+ await act(async()=>root.render(React.createElement(OwnerQuestionConversation,{api,id:generated.id,onOpen:()=>{}})));
+ assert.equal(d.querySelector('details')?.open,false);assert.equal(d.querySelector('summary')?.textContent,'相关原文');assert.equal(d.querySelector('.owner-question-role')?.textContent,'Mote');assert.equal(d.querySelector('.ask-form,.send-button'),null);
+ assert.ok(button(d,'回答并继续'));assert.ok(button(d,'稍后再说'));assert.ok(button(d,'我也不知道'));assert.equal(d.querySelector('textarea')!.maxLength,6000);
+});
+
+
+test('retired private question renders no empty fallback message',async t=>{
+ const {root,d}=await fixture(t),api={request:async()=>({...generated,state:'obsolete',prompt:'',title:'',messages:[],evidence:[]})} as Api;
+ await act(async()=>root.render(React.createElement(OwnerQuestionConversation,{api,id:generated.id,onOpen:()=>{}})));
+ assert.equal(d.querySelectorAll('.owner-question-message').length,0);assert.equal(d.querySelector('textarea'),null);assert.match(d.body.textContent!,/这个问题已失效/);
+});
+
+
+test('paging never sends a prior host cursor when work, material, operations or owner changes',async t=>{
+ const {root,d}=await fixture(t),reads:{owner:string;query:URLSearchParams}[]=[];
+ const makeApi=(owner:string)=>({request:async(path:string)=>{const query=new URLSearchParams(path.split('?')[1]);reads.push({owner,query});return {items:[generated],nextCursor:query.has('cursor')?null:'cursor-'+owner+'-'+reads.length};}} as Api);
+ const first=makeApi('first'),second=makeApi('second');
+ let props:{api:Api;workId?:string;materialId?:string;operationIds?:string[]}={api:first,workId:'work-a'};
+ await act(async()=>root.render(React.createElement(OwnerQuestionLinks,props)));
+ for(const next of [{api:first,workId:'work-b'},{api:first,materialId:'material-b'},{api:first,operationIds:['memory:operation-b']},{api:second,operationIds:['memory:operation-b']}]){
+  await act(async()=>button(d,'继续展开').click());assert.ok(reads.at(-1)!.query.has('cursor'));
+  const boundary=reads.length;props=next;await act(async()=>root.render(React.createElement(OwnerQuestionLinks,props)));
+  assert.ok(reads.length>boundary);assert.ok(reads.slice(boundary).every(read=>!read.query.has('cursor')),'new host first reads must not carry the previous host cursor');
+ }
+});
+
+test('a supplemental draft and unresolved reply identity survive leaving the question without entering another owner',async t=>{
+ const {root,d}=await fixture(t),writes:any[]=[],api={request:async(_path:string,init?:RequestInit)=>{if(init?.method==='POST'){writes.push(JSON.parse(String(init.body)));throw new TypeError('Generated lost reply acknowledgement');}return structuredClone(generated);}} as Api;
+ const view=(owner:Api)=>React.createElement(OwnerQuestionConversation,{api:owner,id:generated.id,onOpen:()=>{},standalone:true});
+ await act(async()=>root.render(view(api)));await act(async()=>button(d,'我是讲述者').click());await act(async()=>send(d).click());assert.equal(writes.length,1);
+ await act(async()=>root.render(null));await act(async()=>root.render(view(api)));assert.equal(d.querySelector('textarea')!.value,generated.choices[0].answer);assert.equal(button(d,'我是讲述者').getAttribute('aria-pressed'),'true');await act(async()=>send(d).click());assert.deepEqual(writes[1],writes[0],'remount retries exact UUID, choice and revision');
+ const other={request:async()=>structuredClone(generated)} as Api;await act(async()=>root.render(view(other)));assert.equal(d.querySelector('textarea')!.value,'');assert.equal(button(d,'我是讲述者').getAttribute('aria-pressed'),'false');assert.equal(writes.length,2);
+ await act(async()=>root.render(view(api)));assert.equal(d.querySelector('textarea')!.value,generated.choices[0].answer);
+});
+
+test('standalone Ask questions retain feature capability withdrawal and cannot acquire a replacement material title',async t=>{
+ const {root,d,w}=await fixture(t);await featuresReady;const {Ask}=await import('../src/Ask');let enabled=true;
+ const capabilities=['http:GET:/api/owner-questions','http:GET:/api/owner-questions/:id','http:POST:/api/owner-questions/:id/reply'];
+ const api={request:async(path:string)=>{if(path==='/api/features')return {schemaVersion:1,revision:1,features:[],capabilities:enabled?capabilities.map(id=>({id,version:'1',surface:'data',featureId:'mote.owner-questions',state:'active'})):[]};if(path.startsWith('/api/materials/'))return {material:{ref:'material:replacement@new',title:'Generated replacement title'}};if(path.startsWith('/api/owner-questions?'))return {items:[generated],nextCursor:null};return generated;}} as Api;
+ w.history.replaceState(null,'','#/ask?question='+generated.id);await act(async()=>root.render(React.createElement(Ask,{api,status:{agent:{configured:false}} as any,devices:[],onOpen:()=>{},onInsights:()=>{},onSettings:()=>{}})));assert.ok(d.querySelector('.owner-question-workspace h1'));assert.equal(d.querySelector('.conversation-toolbar'),null);assert.equal(d.querySelector('.model-notice'),null);assert.doesNotMatch(d.body.textContent!,/Generated replacement title/);
+ enabled=false;await act(async()=>resources(api).get('/api/features').refresh());assert.equal(d.querySelector('.owner-question-form'),null);assert.match(d.body.textContent!,/专用视图暂不可用/);
+});
+
+test('a Home supplemental-question visit returns to that Home before a later guide visit gets its own return',async t=>{
+ const {root,d,w}=await fixture(t),{OwnerQuestionWorkspace}=await import('../src/OwnerQuestions'),{openOwnerQuestionList}=await import('../src/owner-question-route'),{guideVisit}=await import('../src/feature-guide-state');const api={request:async()=>({items:[],nextCursor:null})} as Api;
+ guideVisit(api).returnAvailable=true;w.history.replaceState(null,'','#/today');openOwnerQuestionList(api);await act(async()=>root.render(React.createElement(OwnerQuestionWorkspace,{api,id:'',onOpen:()=>{}})));assert.equal(d.querySelector('.owner-question-workspace-header a')!.getAttribute('href'),'#/today','an old guide visit cannot steal a new Home return');
+ await act(async()=>{w.history.replaceState(null,'','#/guide');root.render(null);});await act(async()=>{w.history.replaceState(null,'','#/ask?question=');root.render(React.createElement(OwnerQuestionWorkspace,{api,id:'',onOpen:()=>{}}));});assert.equal(d.querySelector('.owner-question-workspace-header a')!.getAttribute('href'),'#/guide');
+});
+
+test('question A then B returns consume their own scroll ticket once and later list polling never jumps back',async t=>{
+ const {root,d,w}=await fixture(t),{OwnerQuestionWorkspace}=await import('../src/OwnerQuestions');const other={...generated,id:'00000000-0000-4000-8000-000000000002',title:'Generated question B'},scrolls:number[]=[];
+ Object.defineProperty(w,'scrollY',{value:0,configurable:true,writable:true});w.scrollTo=(_x:any,y?:number)=>scrolls.push(y??0);
+ const api={request:async(path:string)=>path.startsWith('/api/owner-questions?')?{items:[generated,other],nextCursor:null}:path.includes(other.id)?other:generated}as Api;
+ const view=(id='')=>React.createElement(OwnerQuestionWorkspace,{api,id,onOpen:()=>{}}),list=ownerQuestionRoute();
+ const trip=async(question:OwnerQuestion,y:number)=>{w.history.replaceState(null,'',list);await act(async()=>root.render(view()));(w as any).scrollY=y;await act(async()=>{const link=[...d.querySelectorAll<HTMLAnchorElement>('.owner-question-history a')].find(link=>link.getAttribute('href')===ownerQuestionRoute(question.id))!;link.focus();link.click();w.history.replaceState(null,'',ownerQuestionRoute(question.id));root.render(view(question.id));});await act(async()=>{d.querySelector<HTMLAnchorElement>('.owner-question-workspace-header a')!.click();w.history.replaceState(null,'',list);root.render(view());});await act(async()=>new Promise(resolve=>setTimeout(resolve,25)));assert.equal(scrolls.at(-1),y);assert.equal((d.activeElement as HTMLAnchorElement).getAttribute('href'),ownerQuestionRoute(question.id));};
+ await trip(generated,100);await trip(other,500);const count=scrolls.length;(w as any).scrollY=700;await act(async()=>resources(api).get(ownerQuestionListPath({},undefined,'open,deferred')).refresh());await act(async()=>new Promise(resolve=>setTimeout(resolve,25)));assert.equal(scrolls.length,count,'a fresh poll cannot replay an already consumed return ticket');
 });

@@ -13,7 +13,7 @@ class NativeUiPackTest {
             listOf("radius", "radius-container", "radius-control", "radius-reading", "radius-indicator", "border-width", "panel-border-width", "font-title", "font-title-mobile", "font-appbar", "font-section", "font-row", "font-body", "font-support", "font-meta", "font-action", "space-page", "space-panel", "space-group", "space-item", "space-inline").associateWith { "14px" } + mapOf(
                 "control-height-mobile" to "48px", "weight-title" to "600", "weight-section" to "600", "weight-body" to "400", "line-body" to "1.65", "letter-title" to "-0.025em", "font" to "sans-serif", "font-heading" to "sans-serif"))
     }
-    private fun layout(value: NativeLayoutSnapshot = NativeLayoutSnapshot(layoutId, listOf("home", "library", "ask", "sources"), "home", "adaptive", "split")) = object : NativeLayoutProvider { override val snapshot = value }
+    private fun layout(value: NativeLayoutSnapshot = NativeLayoutSnapshot(layoutId, listOf("home"), "home", "home", "stack")) = object : NativeLayoutProvider { override val snapshot = value }
     @Test fun explicitBindingSelectsExactInstalledThemeAndLayoutVersions() {
         val registry = NativeUiPackRegistry(); registry.register(theme()); registry.register(theme("2")); registry.register(layout())
         assertThrows(IllegalArgumentException::class.java) { registry.bind(NativeUiBinding(themeId.copy(version = "missing"), layoutId)) }
@@ -28,6 +28,7 @@ class NativeUiPackTest {
         val registry = NativeUiPackRegistry()
         assertThrows(IllegalArgumentException::class.java) { registry.register(layout(layout().snapshot.copy(primary = listOf("arbitrary-url")))) }
         assertThrows(IllegalArgumentException::class.java) { registry.register(layout(layout().snapshot.copy(primary = listOf("library", "library")))) }
+        assertThrows(IllegalArgumentException::class.java) { registry.register(layout(layout().snapshot.copy(primary = listOf("home", "library", "ask", "sources"), navigation = "adaptive"))) }
         assertThrows(IllegalArgumentException::class.java) { registry.register(layout(layout().snapshot.copy(navigation = "script"))) }
         assertThrows(IllegalArgumentException::class.java) { registry.register(layout(layout().snapshot.copy(initial = "overview"))) }
     }
@@ -51,7 +52,7 @@ class NativeUiPackTest {
         assertEquals(48, value.dimension("control-height-mobile"))
         assertEquals(1.65, value.number("line-body"), 0.00001)
         assertEquals(-0.025, value.number("letter-title"), 0.00001)
-        assertFalse(layout().snapshot.usesDetailPane(360)); assertTrue(layout().snapshot.usesDetailPane(840))
+        assertFalse(layout().snapshot.usesDetailPane(360)); assertFalse("Phone home layout stays stacked at wider widths",layout().snapshot.usesDetailPane(840))
     }
     @Test fun eachAppearanceSchemeRejectsTheSameInvalidTokensAsTheBaseBeforePublishing() {
         val invalid = listOf(

@@ -1,8 +1,9 @@
+import {useMaintenanceTransfer,provideMaintenanceDownload,maintenanceFailure,maintenanceTechnicalFailure} from './maintenance-transfer';
 import {useResource} from './useResource';
 import { moteText } from '@mote/shared/i18n';
-import {useEffect, useRef, useState} from 'react';
-import {ArrowDownToLine, RefreshCw} from 'lucide-react';
-import {type Api, bytes, duration, errorMessage} from './api';
+import {useEffect, useRef, useState, type ReactNode} from 'react';
+import {RefreshCw} from 'lucide-react';
+import {type Api, bytes, duration, dateTime, errorMessage} from './api';
 
 interface Snapshot {
   enabled:boolean;level:string;instanceId:string;lastSeq:number;retainedEvents:number;
@@ -18,7 +19,7 @@ interface LogPage {
 }
 type LogStage='all'|'system'|'request'|'ingest'|'index'|'agent'|'source'|'maintenance'|'file'|'unknown';
 const logStages:readonly [LogStage,string][]= [['all',moteText("全部阶段")],['system',moteText("系统")],['request',moteText("请求")],['ingest',moteText("入库")],['index',moteText("索引")],['agent','Agent'],['source',moteText("资料")],['maintenance',moteText("维护")],['file',moteText("文件")],['unknown',moteText("未知")]];
-export function Diagnostics({api,profile}:{api:Api;profile?:string}) {
+export function Diagnostics({api,profile,advanced,deployment}:{api:Api;profile?:string;advanced?:ReactNode;deployment?:ReactNode}) {
   const [wrap,setWrap]=useState(true);
   const [logFile,setLogFile]=useState(0);
   const [logPage,setLogPage]=useState(1);
@@ -27,48 +28,36 @@ export function Diagnostics({api,profile}:{api:Api;profile?:string}) {
   const [autoRefresh,setAutoRefresh]=useState(false);
   const [copyStatus,setCopyStatus]=useState('');
   const logRef=useRef<HTMLTextAreaElement>(null);
-  const [exporting,setExporting]=useState(false);
+  const transfer=useMaintenanceTransfer(api),exporting=Boolean(transfer.busy);
   const [hours,setHours]=useState(24);
-  const [error,setError]=useState('');
+  const [checkedAt,setCheckedAt]=useState('');
   const statusResource=useResource<Snapshot>(api,'/api/diagnostics',autoRefresh?5000:undefined);
   const logs=useResource<LogPage>(api,`/api/diagnostics/log-pages?file=${logFile}&page=${logPage}&pageSize=${pageSize}&stage=${logStage}`,autoRefresh?5000:undefined);
   const snapshot=statusResource.data,logPageData=logs.data,rawLog=logs.data?.items.length?logs.data.items.join('\n')+'\n':'',busy=statusResource.loading||logs.loading;
   const logSelectionLoading=logs.loading&&logPageData===undefined;
   const refresh=()=>{statusResource.refresh();logs.refresh();};
   useEffect(()=>{if(logs.data)setLogPage(logs.data.page);setCopyStatus('');},[logs.data]);
+  useEffect(()=>{setCheckedAt(snapshot?new Date().toISOString():'');},[api,snapshot]);
   async function download() {
-    setExporting(true);setError('');
-    try{
-      const response=await api.raw('/api/support-bundle?after='+encodeURIComponent(new Date(Date.now()-hours*3600000).toISOString())+'&before='+encodeURIComponent(new Date().toISOString()));
-      const url=URL.createObjectURL(await response.blob());
-      const anchor=document.createElement('a');anchor.href=url;anchor.download=`mote-support-${new Date().toISOString().slice(0,10)}.json`;anchor.click();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);
-    }catch(e){setError(errorMessage(e));}finally{setExporting(false);}
+    const before=new Date(),after=new Date(before.getTime()-hours*3600000);
+    await transfer.run('support',async current=>{
+      const response=await api.raw('/api/support-bundle?after='+encodeURIComponent(after.toISOString())+'&before='+encodeURIComponent(before.toISOString()));
+      return provideMaintenanceDownload(response,`mote-support-${before.toISOString().slice(0,10)}.json`,current);
+    });
   }
   async function copyLogs() {
     try {await navigator.clipboard.writeText(rawLog);setCopyStatus(moteText("已复制当前页日志。"));}
     catch {logRef.current?.focus();logRef.current?.select();setCopyStatus(moteText("剪贴板不可用，已全选，请按 ⌘/Ctrl+C 复制。"));}
   }
-  return <section className="panel diagnostics-panel" aria-labelledby="diagnostics-title">
-    <div className="section-heading"><div><h2 id="diagnostics-title">{moteText("运行诊断")}</h2><p>{moteText("环境 ·")}{' '}{profile||'default'}{' '}{moteText("· 中央节点")}</p></div>
-      <div className="diagnostics-actions">
-        <button className="button subtle" onClick={refresh} disabled={busy}><RefreshCw size={15} className={busy?'spin':''}/>{moteText("刷新诊断")}</button>
-        <select aria-label={moteText("导出时间范围")} value={hours} onChange={e=>setHours(Number(e.target.value))}><option value={1}>{moteText("最近 1 小时")}</option><option value={24}>{moteText("最近 24 小时")}</option><option value={168}>{moteText("最近 7 天")}</option></select><button className="button subtle" onClick={()=>void download()} disabled={exporting}><ArrowDownToLine size={15}/>{exporting?moteText("正在导出…"):moteText("导出诊断包")}</button>
-      </div>
-    </div>
+  return <section className="diagnostics-panel" aria-labelledby="diagnostics-title">
+    {Boolean(transfer.error||statusResource.error||logs.error)&&<><div className="notice error" role="alert">{maintenanceFailure(transfer.error||statusResource.error||logs.error)}</div><details className="owner-disclosure"><summary>{moteText('技术详情')}</summary><pre>{maintenanceTechnicalFailure(transfer.error||statusResource.error||logs.error)}</pre></details></>}
+    {transfer.message&&<p className="notice" role="status">{transfer.message}</p>}
+    <div className="owner-row"><div><h2 id="diagnostics-title">{moteText('Mote 中心')}</h2><p>{statusResource.error?moteText('暂不可读取'):snapshot?moteText('运行中'):statusResource.loading?moteText('正在读取…'):moteText('暂不可读取')}{checkedAt&&<> · {moteText('最近检查 {0}',dateTime(checkedAt))}</>}</p></div><button className="text-button" onClick={refresh} disabled={busy}>{moteText('刷新')}</button></div>
+    <div className="owner-row"><div><h3>{moteText('接收与索引')}</h3><p>{snapshot?moteText('索引待处理 {0} 项，失败 {1} 项',snapshot.queue.index.pending,snapshot.queue.index.failed):moteText('正在读取…')}</p></div><a className="text-button" href="#/activity">{moteText('查看后台活动')} →</a></div>
+    <section className="owner-section"><h2>{moteText('问题诊断')}</h2><div className="owner-row"><div><h3>{moteText('导出诊断包')}</h3><p>{moteText('运行状态、数量与脱敏事件')}</p></div><div className="owner-row-actions"><select aria-label={moteText('导出时间范围')} value={hours} onChange={event=>setHours(Number(event.target.value))}><option value={1}>{moteText('最近 1 小时')}</option><option value={24}>{moteText('最近 24 小时')}</option><option value={168}>{moteText('最近 7 天')}</option></select><button className="button" onClick={()=>void download()} disabled={exporting}>{exporting?moteText('正在导出…'):moteText('导出')}</button></div></div>
+    <details className="owner-disclosure"><summary>{moteText('查看运行日志')}</summary>
     <p className="fine-print">{moteText("导出所选时段内全部已保留日志；日志轮转前已清理的部分无法恢复，导出包会注明覆盖范围。")}</p><p className="fine-print">{moteText("诊断包包含运行状态、数量、耗时和最近事件，不包含笔记、截图、模型对话或访问令牌。客户端的采集、电量和本地队列诊断从各自 App 导出。")}</p>
-    {Boolean(error||statusResource.error||logs.error)&&<div className="notice error" role="alert">{error||errorMessage(statusResource.error||logs.error)}</div>}
-    {snapshot&&<>
-      <div className="diagnostics-metrics">
-        <div><strong>{duration(snapshot.runtime.uptimeMs)}</strong><span>{moteText("本次运行")}</span></div>
-        <div><strong>{bytes(snapshot.runtime.rssBytes)}</strong><span>{moteText("进程内存")}</span></div>
-        <div><strong>{snapshot.queue.reportedPending}</strong><span>{moteText("端点上次上报待同步")}</span></div>
-        <div><strong>{snapshot.queue.index.pending} / {snapshot.queue.index.failed}</strong><span>{moteText("索引待处理 / 失败")}</span></div>
-        <div><strong>{snapshot.services.activeQueries}</strong><span>{moteText("进行中的 AI 查询")}</span></div>
-      </div>
-      <p className="fine-print">{moteText("日志")}{' '}{snapshot.enabled?snapshot.level:moteText("已关闭")}{' '}{moteText("· 最多")}{' '}{snapshot.limits.maxFiles}{' '}{moteText("个文件，每个")}{' '}{bytes(snapshot.limits.maxFileBytes)}{' '}{moteText("· 内存保留")}{' '}{snapshot.retainedEvents}{' '}{moteText("条事件。端点队列来自最近心跳，可能不是当前值。")}</p>
-      {(snapshot.writeFailures>0||snapshot.readFailures>0||snapshot.droppedEvents>0)&&<div className="notice" role="status">{moteText("日志读取失败")}{' '}{snapshot.readFailures}{' '}{moteText("次，写入失败")}{' '}{snapshot.writeFailures}{' '}{moteText("次，未写入")}{' '}{snapshot.droppedEvents}{' '}{moteText("条。请检查日志目录权限与磁盘空间。")}</div>}
-      <section className="diagnostics-events" aria-labelledby="raw-log-title">
+    {snapshot&&<section className="diagnostics-events" aria-labelledby="raw-log-title">
         <div className="section-heading"><div><h3 id="raw-log-title">{moteText("日志中心")}</h3><p>{moteText("原始顺序 · 刷新时更新")}</p></div>
           <div className="diagnostics-actions">
             <select aria-label={moteText("日志文件")} value={logFile} disabled={logSelectionLoading} onChange={e=>{setLogFile(Number(e.target.value));}}>
@@ -96,7 +85,25 @@ export function Diagnostics({api,profile}:{api:Api;profile?:string}) {
         </div>
         <textarea ref={logRef} className="raw-log-output" aria-label={moteText("原始日志")} readOnly spellCheck={false} wrap={wrap?'soft':'off'} value={rawLog} placeholder={snapshot.enabled?moteText("暂无日志。"):moteText("运行日志已关闭，历史仍可查看。")}/>
         <p className="fine-print" role="status">{copyStatus}</p>
-      </section>
+      </section>}
+    </details>
+    <details className="owner-disclosure"><summary>{moteText('高级：诊断记录与执行资源')}</summary>
+    <p className="fine-print">{moteText('环境 ·')} {profile||'default'}</p>
+    {advanced}
+    {snapshot&&<>
+      <div className="diagnostics-metrics">
+        <div><strong>{duration(snapshot.runtime.uptimeMs)}</strong><span>{moteText("本次运行")}</span></div>
+        <div><strong>{bytes(snapshot.runtime.rssBytes)}</strong><span>{moteText("进程内存")}</span></div>
+        <div><strong>{snapshot.queue.reportedPending}</strong><span>{moteText("端点上次上报待同步")}</span></div>
+        <div><strong>{snapshot.queue.index.pending} / {snapshot.queue.index.failed}</strong><span>{moteText("索引待处理 / 失败")}</span></div>
+        <div><strong>{snapshot.services.activeQueries}</strong><span>{moteText("进行中的 AI 查询")}</span></div>
+      </div>
+      <p className="fine-print">{moteText("日志")}{' '}{snapshot.enabled?snapshot.level:moteText("已关闭")}{' '}{moteText("· 最多")}{' '}{snapshot.limits.maxFiles}{' '}{moteText("个文件，每个")}{' '}{bytes(snapshot.limits.maxFileBytes)}{' '}{moteText("· 内存保留")}{' '}{snapshot.retainedEvents}{' '}{moteText("条事件。端点队列来自最近心跳，可能不是当前值。")}</p>
+      {(snapshot.writeFailures>0||snapshot.readFailures>0||snapshot.droppedEvents>0)&&<div className="notice" role="status">{moteText("日志读取失败")}{' '}{snapshot.readFailures}{' '}{moteText("次，写入失败")}{' '}{snapshot.writeFailures}{' '}{moteText("次，未写入")}{' '}{snapshot.droppedEvents}{' '}{moteText("条。请检查日志目录权限与磁盘空间。")}</div>}
     </>}
+    </details>
+    <details className="owner-disclosure"><summary>{moteText('高级：部署与生效配置')}</summary>{deployment}</details>
+    <p className="fine-print"><a className="text-button" href="#/help">{moteText('版本与帮助')} →</a></p>
+    </section>
   </section>;
 }

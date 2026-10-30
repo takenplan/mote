@@ -1,4 +1,14 @@
 /** Renderer/main data contract. Keep platform and implementation dependencies outside this module. */
+import type { SourceContextSnapshot } from '@mote/shared';
+
+export type CaptureContextChannel = 'screen' | 'structured' | 'activity' | 'notifications';
+export interface SourceContextState {
+  snapshot: SourceContextSnapshot;
+  pending?: {expectedVersion:number;description:string};
+  conflict?: boolean;
+  error?: 'denied'|'unavailable';
+}
+
 
 export type SourceRetention = 'snapshot' | 'reference' | 'archive';
 export interface SourceDefinition {
@@ -7,6 +17,9 @@ export interface SourceDefinition {
   platform: 'macos' | 'import'; retention: SourceRetention; enabled: boolean;
 }
 export interface SourceOptions {
+  name?: string;
+  /** Optional initial owner declaration, transported separately from source content. */
+  description?: string;
   /** Collector-only policy: false captures one immutable import; undefined preserves legacy watching. */
   syncContinuously?: boolean;
   /** Explicit owner confirmation that snapshot file bytes are sent for central processing. */
@@ -16,11 +29,12 @@ export interface SourceOptions {
   retention: SourceRetention; intervalSeconds: number; trackDeletions: boolean;
   extensions: string[]; excludedPaths: string[]; redactLiterals: string[];
 }
-export interface LocalSource extends SourceDefinition, SourceOptions {
+export interface LocalSource extends SourceDefinition, Omit<SourceOptions, 'name'> {
   importCompletedAt?: string;
   path?: string; calendarId?: string; agent?: 'claude' | 'codex' | 'kimi';
 }
 export interface SourceStatus {
+  context?: SourceContextState;
   blocked?: number;
   failures?: {externalId:string;title:string;status:number}[];
   facts?: import('@mote/shared/native-status').NativeStatusView;

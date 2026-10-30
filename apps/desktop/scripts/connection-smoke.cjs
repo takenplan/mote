@@ -113,7 +113,7 @@ app.on('browser-window-created', (_event, window) => {
       // The central UI owns its browser session now; the client credential is never
       // passed to Chrome or the default browser. Keep this fixture in Electron so
       // it cannot launch a real browser during CI, and verify the renderer contract.
-      assert(await js('document.body.innerText.includes("中央仓库将在浏览器中打开")'));
+      await js('document.querySelector("#connection-details>summary").click()');assert(await js('document.body.innerText.includes("中央仓库将在浏览器中打开")'));
       assert.equal(await js('document.querySelector("#connection-owner-token")'), null);
       assert(!readFileSync(join(profile, 'config.json'), 'utf8').includes(owner)); assert.equal(await readFile(join(profile, 'models', 'preserved-fixture'), 'utf8'), 'synthetic-model-marker');
       console.log('Connection fixture: browser-owned central login contract; recording generated UI');

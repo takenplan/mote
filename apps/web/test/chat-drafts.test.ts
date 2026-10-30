@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import type {Api} from '../src/api';
+import {associateChatScope,clearChatReloadDraft,preserveChatForLanguageReload,unsentDrafts} from '../src/chat-drafts';
+test('explicit language reload preserves one draft only for its authenticated view scope and logout clears the bridge',()=>{
+ const prior=Object.getOwnPropertyDescriptor(globalThis,'sessionStorage'),data=new Map<string,string>(),storage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>data.set(key,value),removeItem:(key:string)=>data.delete(key)};Object.defineProperty(globalThis,'sessionStorage',{value:storage,configurable:true});
+ try{const first={} as Api,after={} as Api,other={} as Api;associateChatScope(first,'generated-owner-a');const saved={question:'Generated private unsent question',attachments:[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'generated.png',mimeType:'image/png'}]};unsentDrafts.set(first,saved);assert.equal(preserveChatForLanguageReload(first),true);assert.equal(data.size,1);associateChatScope(after,'generated-owner-a');assert.deepEqual(unsentDrafts.get(after),saved);assert.equal(data.size,0);associateChatScope(other,'generated-owner-a');assert.equal(unsentDrafts.has(other),false,'the bridge is consumed exactly once');assert.equal(preserveChatForLanguageReload(first),true);associateChatScope(other,'generated-owner-b');assert.equal(unsentDrafts.has(other),false,'another view never inherits private text or IDs');assert.equal(data.size,0);preserveChatForLanguageReload(first);clearChatReloadDraft();associateChatScope({} as Api,'generated-owner-a');assert.equal(data.size,0);
+ const noScope={} as Api;unsentDrafts.set(noScope,saved);assert.equal(preserveChatForLanguageReload(noScope),false,'reload must stop if the draft cannot be bound to a session');assert.deepEqual(unsentDrafts.get(noScope),saved);
+ }finally{if(prior)Object.defineProperty(globalThis,'sessionStorage',prior);else Reflect.deleteProperty(globalThis,'sessionStorage');}
+});

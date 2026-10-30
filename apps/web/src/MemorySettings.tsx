@@ -46,9 +46,10 @@ const names = { extraction: "资料记忆提取", consolidation: "长期记忆�
 const statuses: Record<string, string> = { disabled: "已关闭", pending: "处理中或等待重试", waiting_for_model: "等待配置模型", waiting_for_interval: "等待周期", waiting_for_increment: "等待新增变化", retry_wait: '等待自动重试', queued: '排队等待执行名额', running: '正在执行', paused: '已暂停', pausing: '当前批次结束后暂停', cancelled: '已取消', failed: '失败，等待重试', ready: "等待下一次检查" };
 const enabledNames = { consolidation: '启用长期记忆自动整理', insights: '启用周期洞察', working: '启用对话工作记忆' };
 const enabledLabel = (id: keyof typeof enabledNames) => moteText(enabledNames[id]);
-export function MemorySettings({ api, onPlans }: {
+export function MemorySettings({ api, onPlans, compact = false }: {
     api: Api;
     onPlans?: () => void;
+    compact?: boolean;
 }) {
     const read = useResource<View>(api, '/api/memory-settings', 5000), view = read.data;
     const [editor, setEditor] = useState<{
@@ -95,6 +96,19 @@ export function MemorySettings({ api, onPlans }: {
         if (!controller.signal.aborted)
             setBusy(false);
     } }
+    if (compact) return <section className="memory-settings memory-settings-compact">
+      {Boolean(error || read.error) && <p className="notice error" role="alert">{error || errorMessage(read.error)}</p>}
+      {saved && <p role="status">{moteText("设置已保存。")}</p>}{!draft && !read.error && <p role="status">{moteText('正在读取…')}</p>}
+      {draft && <form onSubmit={event=>{event.preventDefault();void save();}}>
+        {(['consolidation','working'] as const).map(id=><label key={id} className="memory-rhythm-toggle"><span>{id==='consolidation'?moteText('长期记忆自动整理'):moteText('对话工作记忆')}</span><input type="checkbox" aria-label={enabledLabel(id)} disabled={busy} checked={draft[id].enabled} onChange={event=>{setSaved(false);setDraft({...draft,[id]:{...draft[id],enabled:event.target.checked}});}}/></label>)}
+        <details className="memory-rhythm-advanced"><summary>{moteText('高级：处理节奏与内容量')}</summary>
+          {(['extraction','consolidation','working'] as const).map(id=><fieldset disabled={busy} key={id}><legend>{moteText(names[id])}</legend>{id==='extraction'&&<p>{moteText('这些提取门槛与最大等待时间只控制历史资料的窗口处理。已授权且内容就绪的新资料直接进入自动记忆队列，按可用名额持续处理。')}</p>}<div className="memory-settings-grid">{([['maxWaitHours',moteText('最大等待（小时）'),1/60,8760],['minChanges',id==='working'?moteText('新增对话轮次'):moteText('新增变化数'),1,100000],['maxItems',moteText('每个窗口最多处理变化'),1,id==='consolidation'?50:2000]] as const).map(([key,label,min,max])=><label key={key}>{label}<input type="number" min={min} max={max} step={key==='maxWaitHours'?'any':1} required value={draft[id][key]??Math.min(draft[id].intervalHours,1)} onChange={event=>{setSaved(false);setDraft({...draft,[id]:{...draft[id],[key]:Number(event.target.value)}});}}/></label>)}</div></fieldset>)}
+          <p className="memory-rhythm-discovery">{moteText('定期发现在发现页的「更多」中设置。')}</p>
+          <fieldset disabled={busy}><div className="memory-settings-grid">{([['drainWindows',moteText('每轮积压处理窗口上限'),1,1000],['batchCharacters',moteText('提取批次字符上限'),256,12000],['recentTurns',moteText('至少保留近期对话轮数'),2,20],['contextCharacters',moteText('对话上下文字符上限'),4000,60000],['summaryCharacters',moteText('工作记忆字符上限'),1000,12000]] as const).map(([key,label,min,max])=><label key={key}>{label}<input type="number" min={min} max={max} step="1" required value={draft[key]} onChange={event=>{setSaved(false);setDraft({...draft,[key]:Number(event.target.value)});}}/></label>)}</div></fieldset>
+        </details>
+        <div className="memory-rhythm-footer"><span>{moteText('保存后续处理设置')}</span><button className="button" type="submit" disabled={busy}>{busy?moteText('正在保存…'):moteText('保存设置')}</button></div>{error&&<button className="text-button" type="button" disabled={busy} onClick={()=>{setEditor(undefined);setError('');read.refresh();}}>{moteText('重新读取并还原草稿')}</button>}
+      </form>}
+    </section>;
     return <section className="panel memory-settings"><div className="section-heading"><div><h2>{moteText("记忆与洞察的节奏")}</h2><p>{moteText("历史资料提取、长期整理与对话工作记忆达到增量门槛或最大等待时间时运行；自动洞察需要周期与增量门槛同时达到。窗口任务每分钟检查一次，进行中的窗口沿用启动时的设置。")}</p></div></div>
     <div className="discovery-inline-guidance"><p>{moteText("这里配置模型、提取配方和历史资料的处理节奏。自动记忆的暂停 / 恢复、当前方案和更换方案，在「设置 → 自动记忆与插件 → 记忆方案」管理。")}</p>{onPlans && <a className="text-button" href="#/system/plugins?tab=memory">{moteText("管理自动记忆与当前方案 →")}</a>}</div>
     {Boolean(error || read.error) && <p className="notice error" role="alert">{error || errorMessage(read.error)}</p>}{saved && <p role="status">{moteText("设置已保存。")}</p>}

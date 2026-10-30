@@ -7,13 +7,14 @@ const {tmpdir}=require('node:os');
 const {join,resolve}=require('node:path');
 const assert=require('node:assert/strict');
 const {defaultConfig}=require('../dist/config');
-const url='http://127.0.0.1:47894',token='generated-native-topics-owner-token';
+const url=process.env.MOTE_TOPICS_ORIGIN??'http://127.0.0.1:47894',token='generated-native-topics-owner-token';
+assert.equal(new URL(url).protocol,'http:');assert(['127.0.0.1','localhost','[::1]'].includes(new URL(url).hostname),'Generated topic fixture requires loopback');
 const profile=mkdtempSync(join(tmpdir(),'mote-mac-topics-'));app.setPath('userData',profile);process.env.MOTE_PROFILE='dev';
 for(const key of ['MOTE_URL','MOTE_TOKEN','MOTE_ENV_FILE'])delete process.env[key];
 const data=profile+'-profiles/dev';mkdirSync(data,{recursive:true,mode:0o700});
 writeFileSync(join(data,'config.json'),JSON.stringify({version:4,developmentToken:token,config:{...defaultConfig(),serverUrl:url,credentialScope:'owner',syncMode:'manual',metadataEnabled:false,deviceName:'Synthetic topics Mac'}}),{mode:0o600});
 writeFileSync(join(data,'storage-format.json'),JSON.stringify({version:4}),{mode:0o600});
-const out=resolve(__dirname,'../.mote/topic-ui');mkdirSync(out,{recursive:true});
+const out=resolve(process.env.MOTE_TOPICS_OUTPUT??resolve(__dirname,'../.mote/topic-ui'));mkdirSync(out,{recursive:true});
 const post=async(path,body={})=>{const response=await fetch(url+'/api/__fixture/'+path,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(body)});assert.equal(response.status,200);return response.json();};
 const timeout=setTimeout(()=>{console.error('Mac topics timeout');app.exit(1);},120000);let main;
 app.on('browser-window-created',(_event,window)=>{if(main)return;main=window;window.webContents.once('did-finish-load',()=>void(async()=>{
@@ -24,7 +25,14 @@ app.on('browser-window-created',(_event,window)=>{if(main)return;main=window;win
  const count=n=>wait(`document.querySelectorAll('#memory-topic-members [data-memory]').length===${n}`,'members '+n);
  const shot=async(name)=>writeFileSync(join(out,name+'.png'),(await window.webContents.capturePage()).toPNG());
  await wait(`Boolean(window.mote)&&!document.querySelector('#settings-fields').disabled`,'ready');
- await js(`document.querySelector('[data-nav="records"]').click();document.querySelector('#content-memories').click()`);await count(30);
+ if(process.env.MOTE_TOPICS_RETAINED_REVIEW==='1'){
+  assert.equal(window.isVisible(),false);window.setContentSize(1440,936);
+  await js(`document.querySelector('aside [data-nav=settings]').click();document.querySelector('[data-page=settings] [data-nav=mac-options]').click();document.querySelector('[data-page=mac-options] [data-nav=activity]').click()`);
+  await wait(`!document.querySelector('[data-page=activity]').hidden&&document.querySelector('#collection-statistics').textContent.length>0`,'retained local runtime statistics');await shot('local-statistics');
+  await js(`document.querySelector('#workspace-back').click();document.querySelector('[data-page=mac-options] [data-nav=statistics]').click()`);await wait(`document.querySelector('#storage-statistics').textContent.includes('MiB')`,'actual private-profile disk report');assert((await js('window.mote.storageStatistics()')).files>0);await shot('local-disk-statistics');await js(`document.querySelector('#storage-refresh').click()`);await wait(`document.querySelector('#storage-statistics').textContent.includes('MiB')`,'retained disk refresh');
+ }
+
+ await js(`document.querySelector('aside [data-nav="records"]').click();document.querySelector('.content-more-tools').open=true;document.querySelector('#content-memories').focus();document.querySelector('#content-memories').click()`);await count(30);
  if(process.env.MOTE_TOPICS_DETAIL_REVIEW==='1'){
   const pick=async(f)=>{await click('全部记忆');await count(30);await click('下一页');await count(2);await js(`document.querySelector('[data-memory="${f.firstMemory}"]').click()`);await wait(`document.querySelector('#memory-topics-dialog').textContent.includes('查看原文依据 1')`,'detail');};
   const memoryGet=async(id)=>{const response=await fetch(url+'/api/memories/'+id,{headers:{authorization:'Bearer '+token}});assert.equal(response.status,200);return response.json();};
@@ -59,9 +67,9 @@ app.on('browser-window-created',(_event,window)=>{if(main)return;main=window;win
  await post('mode',{mode:'denied'});await wait(`Boolean(document.querySelector('#memory-topics-dialog [role=alert]'))`,'denied');assert.equal(await js(`document.querySelectorAll('[data-topic]').length`),0);await post('mode',{mode:'online'});await click('重试');await count(30);
  await post('invalidate');await wait(`document.querySelector('#memory-topics-dialog').textContent.includes('此主题已不可用')`,'invalidated');assert.equal(await js(`document.querySelectorAll('[data-memory]').length`),0);await shot('invalidated');await click('全部记忆');await count(30);
  await post('empty');await click('刷新');await wait(`document.querySelector('#memory-topics-dialog').textContent.includes('当前筛选下没有匹配')`,'empty');await shot('empty');await click('关闭详情');
- await post('reset');await js(`location.reload()`);await wait(`Boolean(window.mote)&&!document.querySelector('#settings-fields').disabled`,'reload');await js(`document.querySelector('[data-nav="records"]').click();document.querySelector('#content-memories').click()`);await count(30);
+ await post('reset');await js(`location.reload()`);await wait(`Boolean(window.mote)&&!document.querySelector('#settings-fields').disabled`,'reload');await js(`document.querySelector('aside [data-nav="records"]').click();document.querySelector('.content-more-tools').open=true;document.querySelector('#content-memories').focus();document.querySelector('#content-memories').click()`);await count(30);
  assert.equal((await js('window.mote.status()')).running,false);
- writeFileSync(join(out,'result.json'),JSON.stringify({passed:true,actualMacRendererPreloadIPC:true,actualCentralHTTP:true,generatedClassifier:true,liveModel:false,checks:['multi-tree same Memory','detail/original/return','32 members pagination and close/reopen','offline and 403 clearing/retry','whole-batch dependency invalidation','empty','renderer reload current authority']}));console.log('PASS native Mac topics real UI/IPC/HTTP');clearTimeout(timeout);app.exit(0);
+ writeFileSync(join(out,'result.json'),JSON.stringify({passed:true,generatedOnly:true,hidden:!window.isVisible(),retainedLocalStatistics:process.env.MOTE_TOPICS_RETAINED_REVIEW==='1',actualMacRendererPreloadIPC:true,actualCentralHTTP:true,generatedClassifier:true,liveModel:false,checks:['multi-tree same Memory','detail/original/return','32 members pagination and close/reopen','offline and 403 clearing/retry','whole-batch dependency invalidation','empty','renderer reload current authority']}));console.log('PASS native Mac topics real UI/IPC/HTTP');clearTimeout(timeout);app.exit(0);
 })().catch(error=>{console.error(error);clearTimeout(timeout);app.exit(1);}));});
 app.on('quit',()=>{void rm(profile,{recursive:true,force:true});void rm(profile+'-profiles',{recursive:true,force:true});});
 require('../dist/main');

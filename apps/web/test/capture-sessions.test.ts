@@ -51,6 +51,7 @@ async function fixture(t:import('node:test').TestContext,locale:Locale){
   const refresh=()=>d.querySelector<HTMLButtonElement>('.capture-session-filters button')!;
   const last=()=>requests.at(-1)!.url;
   return {d,requests,opened,status,pagination,filters,refresh,last,click,select,render,
+    mode:async(value:string)=>click(d.querySelector<HTMLElement>('.capture-group-tabs [data-mode="'+value+'"]')!),
     respond:(handler:(url:URL)=>Page)=>{respond=handler;},
     revise:async()=>{revision++;await render();},
   };
@@ -65,7 +66,7 @@ for(const locale of ['en','zh-CN'] as const)test('capture grouping renders zero,
     {groups:7,records:41,items:[group('generated-first-page')]},
   ];
   for(const mode of ['sessions','albums'] as const){
-    await f.select(f.filters()[1]!,mode);
+    await f.mode(mode);
     for(const scenario of scenarios){
       f.respond(()=>({items:scenario.items,totalCount:scenario.records,...(mode==='sessions'?{sessionCount:scenario.groups}:{albumCount:scenario.groups}),nextCursor:null}));
       const before=f.requests.length;
@@ -137,7 +138,7 @@ for(const locale of ['en','zh-CN'] as const)test('capture grouping selection, fi
   assert.equal(f.filters()[0]!.value,'generated-device-2');
   assert.equal(f.d.querySelector<HTMLInputElement>('input[type="date"]')!.value,day);
   await f.click(f.pagination()[1]!);
-  await f.select(f.filters()[1]!,'albums');
+  await f.mode('albums');
   assert.equal(f.last().pathname,'/api/capture-browser/albums');
   assert.equal(f.last().searchParams.has('cursor'),false,'changing aggregation resets the outer page');
   assert.equal(f.status(),expected('albums',12,1));
@@ -155,7 +156,7 @@ for(const locale of ['en','zh-CN'] as const)test('capture grouping selection, fi
   assert.equal(f.status(),expected(null,1,1),'selected album records omit the outer album count');
   await f.click(f.d.querySelector<HTMLButtonElement>('.section-heading > button')!);
   assert.equal(f.status(),expected('albums',12,1));
-  assert.equal(f.filters()[1]!.value,'albums');
+  assert.equal(f.d.querySelector('.capture-group-tabs [aria-selected=true]')?.getAttribute('data-mode'),'albums');
   assert.equal(f.last().searchParams.get('deviceId'),'generated-device-2');
   assert.equal(f.last().searchParams.get('after'),range.after);
   assert.equal(f.last().searchParams.get('before'),range.before);

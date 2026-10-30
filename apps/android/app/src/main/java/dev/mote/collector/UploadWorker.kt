@@ -126,6 +126,11 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
             }
             stage = EventStage.QUEUE
             val queue = applicationContext.queue()
+            val contexts = applicationContext.captureContexts().pending(config.server.trimEnd('/'), settings.deviceId, includeUnbound = settings.dataOrigin() == config.server.trimEnd('/'))
+            if (contexts.isNotEmpty()) {
+                SyncHeartbeat.send(applicationContext, settings, config, queue)
+                if (!CaptureContextSync.syncPending(applicationContext, config)) return failed(MoteI18n.text("采集来源说明有版本冲突，请保留或更新说明后重试"), retryable = false)
+            }
             val history = applicationContext.captureUploadHistory()
             val finalizer = CaptureReceiptFinalizer(history)
             history.prune(UploadHistoryRetention.read(applicationContext))

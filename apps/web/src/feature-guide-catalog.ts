@@ -1370,12 +1370,12 @@ export const guideSections:GuideSection[] = [
             ],
             "target": {
               "pageId": "ask",
-              "href": "#/ask",
+              "href": "#/ask?question=",
               "collectionId": null,
               "categoryId": null,
-              "label": "问一问",
-              "path": "问一问中的待澄清问题；活动详情 / 资料来源上下文 → 需要你补充",
-              "where": "在问一问历史、活动详情或资料上下文查找「需要你补充」的问题入口。具体问题链接由现有对象提供。"
+              "label": "需要你补充",
+              "path": "需要你补充",
+              "where": "补充后，仅继续处理这份资料"
             },
             "otherTargets": [
               {
@@ -1718,8 +1718,8 @@ export const guideSections:GuideSection[] = [
           {
             "id": "C30",
             "priority": "core",
-            "title": "审核日程建议并交给设备执行",
-            "purpose": "查看有证据的日程建议，核对内容和目标日历后确认，跟踪设备的执行结果。",
+            "title": "查看已生效日程和设备写入状态",
+            "purpose": "授权后，范围内明确的日程会自动创建、更新、取消或标记完成。更新和取消只作用于 Mote 创建的原事件；完成仅记录在 Mote。不会邀请参与人或扩大设备和日历范围。",
             "actions": [
               "启用发现并设置时区和审核设备",
               "筛选建议、待执行或全部",
@@ -2864,13 +2864,13 @@ export const guideSections:GuideSection[] = [
               "退出登录"
             ],
             "target": {
-              "pageId": "about",
-              "href": "#/preferences",
+              "pageId": "localPreferences",
+              "href": "#/preferences/session",
               "collectionId": null,
               "categoryId": null,
-              "label": "设置",
+              "label": "外观、语言与会话",
               "path": "设置 → 当前服务（中央节点）",
-              "where": "页面下方的「当前服务（中央节点）」和「登录会话有效期」；未登录时由目标页进入登录。"
+              "where": "在「当前服务」查看连接与浏览器登录保留时间；未登录时由目标页进入登录。"
             },
             "otherTargets": [],
             "setup": "需要当前中央节点的管理令牌；登录只连接当前网页所属的中央节点。",
@@ -3076,7 +3076,7 @@ export const guideSections:GuideSection[] = [
             ],
             "target": {
               "pageId": "agentView",
-              "href": "#/agent",
+              "href": "#/agent?tab=input",
               "collectionId": null,
               "categoryId": null,
               "label": "Agent 能看到什么",
@@ -3197,13 +3197,13 @@ export const guideSections:GuideSection[] = [
               "选择中文或 English"
             ],
             "target": {
-              "pageId": "about",
-              "href": "#/preferences",
+              "pageId": "localPreferences",
+              "href": "#/preferences/session",
               "collectionId": null,
               "categoryId": null,
-              "label": "设置",
+              "label": "外观、语言与会话",
               "path": "设置 → 语言",
-              "where": "设置入口顶部的语言选择器。"
+              "where": "在「此浏览器」选择界面语言。"
             },
             "otherTargets": [],
             "setup": null,

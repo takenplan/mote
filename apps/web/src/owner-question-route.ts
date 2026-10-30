@@ -1,5 +1,10 @@
+import type {Api} from './api';
+const listOrigins=new WeakMap<Api,string>();
+export function openOwnerQuestionList(api:Api){listOrigins.set(api,window.location.hash);window.location.hash=ownerQuestionRoute();}
+export function ownerQuestionListOrigin(api:Api){return listOrigins.get(api);}
+export function clearOwnerQuestionListOrigin(api:Api){listOrigins.delete(api);}
 /** Owner questions live within Ask; identifiers never carry answer semantics. */
-export function ownerQuestionRoute(id:string){return '#/ask?'+new URLSearchParams({question:id});}
+export function ownerQuestionRoute(id=''){return '#/ask?'+new URLSearchParams({question:id});}
 export function readOwnerQuestion(hash:string){return new URLSearchParams(hash.split('?')[1]??'').get('question');}
 export function ownerQuestionListPath(scope:{workId?:string;materialId?:string;operationIds?:string[]}={},cursor?:string,state='open,deferred'){
   const {operationIds,...ids}=scope;

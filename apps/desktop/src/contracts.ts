@@ -87,6 +87,11 @@ export interface Status {
   diagnostics?: import('@mote/diagnostics').DiagnosticsStatus;
 }
 export interface DesktopApi {
+  checkChromePermissions(id:string):Promise<import('./contracts/chrome').ChromePermissionStatus>;
+  cancelChromePermissions(id:string):Promise<void>;
+  openChromeExtensions():Promise<void>;
+  captureContext(channel:import('./contracts/sources').CaptureContextChannel):Promise<import('./contracts/sources').SourceContextState>;
+  saveCaptureContext(channel:import('./contracts/sources').CaptureContextChannel,input:{expectedVersion:number;description:string}):Promise<import('./contracts/sources').SourceContextState>;
   setupChromeCapture():Promise<{extensionId:string;extensionDirectory:string;manifestPath:string}>;
   initialAppearance: import('@mote/shared').AppearanceSnapshot;
   setAppearance(preference: import('@mote/shared').AppearancePreference): Promise<import('@mote/shared').AppearanceSnapshot>;
@@ -113,7 +118,7 @@ export interface DesktopApi {
   captureDetail(location: import('./contracts/content').CaptureLocation, id: string): Promise<import('./contracts/content').BrowserDetail>;
   captureImage(location: import('./contracts/content').CaptureLocation, id: string, thumbnail: boolean): Promise<string>;
   installedApplications(): Promise<{ appId: string; appName: string; appVersion?: string }[]>;
-  onNavigate(callback: (page: 'overview' | 'notes' | 'sources' | 'settings' | 'central') => void): () => void;
+  onNavigate(callback: (page: 'overview' | 'notes' | 'sources' | 'settings' | 'central' | 'capture-start') => void): () => void;
   previewConnection(input: string): Promise<import('./contracts/connection').ConnectionPreview>;
   importConnection(kind: 'json' | 'qr'): Promise<{ canceled: boolean; preview?: import('./contracts/connection').ConnectionPreview }>;
   cancelConnection(): Promise<void>;
@@ -130,33 +135,38 @@ export interface DesktopApi {
   releaseNotes(): Promise<void>;
   openFeedback(): Promise<void>;
   codingAgents(): Promise<import('./contracts/sources').CodingAgentDiscovery[]>;
-  addCodingAgent(provider: import('./contracts/sources').CodingProvider, options: import('./contracts/sources').SourceOptions): Promise<void>;
+  addCodingAgent(provider: import('./contracts/sources').CodingProvider, options: import('./contracts/sources').SourceOptions): Promise<string>;
   sources(): Promise<import('./contracts/sources').SourceStatus[]>;
+  sourceArchivedContent(id:string,cursor?:string):Promise<import('./contracts/content').CentralContentPage>;
+  sourcePendingContent(id:string):Promise<import('./contracts/content').LocalContentPage>;
+  sourceContext(id:string):Promise<import('./contracts/sources').SourceContextState>;
+  saveSourceContext(id:string,input:{expectedVersion:number;description:string}):Promise<import('./contracts/sources').SourceContextState>;
   selectSourceFiles(mode: 'files' | 'directory'): Promise<{canceled:boolean;selectionId?:string;names?:string[]}>;
-  confirmSourceFiles(selectionId:string, options: import('./contracts/sources').SourceOptions): Promise<void>;
+  confirmSourceFiles(selectionId:string, options: import('./contracts/sources').SourceOptions): Promise<{sourceIds:string[]}>;
   cancelSourceFiles(selectionId:string): Promise<void>;
   memoryTopics(): Promise<import('./contracts/content').TopicDirectory>;
   memoryTopicPage(input?:import('./contracts/content').TopicQuery): Promise<import('./contracts/content').TopicPage>;
   memoryTopicEvidence(memoryId:string,evidenceId:string): Promise<import('./contracts/content').TopicEvidence>;
   memoryTopicDetail(id:string): Promise<import('./contracts/content').TopicMemory>;
-  centralContent(cursor?:string): Promise<import('./contracts/content').CentralContentPage>;
+  centralContent(cursor?:string,query?:string): Promise<import('./contracts/content').CentralContentPage>;
   centralContentDetail(id:string,offset?:number,image?:boolean): Promise<import('./contracts/content').SyncContent>;
-  localContent(offset?:number): Promise<import('./contracts/content').LocalContentPage>;
+  localContent(offset?:number,query?:string): Promise<import('./contracts/content').LocalContentPage>;
   localContentDetail(key:string, image?:boolean): Promise<import('./contracts/content').ContentDetail|import('./contracts/content').SyncContent>;
   chooseSourceFiles(mode: 'files' | 'directory', options: import('./contracts/sources').SourceOptions): Promise<{ canceled: boolean }>;
   connectActionCalendar(): Promise<{deviceId:string}>;
   authorizeCalendar(): Promise<import('./contracts/sources').CalendarChoice[]>;
-  addCalendarSource(id: string, options: import('./contracts/sources').SourceOptions): Promise<void>;
+  addCalendarSource(id: string, options: import('./contracts/sources').SourceOptions): Promise<string>;
   updateSource(id: string, options: import('./contracts/sources').SourceOptions & { enabled: boolean }): Promise<void>;
   syncSources(): Promise<void>;
   openCalendarPermissions(): Promise<void>;
   setSyncPaused(paused:boolean): Promise<Status>;
   status(): Promise<Status>;
   openQuickNote?(): Promise<void>;
+  resizeQuickNote?(expanded: boolean): Promise<void>;
   noteDraft(): Promise<import('./contracts/note').NoteDraft>;
   updateNoteDraft(input: import('./contracts/note').NoteDraft): Promise<import('./contracts/note').NoteDraft>;
   saveNote(input: import('./contracts/note').NoteDraft): Promise<{ id: string; draft: import('./contracts/note').NoteDraft }>;
-  openCentral(page?: string, evidenceId?: string): Promise<void>;
+  openCentral(page?: string, evidenceId?: string,conversationId?:string): Promise<void>;
   exportSupport(hours?:number): Promise<{ canceled: boolean }>;
   exportDiagnostics(): Promise<{ canceled: boolean }>;
   readRawEvents(): Promise<string>;
@@ -172,7 +182,7 @@ export interface DesktopApi {
   openPermissions(): Promise<void>;
   openDataFolder(): Promise<void>;
   exportMetadata(): Promise<void>;
-  exportQueue(): Promise<{ canceled: boolean; path?: string }>;
-  importQueue(): Promise<{ canceled: boolean; imported?: number }>;
+  exportQueue(): Promise<{canceled:true}|{canceled:false;path:string;file:import('./contracts/operations').BackupFileIdentity}>;
+  importQueue(): Promise<{canceled:true}|{canceled:false;state:'imported';imported:number;file:import('./contracts/operations').BackupFileIdentity}|{canceled:false;state:'incomplete';phase:'validation'|'saving'|'cleanup';imported:number;total?:number;currentRecordUnconfirmed:boolean;error:string;file:import('./contracts/operations').BackupFileIdentity}>;
   onStatus(callback: (status: Status) => void): () => void;
 }

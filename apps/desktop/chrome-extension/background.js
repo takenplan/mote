@@ -1,3 +1,4 @@
+import {permissionStatus} from './permissions.js';
 import {extractVisible} from './extract.js';
 const HOST='dev.mote.visible_context';let connection,generation=0,busy=false;
 const stable=value=>value&&typeof value==='object'?(Array.isArray(value)?value.map(stable):Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])]))):value;
@@ -16,6 +17,6 @@ async function sample(message,epoch){
  const after=await binding();if(epoch!==generation||!same(before,after))return fail('stale');return {id:message.id,status:'ok',binding:{...before,viewport:result.identity.viewport,scroll:result.identity.scroll},...(message.structured?{pages:result.pages??[],...(result.media?{media:result.media}:{})}:{})};
  }catch{return fail('failed');}finally{busy=false;}
 }
-function connect(){if(connection)return;try{const port=chrome.runtime.connectNative(HOST);connection=port;const epoch=++generation;port.onMessage.addListener(message=>{void sample(message,epoch).then(reply=>{if(reply&&epoch===generation){try{port.postMessage(reply);}catch{}}});});port.onDisconnect.addListener(()=>{void chrome.runtime.lastError;if(connection!==port)return;connection=undefined;generation++;chrome.alarms?.create?.('reconnect',{delayInMinutes:0.5});setTimeout(connect,2000);});}catch{setTimeout(connect,2000);}}
+function connect(){if(connection)return;try{const port=chrome.runtime.connectNative(HOST);connection=port;const epoch=++generation;port.onMessage.addListener(message=>{void (message?.type==='permission-status'?permissionStatus(message,chrome.permissions):sample(message,epoch)).then(reply=>{if(reply&&epoch===generation){try{port.postMessage(reply);}catch{}}});});port.onDisconnect.addListener(()=>{void chrome.runtime.lastError;if(connection!==port)return;connection=undefined;generation++;chrome.alarms?.create?.('reconnect',{delayInMinutes:0.5});setTimeout(connect,2000);});}catch{setTimeout(connect,2000);}}
 chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name==='reconnect'&&!connection)connect();});
 chrome.runtime.onStartup.addListener(()=>{if(!connection)connect();});chrome.runtime.onInstalled.addListener(()=>{if(!connection)connect();});connect();

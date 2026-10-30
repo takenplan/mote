@@ -152,15 +152,16 @@ test('Actions settings read and submit both configuration and device-authorizati
   const api=actionApi((_path,init)=>{if(init?.method==='PUT'){const body=JSON.parse(String(init.body));writes.push(body);enabled=body.settings.enabled;revision++;}return actionView(revision,authorizationRevision,enabled);});
   await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));
   revision=4;authorizationRevision=3;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/actions?')));
-  await act(async()=>d.querySelector<HTMLInputElement>('.action-discovery-settings input[type="checkbox"]')!.click());
+  await act(async()=>button(d,'日程设置').click());await act(async()=>d.querySelector<HTMLInputElement>('.action-discovery-settings input[type="checkbox"]')!.click());assert.equal(writes.length,0,'editing is a local draft until explicit save');await act(async()=>button(d,'保存设置').click());
   assert.deepEqual(writes,[{revision:4,authorizationRevision:3,settings:{enabled:true,timeZone:'UTC',reviewDeviceIds:['generated-phone']}}]);
 });
 test('Actions displays actual permission withdrawal after a failed runtime save and reloads both revisions',async t=>{
   const {root,d}=await fixture(t),writes:any[]=[];let authorizationRevision=2,reviewDeviceIds=['generated-phone'];
   const api=actionApi((_path,init)=>{if(init?.method==='PUT'){writes.push(JSON.parse(String(init.body)));reviewDeviceIds=[];authorizationRevision++;throw new ApiError('Generated runtime save failed',503,undefined,'config_unavailable');}return actionView(3,authorizationRevision,false,reviewDeviceIds);});
   await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));
+  await act(async()=>button(d,'日程设置').click());
   const phone=()=>d.querySelectorAll<HTMLInputElement>('.action-discovery-settings input[type="checkbox"]')[1];
-  assert.equal(phone().checked,true);await act(async()=>phone().click());
+  assert.equal(phone().checked,true);await act(async()=>phone().click());await act(async()=>button(d,'保存设置').click());
   assert.equal(writes[0].authorizationRevision,2);assert.deepEqual(writes[0].settings.reviewDeviceIds,[]);
   assert.equal(phone().checked,false);assert.match(d.body.textContent!,/所选设备授权已撤销/);assert.match(d.body.textContent!,/所需服务暂不可用/);
   await act(async()=>button(d,'重新读取并还原草稿').click());
@@ -171,12 +172,13 @@ test('Actions timezone edits keep their original dual revisions across refresh a
   const {root,d}=await fixture(t),writes:any[]=[];let revision=3,authorizationRevision=2;
   const api=actionApi((_path,init)=>{if(init?.method==='PUT'){writes.push(JSON.parse(String(init.body)));throw new ApiError('Generated conflict',409,undefined,'config_conflict');}return actionView(revision,authorizationRevision);});
   await act(async()=>root.render(React.createElement(Actions,{api,onOpen:()=>{}})));
+  await act(async()=>button(d,'日程设置').click());
   const input=d.querySelector<HTMLInputElement>('[aria-label="默认时区"]')!;
   Object.assign(input,{attachEvent:()=>{},detachEvent:()=>{}});
   await act(async()=>input.focus());
   await act(async()=>{Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')!.set!.call(input,'Asia/Tokyo');input.dispatchEvent(new window.Event('input',{bubbles:true}));input.dispatchEvent(new window.KeyboardEvent('keyup',{bubbles:true,key:'o'}));});
   revision=4;authorizationRevision=3;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/actions?')));
-  assert.equal(input.value,'Asia/Tokyo');await act(async()=>input.blur());
+  assert.equal(input.value,'Asia/Tokyo');await act(async()=>input.blur());assert.equal(writes.length,0,'blur does not submit the draft');await act(async()=>button(d,'保存设置').click());
   assert.equal(writes[0].revision,3);assert.equal(writes[0].authorizationRevision,2);assert.equal(writes[0].settings.timeZone,'Asia/Tokyo');
   assert.match(d.body.textContent!,/配置或相关操作状态已变化/);assert.equal(input.value,'Asia/Tokyo');
   await act(async()=>button(d,'重新读取并还原草稿').click());assert.equal(input.value,'UTC');
@@ -205,4 +207,18 @@ test('malformed calendar inventory reports a recoverable error without rendering
  }
  payload=emptyCapabilities();await act(async()=>button(d,'刷新').click());
  assert.equal(d.querySelector('[role=alert]'),null);assert.match(d.body.textContent!,/暂无已连接的可写日历/);assert.equal(writes,0);
+});
+
+test('old calendar capabilities and scope drafts are not offered as current authorization choices',async t=>{
+ const {root,d}=await fixture(t),target={deviceId:'generated-device',calendarId:'generated-calendar',declarationRevision:1};let writes=0;
+ const declaration={deviceId:target.deviceId,connectionActive:true,permission:'granted',revision:1,calendars:[{id:target.calendarId,title:'Generated calendar'}]};
+ const draft={id:'generated-draft',revision:1,target,inputs:{sources:[],existingArchived:true,futureInputs:true},state:'draft',updatedAt:'2026-10-29T00:00:00Z'};
+ let capability={id:'calendar.create',version:1};
+ const api={request:async(_path:string,init?:RequestInit)=>{if(init?.method)writes++;return {...emptyCapabilities(),declarations:[{...declaration,capability}],drafts:[{...draft,capability}]};}} as Api;
+ await act(async()=>root.render(React.createElement(ActionCapabilitySettings,{api})));
+ assert.match(d.body.textContent!,/请在设备重新连接日历，再保存和确认新的范围/);
+ assert.equal(d.querySelectorAll('select option').length,1);assert.doesNotMatch(d.body.textContent!,/继续草稿 ·/);
+ assert.equal(button(d,'保存范围草稿').disabled,true);
+ capability={id:'calendar.manage',version:1};await act(async()=>button(d,'刷新').click());
+ assert.equal(d.querySelectorAll('select option').length,2);assert.match(d.body.textContent!,/继续草稿 ·/);assert.equal(writes,0);
 });
