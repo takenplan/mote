@@ -92,7 +92,7 @@ class FinalEditorActionsInstrumentedTest {
             try{ActivityScenario.launch(CalendarActionsActivity::class.java).use{
                 until("Only actual waiting-device fixture card"){has(http.title("waiting_device"))&&has("等待已授权设备")};picture("managed-waiting-device-dark")
                 for((state,label)in listOf("executing" to "等待保存回执","cancel_requested" to "已请求取消，写入结果仍待核实","cancelled" to "已取消等待执行")){
-                    http.state=state;click("更多");click("最新建议");until("Actual HTTP $state state consumed"){has(http.title(state))&&has(label)};click("更多");picture("managed-$state-dark")
+                    http.state=state;tag("calendar-tools");click("最新建议");until("Actual HTTP $state state consumed"){has(http.title(state))&&has(label)};tag("calendar-tools");picture("managed-$state-dark")
                 }
                 tag("action-tabs:todos");until("Actual open Todo read"){has(http.todoTitle)&&has("未完成")};picture("todo-open-full-dark");click("标记完成");until("Actual same Todo PATCH completion"){http.patches.get()==1&&has(http.todoTitle)&&has("已完成")};picture("todo-completed-full-dark");assertEquals(1,http.writes.get());assertEquals(0,http.calendarWrites.get())
             }}finally{CentralDraftWrites.barrier{};File(context.noBackupFilesDir,"central-native/"+SourceRules.hash(http.origin)).deleteRecursively()}
