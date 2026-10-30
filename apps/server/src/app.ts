@@ -770,6 +770,11 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   }));
   const imports=new ImportStore(store,archivedFiles,sources,{executor,intake:processing.runtime.intake,fileStore:files,
     sourcePacks,
+    bindPhaseAuthority:step=>{
+      // Only this import's explicit owner action may fill a missing binding.
+      // An already-bound step keeps its original durable authority on retries.
+      if(modelAuthorization.ownerIntent(step.operationId)&&!modelAuthorization.stepAuthority(step.id))modelAuthorization.bindCurrentStep(step);
+    },
     prepare:dependencies?.prepareImport??(async input=>{
       if(!agent.configured)throw new AgentNotConfiguredError();
       const selected=modelSettings.select('import');if(!agent.configuredFor(selected.id))throw new AgentNotConfiguredError();

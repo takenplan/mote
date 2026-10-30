@@ -34,7 +34,7 @@ export class ImportInputError extends StoreError {
 }
 export type ImportPreparation={operationId?:string;signal?:AbortSignal;workspace:string;inputPaths:string[];hostMedia?:ImportHostMedia[];instruction:string;previous?:{summary:string;error?:string}};
 export type ImportPreparationResult={summary:string;recordsPath?:string;warnings?:string[];reviewDecision?:ImportReviewDecision};
-export type ImportRuntime={executor?:ExecutionEngine;intake?:ImportIntakeRegistry;fileStore?:FileStore;prepare?:(input:ImportPreparation)=>Promise<ImportPreparationResult>;sourcePacks?:ReadonlyMap<string,{revision:string;prepare:(input:ImportPreparation)=>Promise<ImportPreparationResult>}>;onImported?:(captureIds:string[],importJobId:string)=>Promise<{memoryJobId?:string}>};
+export type ImportRuntime={executor?:ExecutionEngine;intake?:ImportIntakeRegistry;fileStore?:FileStore;bindPhaseAuthority?:(step:ExecutionStep)=>void;prepare?:(input:ImportPreparation)=>Promise<ImportPreparationResult>;sourcePacks?:ReadonlyMap<string,{revision:string;prepare:(input:ImportPreparation)=>Promise<ImportPreparationResult>}>;onImported?:(captureIds:string[],importJobId:string)=>Promise<{memoryJobId?:string}>};
 type InternalJob=ImportJob&{resourceWait?:'prepare'|'commit';excludedFiles?:{fileId:string;reason:string}[];containerIds?:string[];recordsProcessed:number;processing:'automatic'|'preview';sourcePackRevision?:string;archiveWarnings?:string[];createFingerprint?:string;preparationRevision:number;originalsPending?:boolean;expansion?:{originalIds:string[];completedIds:string[];pins?:Record<string,{id:string;version:string}>};parserMode?:'plain';workspace:string;inputs:{path:string;fileId:string}[];manifestHash?:string;failurePhase?:'prepare'|'import';memoryNotified?:boolean;blockedArchive?:boolean};
 const responseSchema=z.object({summary:z.string().max(20000),recordsPath:z.string().max(4000).optional(),warnings:z.array(z.string().max(2000)).max(200).optional(),reviewDecision:importReviewDecisionSchema.optional()}).strict();
 const message=(error:unknown)=>error instanceof Error?error.message.slice(0,2000):'Import failed';
@@ -490,7 +490,21 @@ export class ImportStore {
     if(this.running.has(id)||this.isScheduled(id))throw new StoreError('Import is already processing',409);
     const job=this.load(id),stepId=this.admitPhase(job,phase),step=this.executor.get(stepId)!;
     if(step.state==='succeeded')return this.public(this.load(id));
-    if(step.state!=='running')this.executor.retry(stepId,ownerRetry);
+    const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
+    try{
+      // Creation/restoration can establish a blocked step before the owner starts
+      // it. Bind that exact step before making it runnable, so the shared executor
+      // restores the owner's authority instead of inheriting a scheduler context.
+      this.runtime.bindPhaseAuthority?.(step);
+      if(ownerRetry){
+        const current=this.load(id);
+        if(['failed','cancelled','unsupported','needs_configuration'].includes(current.status)){
+          current.status=phase==='prepare'?'queued':'importing';current.processingStatus=phase==='prepare'?'archived':'saving';current.error=undefined;this.save(current);
+        }
+      }
+      if(step.state!=='running')this.executor.retry(stepId,ownerRetry);
+      if(own)db.exec('COMMIT');
+    }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
     let resolveDone!:()=>void;
     const done=new Promise<void>(resolve=>{resolveDone=resolve;let waiters=this.phaseWaiters.get(stepId);if(!waiters){waiters=new Set();this.phaseWaiters.set(stepId,waiters);}waiters.add(resolve);});
     try{
