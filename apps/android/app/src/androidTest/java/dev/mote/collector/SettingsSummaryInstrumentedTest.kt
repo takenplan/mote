@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.lifecycle.Lifecycle
@@ -24,6 +25,18 @@ import java.util.concurrent.atomic.AtomicReference
 /** Generated profile only: configuration reads and the retained Settings page are real. */
 @RunWith(AndroidJUnit4::class)
 class SettingsSummaryInstrumentedTest {
+    private fun views(root: View): List<View> = buildList {
+        add(root)
+        if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) }
+    }
+
+    private fun row(activity: MainActivity, label: String): View =
+        views(activity.window.decorView).single { it.isShown && it.tag == "menu:$label" }.also {
+            assertNotNull("The visible Settings row must have its own detail", it.findViewWithTag<TextView>("row-detail"))
+        }
+
+    private fun detail(row: View) = requireNotNull(row.findViewWithTag<TextView>("row-detail")).text.toString()
+
     @Test fun cachedCardsFollowCommittedChangesAndUnavailableReadsWithoutReplacingThePage() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("emu64a"))
@@ -38,8 +51,6 @@ class SettingsSummaryInstrumentedTest {
         val old = "https://old.generated.invalid"
         val paired = "https://paired.generated.invalid"
         val token = "generated-settings-summary-token-1234567890"
-        fun row(activity: MainActivity, label: String) = requireNotNull(activity.window.decorView.findViewWithTag<View>("menu:$label"))
-        fun detail(row: View) = row.findViewWithTag<TextView>("row-detail")!!.text.toString()
         fun waitFor(scenario: ActivityScenario<MainActivity>, label: String, value: String) {
             val until = SystemClock.elapsedRealtime() + 15_000
             var current = ""
@@ -79,21 +90,38 @@ class SettingsSummaryInstrumentedTest {
                     assertEquals("Settings scroll is retained", initialScroll, scroll.scrollY)
                     assertTrue("Settings focus is retained", card.isFocused)
                 }
-                // Hold the real status executor while the retained Activity returns from the background.
-                val readBlocked = CountDownLatch(1); val releaseRead = CountDownLatch(1)
+                // Pause first so no prior status job can be mistaken for the returning read.
+                scenario.moveToState(Lifecycle.State.STARTED)
+                val loadingField = MainActivity::class.java.getDeclaredField("statusLoading").apply { isAccessible = true }
+                val executorField = MainActivity::class.java.getDeclaredField("statusExecutor").apply { isAccessible = true }
+                val instrumentation = InstrumentationRegistry.getInstrumentation()
+                val idleDeadline = SystemClock.elapsedRealtime() + 15_000
+                var idle = false
+                while (!idle && SystemClock.elapsedRealtime() < idleDeadline) {
+                    instrumentation.runOnMainSync { idle = !loadingField.getBoolean(originalActivity) }
+                    if (!idle) Thread.sleep(25)
+                }
+                assertTrue("The earlier status read must finish before holding the executor", idle)
+                val readBlocked = CountDownLatch(1); val releaseRead = CountDownLatch(1); val blockerFinished = CountDownLatch(1)
                 val afterReturn = "https://after-return.generated.invalid"
-                scenario.onActivity { activity ->
-                    val field = MainActivity::class.java.getDeclaredField("statusExecutor").apply { isAccessible = true }
-                    (field.get(activity) as ExecutorService).execute {
-                        readBlocked.countDown()
-                        check(releaseRead.await(20, TimeUnit.SECONDS)) { "The returning status read was never released" }
-                    }
+                (executorField.get(originalActivity) as ExecutorService).execute {
+                    readBlocked.countDown()
+                    try { check(releaseRead.await(35, TimeUnit.SECONDS)) { "The returning status read was never released" } }
+                    finally { blockerFinished.countDown() }
                 }
                 try {
                     assertTrue("The returning status read must be held", readBlocked.await(15, TimeUnit.SECONDS))
-                    scenario.moveToState(Lifecycle.State.STARTED)
+                    instrumentation.runOnMainSync { assertFalse("No status read may be in flight before resume", loadingField.getBoolean(originalActivity)) }
                     settings.save(settings.read().copy(server = afterReturn), confirmCentralEndpoint = true)
                     scenario.moveToState(Lifecycle.State.RESUMED)
+                    val submittedDeadline = SystemClock.elapsedRealtime() + 15_000
+                    var submitted = false
+                    while (!submitted && SystemClock.elapsedRealtime() < submittedDeadline) {
+                        scenario.onActivity { submitted = loadingField.getBoolean(it) }
+                        if (!submitted) Thread.sleep(25)
+                    }
+                    assertTrue("A new status read must be submitted after resume", submitted)
+                    assertEquals("The executor must still be held", 1L, blockerFinished.count)
                     scenario.onActivity { activity ->
                         val connection = row(activity, "连接与设备")
                         val send = row(activity, "同步与上传")
@@ -203,8 +231,8 @@ class SettingsSummaryInstrumentedTest {
                     Handler(Looper.getMainLooper()).post {
                         try {
                             observedNode.set((configField.get(activity) as CollectorConfig).server)
-                            val card = activity.window.decorView.findViewWithTag<View>("menu:连接与设备")
-                            observedCard.set(card.findViewWithTag<TextView>("row-detail").text.toString())
+                            val card = row(activity, "连接与设备")
+                            observedCard.set(detail(card))
                         } catch (error: Throwable) { failure.set(error) } finally { observed.countDown() }
                     }
                     releaseMain.countDown()

@@ -171,8 +171,8 @@ class PairingNavigationInstrumentedTest {
                 waitUntil {
                     var updated = false
                     scenario.onActivity { activity ->
-                        val row = activity.window.decorView.findViewWithTag<View>("menu:连接与设备")
-                        updated = row?.isShown == true && row.findViewWithTag<TextView>("row-detail")?.text.toString() == node &&
+                        val row = views(activity.window.decorView).singleOrNull { it.isShown && it.tag == "menu:连接与设备" }
+                        updated = row != null && row.findViewWithTag<TextView>("row-detail")?.text.toString() == node &&
                             row.contentDescription.toString() == "连接与设备，$node"
                     }
                     updated
