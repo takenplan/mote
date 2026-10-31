@@ -133,10 +133,11 @@ export class ExecutionEngine {
  }
  list(args:{operationId?:string;kind?:string;state?:ExecutionState;cursor?:number;limit?:number}={}){
   const clauses:string[]=[],values:(string|number)[]=[];
-  if(args.operationId){clauses.push('EXISTS(SELECT 1 FROM execution_operation_steps o WHERE o.step_id=execution_steps.id AND o.operation_id=?)');values.push(args.operationId);}
-  for(const [key,column] of [['kind','kind'],['state','state']] as const)if(args[key]){clauses.push(column+'=?');values.push(args[key]!);}
-  if(args.cursor!==undefined){clauses.push('rowid<?');values.push(args.cursor);}
-  const limit=Math.max(1,Math.min(args.limit??50,100)),rows=this.store.db.prepare(`SELECT rowid,* FROM execution_steps ${clauses.length?'WHERE '+clauses.join(' AND '):''} ORDER BY rowid DESC LIMIT ?`).all(...values,limit+1) as (Row&{rowid:number})[];
+  const from=args.operationId?'execution_operation_steps o JOIN execution_steps e ON e.id=o.step_id':'execution_steps e';
+  if(args.operationId){clauses.push('o.operation_id=?');values.push(args.operationId);}
+  for(const [key,column] of [['kind','kind'],['state','state']] as const)if(args[key]){clauses.push('e.'+column+'=?');values.push(args[key]!);}
+  if(args.cursor!==undefined){clauses.push('e.rowid<?');values.push(args.cursor);}
+  const limit=Math.max(1,Math.min(args.limit??50,100)),rows=this.store.db.prepare(`SELECT e.rowid AS rowid,e.* FROM ${from} ${clauses.length?'WHERE '+clauses.join(' AND '):''} ORDER BY e.rowid DESC LIMIT ?`).all(...values,limit+1) as (Row&{rowid:number})[];
   return {items:rows.slice(0,limit).map(view),nextCursor:rows.length>limit?rows[limit-1].rowid:null};
  }
  project(id:string){const step=this.get(id);if(step)this.handlers.get(step.kind)?.project?.(step);}

@@ -44,6 +44,27 @@ test('one engine fills slots, fairly interleaves operations and keeps one step p
  let count=0,cursor:number|undefined;do{const page=engine.list({limit:37,cursor});count+=page.items.length;cursor=page.nextCursor??undefined;}while(cursor);assert.equal(count,400);
 });
 
+test('operation step lookup stays bounded as unrelated history grows and preserves linked generations and paging',async t=>{
+ const {engine,store}=await fixture(t);engine.register(base);engine.register({...base,kind:'other-kind'});
+ const selected='file:selected';
+ const older=engine.enqueue(selected,'fixture',{generation:1},{generation:{slot:'pipeline',version:'1'}});
+ const newer=engine.enqueue(selected,'fixture',{generation:2},{generation:{slot:'pipeline',version:'2'}});
+ const shared=engine.enqueue('child:shared','fixture',{shared:true});engine.enqueue(selected,'fixture',{shared:true},{id:shared});
+ const blocked=engine.enqueue(selected,'other-kind',{blocked:true},{initial:{state:'blocked',attempts:0,availableAt:0,error:'generated_wait'}});
+ for(let i=0;i<100;i++)engine.enqueue('file:unrelated-'+i,'fixture',{i});
+ let sql='',bindings:unknown[]=[];const prepare=store.db.prepare.bind(store.db);
+ const spy=t.mock.method(store.db,'prepare',(statement:string)=>{const prepared=prepare(statement);if(statement.includes('ORDER BY')&&statement.includes('execution_steps')){const all=prepared.all.bind(prepared);prepared.all=((...args:unknown[])=>{sql=statement;bindings=args;return all(...args as Parameters<typeof all>);}) as typeof prepared.all;}return prepared;});
+ const first=engine.list({operationId:selected,kind:'fixture',limit:2});spy.mock.restore();
+ assert.deepEqual(first.items.map(step=>step.id),[shared,newer]);assert.ok(first.nextCursor);
+ const second=engine.list({operationId:selected,kind:'fixture',limit:2,cursor:first.nextCursor!});assert.deepEqual(second.items.map(step=>step.id),[older]);assert.equal(second.nextCursor,null);
+ assert.deepEqual(engine.list({operationId:selected,state:'blocked'}).items.map(step=>step.id),[blocked]);
+ assert.deepEqual(engine.list({operationId:'child:shared'}).items.map(step=>step.id),[shared]);
+ assert.deepEqual(engine.list({operationId:'file:missing'}).items,[]);
+ assert.ok(sql,'the operation lookup must be inspectable');
+ const plan=store.db.prepare('EXPLAIN QUERY PLAN '+sql).all(...bindings as Parameters<ReturnType<typeof prepare>['all']>).map(row=>String(row.detail));
+ assert.ok(!plan.some(row=>/\bSCAN (?:e|execution_steps)(?:\s|$)/.test(row)),`operation lookup must not scan unrelated steps: ${plan.join('; ')}`);
+});
+
 test('cancel, stale inputs and failed commit transactions cannot save late results',async t=>{
  const {engine,store}=await fixture(t);store.db.exec('CREATE TABLE fixture_outputs(id TEXT PRIMARY KEY)');
  let release!:()=>void,enter!:()=>void,current=true;const held=new Promise<void>(r=>release=r),entered=new Promise<void>(r=>enter=r);
