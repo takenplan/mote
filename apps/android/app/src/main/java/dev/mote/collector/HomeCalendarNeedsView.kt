@@ -12,10 +12,26 @@ import org.json.JSONObject
 
 /** Calendar suggestions only the owner can complete. Calendar items otherwise take effect without per-item review. */
 internal object CalendarNeeds {
+    /** The home shows at most this many; the calendar page keeps the complete history. */
+    const val SHOWN = 2
+    /** Suggestions arrive newest first; the home looks this many pages back and leaves older ones to the calendar page. */
+    const val PAGES = 5
     fun missingTime(items: JSONArray): List<JSONObject> = (0 until items.length()).map(items::getJSONObject).filter { action ->
         val event = action.optJSONObject("event")
         action.optString("status") == "proposed" && !action.has("resolution") && action.optString("kind") in setOf("calendar.create", "calendar.update") &&
             event != null && listOf("start", "end").any { event.isNull(it) || event.optString(it).isBlank() }
+    }
+    /** Follows the actions cursor until the home has its rows, the history ends or the bounded scan is used up. */
+    fun scan(read: (cursor: Long) -> JSONObject): List<JSONObject> {
+        val found = mutableListOf<JSONObject>()
+        var cursor = 0L
+        repeat(PAGES) {
+            val page = read(cursor)
+            found += missingTime(page.getJSONArray("items"))
+            if (found.size >= SHOWN || page.isNull("nextCursor")) return found.take(SHOWN)
+            cursor = page.getLong("nextCursor")
+        }
+        return found.take(SHOWN)
     }
 }
 
@@ -43,10 +59,12 @@ internal class HomeCalendarNeedsView(private val activity: MoteActivity, private
         if (task.busy || SystemClock.elapsedRealtime() < nextRead) return
         val stamp = epoch; nextRead = SystemClock.elapsedRealtime() + 15000
         task.start("", {}, {
-            val page = access.client.get("/api/actions?cursor=0")
-            val after = CentralAccess.resolve(activity)
-            check(after.generation == access.generation && after.server == access.server && after.client != null)
-            CalendarNeeds.missingTime(page.getJSONArray("items"))
+            CalendarNeeds.scan { cursor ->
+                access.client.get("/api/actions?cursor=$cursor").also {
+                    val after = CentralAccess.resolve(activity)
+                    check(after.generation == access.generation && after.server == access.server && after.client != null)
+                }
+            }
         }) { outcome ->
             if (closed || !active || stamp != epoch || activity.isDestroyed || activity.isFinishing) return@start
             // A failed or malformed read keeps the last confirmed rows instead of claiming nothing is waiting.
@@ -56,7 +74,7 @@ internal class HomeCalendarNeedsView(private val activity: MoteActivity, private
             clear(); rendered = signature
             if (needs.isEmpty()) return@start
             addView(TextView(activity).apply { text = MoteI18n.text("等你补充"); MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, 0, 0, activity.moteDp(8)) })
-            needs.take(2).forEach { action -> addView(row(action), LayoutParams(-1, -2).apply { bottomMargin = activity.moteDp(8) }) }
+            needs.forEach { action -> addView(row(action), LayoutParams(-1, -2).apply { bottomMargin = activity.moteDp(8) }) }
             visibility = View.VISIBLE
         }
     }

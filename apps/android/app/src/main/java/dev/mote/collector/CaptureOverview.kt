@@ -26,11 +26,17 @@ internal object CaptureOverview {
 
     fun kind(f: Facts): Kind = when {
         CaptureAttention.show(f.enabled, f.state, f.live, f.missingSource, f.queueFull) -> Kind.ATTENTION
-        // Only an explicit temporary pause is shown as paused; turning screen capture off in settings is not.
-        f.screenPausedAt != null && !f.screenSelected -> Kind.SCREEN_PAUSED
+        screenPaused(f) -> Kind.SCREEN_PAUSED
         !f.enabled -> if (f.used) Kind.PAUSED else Kind.HIDDEN
         else -> Kind.ACTIVE
     }
+
+    /**
+     * Only an explicit temporary pause is a screen pause; turning screen capture off in settings is not. It describes the
+     * state while other sources run or when the screen was the only source. Stopping everything while other sources are
+     * selected is a full pause, whose resume brings the paused screen back through the preview.
+     */
+    fun screenPaused(f: Facts) = f.screenPausedAt != null && !f.screenSelected && (f.enabled || !f.observesSystem)
 
     fun line(f: Facts, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): Line {
         val (send, sendAttention) = send(f)

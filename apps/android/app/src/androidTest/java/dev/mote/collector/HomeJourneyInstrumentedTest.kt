@@ -48,6 +48,7 @@ class HomeJourneyInstrumentedTest {
     private val automation get() = instrumentation.getUiAutomation(android.app.UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
     private val conversation = "5b0f6c1e-3d0a-4f4c-9a51-2f7f3a1d8c42"
     private val action = "8a6b2f0e-1c4d-4e7a-b2d3-6f5e4c3b2a19"
+    private val settled = "3f9d2c4b-7a1e-4b6f-8c5d-0e2a9b7c6d15"
     private fun views(root: View): List<View> = listOf(root) + if (root is ViewGroup) (0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
     private fun shown(activity: Activity) = views(activity.window.decorView).filter { it.isShown }
     private fun texts(activity: Activity) = shown(activity).filterIsInstance<TextView>().map { it.text.toString() }
@@ -155,6 +156,10 @@ class HomeJourneyInstrumentedTest {
             settings.save(settings.read().copy(screenCollectionEnabled = false)); settings.screenPaused(System.currentTimeMillis())
             val screen = onTop("A temporary screen pause names when it started") { activity -> "屏幕采集已暂停" in texts(activity) && texts(activity).any { it.endsWith(" 起") } }
             capture(screen, "home-screen-paused")
+            settings.save(settings.read().copy(notificationCollectionEnabled = true))
+            onTop("Stopped while other sources are selected is a full pause, not a screen pause") { activity ->
+                "采集已暂停" in texts(activity) && "屏幕采集已暂停" !in texts(activity) && "恢复采集" in texts(activity)
+            }
             settings.status("permission_required", "生成的中断：采集服务被系统停止")
             val broken = onTop("An actionable interruption is amber with its repair") { activity -> shown(activity).any { it.tag == "home-attention" } }
             instrumentation.runOnMainSync { assertTrue("采集已中断" in texts(broken) && "重新开启" in texts(broken) && "生成的中断：采集服务被系统停止" in texts(broken)) }
@@ -177,6 +182,22 @@ class HomeJourneyInstrumentedTest {
             until("The panel finished when the app took over") { inStage(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED).none { it is CaptureStatusActivity } }
             instrumentation.runOnMainSync { scope.onBackPressedDispatcherCompat() }
             onTop("Back leaves the scope page inside the app") { activity -> activity is MainActivity && shown(activity).none { it.tag == "local-back:PRIVACY" } }
+        } finally {
+            val open = inStage(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED)
+            instrumentation.runOnMainSync { open.forEach { it.finish() } }
+            until("The journey's activities finished") { inStage(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED).isEmpty() }
+        }
+    }
+
+    @Test fun aStandalonePanelLeavesNothingBehindTheApp() {
+        // The tile and the notification open the panel in a task of its own when no app screen is open.
+        context.startActivity(Intent(context, CaptureStatusActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        try {
+            val panel = onTop("The panel opens as its task's root") { activity -> activity is CaptureStatusActivity && activity.isTaskRoot && shown(activity).any { it.tag == "capture-status-screen" } }
+            click(panel) { it.tag == "capture-status-screen" }
+            val scope = onTop("The screen row opens the recovery scope page") { activity -> activity is MainActivity && shown(activity).any { it.tag == "local-back:PRIVACY" } }
+            until("The panel does not stay behind the app, so Back from the home leaves the task") { inStage(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED).none { it is CaptureStatusActivity } }
+            instrumentation.runOnMainSync { assertTrue("The app now owns the task", scope.isTaskRoot) }
         } finally {
             val open = inStage(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED)
             instrumentation.runOnMainSync { open.forEach { it.finish() } }
@@ -251,8 +272,15 @@ class HomeJourneyInstrumentedTest {
         val settings = Settings(context)
         settings.save(settings.read().copy(screenCollectionEnabled = true, notificationCollectionEnabled = true, syncPaused = false))
         settings.enabled = true
-        context.sendBroadcast(Intent(context, PauseScreenReceiver::class.java))
-        until("The registered receiver pauses screen capture") { !settings.read().screenCollectionEnabled && settings.screenPausedAt() != null }
+        val saved = java.util.concurrent.LinkedBlockingQueue<Boolean>()
+        val results = android.os.HandlerThread("pause-result").apply { start() }
+        try {
+            // An ordered broadcast reports back only after the receiver releases it, so the pause must already be saved here.
+            context.sendOrderedBroadcast(Intent(context, PauseScreenReceiver::class.java), null, object : android.content.BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) { saved.put(!settings.read().screenCollectionEnabled && settings.screenPausedAt() != null) }
+            }, android.os.Handler(results.looper), Activity.RESULT_OK, null, null)
+            assertEquals("The notification action keeps its broadcast until the pause is saved", true, saved.poll(20, TimeUnit.SECONDS))
+        } finally { results.quitSafely() }
         val after = settings.read()
         assertTrue("Notifications keep their own choice", after.notificationCollectionEnabled)
         assertFalse("Sending is not paused", after.syncPaused)
@@ -320,6 +348,10 @@ class HomeJourneyInstrumentedTest {
                 val body = when {
                     path.startsWith("/api/conversations?") -> JSONObject().put("items", JSONArray().put(JSONObject().put("id", conversation).put("title", "周五评审需要准备什么？").put("updatedAt", "2026-10-30T10:00:00Z").put("turnCount", 2)))
                     path == "/api/status" -> JSONObject().put("storage", JSONObject().put("captures", 3))
+                    // A newer suggestion that needs nothing comes first, so the home has to follow the cursor to the waiting one.
+                    path == "/api/actions?cursor=0" -> JSONObject().put("nextCursor", 7).put("targets", JSONArray()).put("items", JSONArray().put(JSONObject()
+                        .put("id", settled).put("version", 1).put("kind", "calendar.create").put("status", "approved").put("evidence", JSONArray())
+                        .put("event", JSONObject().put("title", "生成的已安排事项").put("start", "2026-11-01T07:00:00Z").put("end", "2026-11-01T08:00:00Z").put("timeZone", "Asia/Shanghai").put("allDay", false).put("location", "").put("description", ""))))
                     path.startsWith("/api/actions?") -> JSONObject().put("nextCursor", JSONObject.NULL).put("targets", JSONArray()).put("items", JSONArray().put(JSONObject()
                         .put("id", action).put("version", 1).put("kind", "calendar.create").put("status", "proposed").put("evidence", JSONArray())
                         .put("event", JSONObject().put("title", "生成的设计评审").put("start", "2026-11-02T07:00:00Z").put("end", JSONObject.NULL).put("timeZone", "Asia/Shanghai").put("allDay", false).put("location", "").put("description", ""))))

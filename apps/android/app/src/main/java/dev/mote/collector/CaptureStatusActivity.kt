@@ -107,7 +107,8 @@ class CaptureStatusActivity : MoteActivity() {
             f.screenLive -> MoteI18n.text("采集中")
             else -> MoteI18n.text("等待采集权限")
         }
-        val screenPaused = f.screenPausedAt != null && !f.screenSelected
+        // After a full stop the line and the start button resume everything; the row only resumes its own pause.
+        val screenPaused = CaptureOverview.screenPaused(f)
         screenAction.visibility = if (f.enabled && f.screenSelected || screenPaused) View.VISIBLE else View.GONE
         screenAction.text = MoteI18n.text(if (screenPaused) "恢复采集" else "暂停")
         screenAction.setOnClickListener { if (screenPaused) forward(CaptureOverview.Action.RESUME) else pauseScreen() }
@@ -141,11 +142,11 @@ class CaptureStatusActivity : MoteActivity() {
     private fun notice(error: Throwable) = android.widget.Toast.makeText(this, error.message ?: MoteI18n.text("保存或调度失败，请重试；已保存内容不会丢失"), android.widget.Toast.LENGTH_LONG).show()
 
     /** Resume, restart and repair run where the preview, permissions and system consent already live. */
-    private fun forward(action: CaptureOverview.Action) {
-        startActivity(Intent(this, MainActivity::class.java).putExtra("captureAction", action.name).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+    private fun forward(action: CaptureOverview.Action) = handOff("captureAction", action.name)
+    private fun forwardPage(page: String) = handOff("page", page)
+    /** The app takes over the task. Opened from the tile or notification, the panel never stays behind the home. */
+    private fun handOff(key: String, value: String) {
+        startActivity(Intent(this, MainActivity::class.java).putExtra(key, value).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
         finish()
-    }
-    private fun forwardPage(page: String) {
-        startActivity(Intent(this, MainActivity::class.java).putExtra("page", page).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
     }
 }

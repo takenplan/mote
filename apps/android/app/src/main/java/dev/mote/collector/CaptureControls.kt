@@ -11,6 +11,7 @@ import android.os.Looper
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Pauses shared by the home, the status panel, the notification and Quick Settings. Screen capture, all capture and
@@ -69,7 +70,14 @@ internal object CaptureControls {
 /** The notification action. Like the existing stop action, it runs only on the owner's tap. */
 class PauseScreenReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        CaptureControls.pauseScreen(context.applicationContext)
+        // The broadcast keeps the process until the pause is saved. A drain past the broadcast limit is released instead
+        // of ending as a background ANR; the pause only acts while capture is on, whose service also keeps the process.
+        val pending = goAsync()
+        val main = Handler(Looper.getMainLooper())
+        val released = AtomicBoolean()
+        val release = Runnable { if (released.compareAndSet(false, true)) pending.finish() }
+        main.postDelayed(release, 9_000)
+        CaptureControls.pauseScreen(context.applicationContext) { main.removeCallbacks(release); release.run() }
     }
 }
 

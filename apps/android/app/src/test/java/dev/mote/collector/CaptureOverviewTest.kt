@@ -48,6 +48,15 @@ class CaptureOverviewTest {
         assertEquals("When the screen was the only source, nothing else is claimed to continue", "12:30 起", only.detail)
     }
 
+    @Test fun stoppingEverythingAfterAScreenPauseIsAFullPause() {
+        val stopped = facts(enabled = false, state = "paused", screenSelected = false, screenLive = false, pausedAt = pausedToday, systemLive = false)
+        val line = CaptureOverview.line(stopped, now, zone)
+        assertEquals("Notifications are still selected, so collection as a whole was stopped", CaptureOverview.Kind.PAUSED, line.kind)
+        assertEquals("采集已暂停", line.title)
+        assertEquals(CaptureOverview.Action.RESUME, line.action)
+        assertFalse("The screen row does not offer a second, partial resume", CaptureOverview.screenPaused(stopped))
+    }
+
     @Test fun turningScreenCaptureOffInSettingsIsNotAPause() {
         val line = CaptureOverview.line(facts(screenSelected = false, screenLive = false, pausedAt = null), now, zone)
         assertEquals(CaptureOverview.Kind.ACTIVE, line.kind)
@@ -99,6 +108,25 @@ class CaptureOverviewTest {
             .put(action("approved", status = "approved"))
             .put(action("cancel", kind = "calendar.cancel"))
         assertEquals(listOf("missing-end", "missing-start"), CalendarNeeds.missingTime(items).map { it.getString("id") })
+    }
+
+    @Test fun olderNeedsAreFoundWithinABoundedScan() {
+        fun proposal(id: String, status: String = "proposed") = JSONObject().put("id", id).put("status", status).put("kind", "calendar.create")
+            .put("event", JSONObject().put("title", "生成的安排 $id").put("start", "2026-11-01T07:00:00Z").put("end", JSONObject.NULL))
+        fun page(next: Long?, items: List<JSONObject>) = JSONObject().put("items", JSONArray(items)).put("nextCursor", next ?: JSONObject.NULL)
+        val settled = (1..20).map { proposal("settled-$it", status = "approved") }
+        val history = mapOf(0L to page(40, settled), 40L to page(20, listOf(proposal("older"))), 20L to page(null, listOf(proposal("oldest"))))
+        val read = mutableListOf<Long>()
+        assertEquals("A full page of newer, settled suggestions does not hide older ones", listOf("older", "oldest"),
+            CalendarNeeds.scan { read += it; history.getValue(it) }.map { it.getString("id") })
+        assertEquals(listOf(0L, 40L, 20L), read)
+        read.clear()
+        val crowded = page(10, listOf(proposal("a"), proposal("b"), proposal("c")))
+        assertEquals(listOf("a", "b"), CalendarNeeds.scan { read += it; crowded }.map { it.getString("id") })
+        assertEquals("Reading stops once the home has its rows", listOf(0L), read)
+        read.clear()
+        assertTrue(CalendarNeeds.scan { read += it; page(it + 1, settled) }.isEmpty())
+        assertEquals("The scan is bounded even when the history continues", CalendarNeeds.PAGES, read.size)
     }
 
     @Test fun systemEntriesShareOneStableDefinition() {
