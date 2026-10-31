@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const german: Readonly<Record<string, string>> = {
+  "例如：这是我与 Coding Agent 的项目开发对话，包含工具执行记录。": "Zum Beispiel: Dies sind meine Gespräche zur Projektentwicklung mit einem Coding Agent, einschließlich der Werkzeugausführung.",
   "查看已生效日程和设备写入状态": "Übernommene Termine und den Schreibstatus der Geräte ansehen",
   "例如：这是我的工作日历，日程不代表实际参加。": "Zum Beispiel: Dies ist mein Arbeitskalender; ein Termin belegt keine tatsächliche Teilnahme.",
   "备份未导入": "Sicherung nicht importiert",

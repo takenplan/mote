@@ -2,7 +2,7 @@ import type { CodingProvider } from './contracts/sources';
 export type { CodingProvider } from './contracts/sources';
 import { moteText } from '@mote/shared/i18n';
 import {codingHostEnvelope,MAX_CODING_DIALOGUE_MESSAGE_CHARACTERS,type CodingEvidence} from '@mote/shared';
-import {constants} from 'node:fs';
+import {constants,lstatSync} from 'node:fs';
 import {lstat,open,readdir,realpath} from 'node:fs/promises';
 import {homedir} from 'node:os';
 import {join,basename,dirname,relative,resolve} from 'node:path';
@@ -13,23 +13,27 @@ import {repositoryCandidate} from './coding-project';
 
 export const codingProviders={claude:'Claude Code',codex:'Codex',kimi:'Kimi Code'} as const;
 const hash=(s:string|Buffer)=>createHash('sha256').update(s).digest('hex');
-export function codingRoot(provider:CodingProvider,home=homedir()):string {
-  return join(home,provider==='claude'?'.claude/projects':provider==='codex'?'.codex/sessions':'.kimi/sessions');
+export function codingRoot(provider:CodingProvider,home=homedir(),env:NodeJS.ProcessEnv=process.env):string {
+  if(provider!=='kimi')return join(home,provider==='claude'?'.claude/projects':'.codex/sessions');
+  if(env.KIMI_CODE_HOME)return join(resolve(env.KIMI_CODE_HOME),'sessions');
+  const current=join(home,'.kimi-code','sessions'),cli=join(home,'.kimi','sessions');
+  const directory=(path:string)=>{try{return lstatSync(path).isDirectory();}catch{return false;}};
+  return directory(current)||!directory(cli)?current:cli;
 }
-export async function discoverCodingAgents(home=homedir()): Promise<import('./contracts/sources').CodingAgentDiscovery[]> {
-  return Promise.all((Object.keys(codingProviders) as CodingProvider[]).map(async provider=>({provider,name:codingProviders[provider],path:codingRoot(provider,home),available:await lstat(codingRoot(provider,home)).then(s=>s.isDirectory()&&!s.isSymbolicLink(),()=>false)})));
+export async function discoverCodingAgents(home=homedir(),env:NodeJS.ProcessEnv=process.env): Promise<import('./contracts/sources').CodingAgentDiscovery[]> {
+  return Promise.all((Object.keys(codingProviders) as CodingProvider[]).map(async provider=>{const path=codingRoot(provider,home,env);return {provider,name:codingProviders[provider],path,available:await lstat(path).then(s=>s.isDirectory()&&!s.isSymbolicLink(),()=>false)};}));
 }
-type Context={sessionId:string;cwd?:string;repositoryKey?:string;branch?:string;parentSessionId?:string;callId?:string;hostSession?:boolean;turnId?:string;finalEmitted?:boolean;kimiText?:string;kimiOverflow?:boolean;kimiAt?:string};
+type Context={sessionId:string;cwd?:string;repositoryKey?:string;branch?:string;parentSessionId?:string;callId?:string;hostSession?:boolean;turnId?:string;finalEmitted?:boolean;kimiText?:string;kimiOverflow?:boolean;kimiAt?:string;kimiToolStep?:boolean;kimiHostTurn?:boolean;kimiCodeTurnId?:string};
 type Cursor={offset:number;anchor:string;ino:number;size:number;mtimeMs:number;ctimeMs:number;quickHash:string;generation:number;context:Context;pendingEvent?:{hash:string;nextItem:number}};
 export type CodingCatalogEntry={relativePath:string;fileId:string;size:number;mtimeMs:number;ctimeMs:number;quickHash:string;contentHash?:string;lastSeenScan:number;syncState:'pending'|'synced'|'error'};
 export type CodingCheckpoint={version:3;files:Record<string,Cursor>;initialized:boolean;catalog:Record<string,CodingCatalogEntry>;scanNumber:number;scanStartedAt:string;nextFile?:string};
 type Event={role:'user'|'assistant'|'tool_call'|'tool_result'|'assistant_delta'|'tool_call_delta';text:string;callId?:string;at?:string;channel?:string;nativeId?:string;attribution?:CodingEvidence['attribution']};
-const time=(v:unknown)=>{const ms=typeof v==='number'?v*1000:typeof v==='string'?Date.parse(v):NaN;return Number.isFinite(ms)?new Date(ms).toISOString():undefined;};
+const time=(v:unknown)=>{const ms=typeof v==='number'?(v>1e11?v:v*1000):typeof v==='string'?Date.parse(v):NaN;return Number.isFinite(ms)?new Date(ms).toISOString():undefined;};
 const textParts=(content:any):string=>typeof content==='string'?content:Array.isArray(content)?content.flatMap(p=>p?.type==='text'||p?.type==='input_text'||p?.type==='output_text'?[String(p.text??'')]:p?.type==='image'||p?.type==='input_image'||p?.type==='image_url'?['[image attachment omitted]']:[]).join('\n'):'';
 /** Decode syntax only; no keywords select topics, intent or memory value. Reasoning and host instructions are not conversation evidence. */
 export function decodeCodingEvent(provider:CodingProvider,row:any,context:Context,wire=false):Event[] {
   if(!row||typeof row!=='object')throw Error('Invalid transcript event');
-  const at=time(row.timestamp),events:Event[]=[];
+  const at=time(row.timestamp??row.time),events:Event[]=[];
   const add=(role:Event['role'],text:string,callId?:string,channel?:unknown)=>{if(text)events.push({role,text,callId,at,
     ...(typeof channel==='string'&&channel.length&&channel.length<=64?{channel}:{}),
     ...(['user','assistant','assistant_delta'].includes(role)?{attribution:context.hostSession?'host':role==='user'?(codingHostEnvelope(provider,text)?'host':'human'):'agent'}:{})});};
@@ -72,6 +76,41 @@ export function decodeCodingEvent(provider:CodingProvider,row:any,context:Contex
       if(part.type==='tool_result')add('tool_result',textParts(part.content),part.tool_use_id);
     }
     for(const event of events)if(typeof row.uuid==='string'&&row.uuid)event.nativeId=row.uuid;
+  }else if(wire&&typeof row.type==='string'){
+    // Kimi Code persists prompts and loop events separately. The matching
+    // context.append_message is a duplicate, and need not be imported.
+    const clearStep=()=>{context.kimiText='';context.kimiOverflow=false;context.kimiAt=undefined;};
+    if(row.type==='config.update'&&typeof row.cwd==='string')context.cwd=row.cwd;
+    if(row.type==='turn.prompt'||row.type==='turn.steer'){
+      // Only explicitly tagged skill and hook parts can be separated from a
+      // human prompt. Keep unmarked, ambiguous input in the private archive.
+      const origin=row.origin,parts=Array.isArray(row.input)?row.input:[];
+      const activations=Array.isArray(origin?.skillActivations)?origin.skillActivations.length:0;
+      const tagged=parts.filter((part:any)=>part?.type==='text'&&part?.meta?.source==='skill activation').length;
+      const ambiguous=activations>tagged,hostSteer=row.type==='turn.steer'&&context.kimiHostTurn!==false;
+      if(row.type==='turn.prompt'){clearStep();context.kimiToolStep=false;context.kimiHostTurn=origin?.kind!=='user'||ambiguous;context.kimiCodeTurnId=row.turnId==null?undefined:String(row.turnId);}
+      const userParts=parts.filter((part:any)=>!['skill activation','user prompt submit hook'].includes(part?.meta?.source));
+      add('user',textParts(userParts));
+      if(origin?.kind!=='user'||hostSteer)for(const event of events)event.attribution='host';
+      else if(ambiguous)for(const event of events)event.attribution='unknown';
+    }
+    if(row.type==='context.append_loop_event'){
+      const event=row.event;
+      if(event?.type==='step.begin'){clearStep();context.kimiToolStep=false;if(event.turnId!=null)context.kimiCodeTurnId=String(event.turnId);}
+      if(event?.type==='content.part'&&event.part?.type==='text'&&typeof event.part.text==='string'){
+        const text=event.part.text;add('assistant_delta',text,undefined,'commentary');
+        if(context.kimiHostTurn!==false)for(const output of events)output.attribution='host';
+        if(!context.kimiToolStep){context.kimiAt??=at;if((context.kimiText?.length??0)+text.length>MAX_CODING_DIALOGUE_MESSAGE_CHARACTERS){context.kimiOverflow=true;context.kimiText='';}else if(!context.kimiOverflow)context.kimiText=(context.kimiText??'')+text;}
+      }
+      if(event?.type==='tool.call'){clearStep();context.kimiToolStep=true;add('tool_call',JSON.stringify({name:event.name,arguments:event.args}),event.toolCallId);}
+      if(event?.type==='tool.result')add('tool_result',typeof event.result==='string'?event.result:JSON.stringify(event.result??''),event.toolCallId);
+      if(event?.type==='step.end'&&['interrupted','error'].includes(event.finishReason)){clearStep();context.kimiToolStep=true;}
+    }
+    if(row.type==='turn.ended'){
+      if(context.kimiCodeTurnId&&row.turnId!=null&&context.kimiCodeTurnId!==String(row.turnId))return events;
+      if(row.reason==='completed'&&!context.kimiToolStep&&!context.kimiOverflow&&context.kimiText){add('assistant',context.kimiText,undefined,'final');events.at(-1)!.at=context.kimiAt??at;if(context.kimiHostTurn!==false)events.at(-1)!.attribution='host';}
+      clearStep();context.kimiToolStep=false;context.kimiHostTurn=undefined;context.kimiCodeTurnId=undefined;
+    }
   }else if(wire){
     const m=row.message,p=m?.payload;
     if(!m||!p)return [];
@@ -111,6 +150,8 @@ export async function scanCodingAgent(rootPath:string,provider:CodingProvider,op
     signal?.throwIfAborted();if(++visited>20000||depth>12){result.complete=false;result.skipped++;return;}
     const rel=relative(root,path).split('\\').join('/');
     if(options.excludedPaths.some(p=>rel===p||rel.startsWith(p+'/')))return;
+    // Both Kimi CLI and Kimi Code store delegated conversations separately.
+    if(provider==='kimi'&&(rel.split('/').includes('subagents')||/\/agents\/(?!main(?:\/|$))[^/]+(?:\/|$)/.test('/'+rel)))return;
     const info=await lstat(path);if(info.isSymbolicLink())return;
     if(info.isDirectory()){for(const entry of (await readdir(path)).sort())await visit(join(path,entry),depth+1);}
     else if(info.isFile()&&(provider==='kimi'?['wire.jsonl','context.jsonl'].includes(basename(path)):path.endsWith('.jsonl'))){
@@ -135,7 +176,8 @@ export async function scanCodingAgent(rootPath:string,provider:CodingProvider,op
       if(await realpath(path)!==path)throw Error('Source path changed');
       handle=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW);const info=await handle.stat();if(!info.isFile())throw Error('Invalid source');
       const read=async(start:number,length:number)=>{const buffer=Buffer.alloc(length);const {bytesRead}=await handle!.read(buffer,0,length,start);return buffer.subarray(0,bytesRead);};
-      let cursor:Cursor=old?structuredClone(old):{offset:0,anchor:hash(''),ino:info.ino,size:info.size,mtimeMs:info.mtimeMs,ctimeMs:info.ctimeMs,quickHash:entry.quickHash,generation:0,context:{sessionId:provider==='kimi'?basename(dirname(path)):basename(path,'.jsonl')}};
+      const parent=dirname(path),sessionId=provider==='kimi'?(basename(parent)==='main'&&basename(dirname(parent))==='agents'?basename(dirname(dirname(parent))):basename(parent)):basename(path,'.jsonl');
+      let cursor:Cursor=old?structuredClone(old):{offset:0,anchor:hash(''),ino:info.ino,size:info.size,mtimeMs:info.mtimeMs,ctimeMs:info.ctimeMs,quickHash:entry.quickHash,generation:0,context:{sessionId}};
       if(old&&(info.ino!==old.ino||info.size<old.offset||hash(await read(Math.max(0,old.offset-256),Math.min(old.offset,256)))!==old.anchor))cursor={offset:0,anchor:hash(''),ino:info.ino,size:info.size,mtimeMs:info.mtimeMs,ctimeMs:info.ctimeMs,quickHash:entry.quickHash,generation:old.generation+1,context:{sessionId:old.context.sessionId}};
       const itemQueue: 'realtime'|'history' = old && info.size>old.offset ? 'realtime' : checkpoint.catalog[rel] && priorScanStartedAt && info.mtimeMs>=Date.parse(priorScanStartedAt) ? 'realtime' : checkpoint.initialized ? 'realtime' : 'history';
       if(!checkpoint.initialized&&!old&&options.initialSync==='new_only'){
