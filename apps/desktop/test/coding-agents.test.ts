@@ -77,19 +77,38 @@ it('does not promote cancelled turns, tool steps, injected prompts, or skill ins
  const prompt=(text:string,origin:unknown={kind:'user'})=>event('turn.prompt',{input:[{type:'text',text}],origin});
  const loop=(type:string,extra:Record<string,unknown>={})=>event('context.append_loop_event',{event:{type,...extra}});
  await writeFile(path,[
-  event('turn.prompt',{input:[{type:'text',text:'Hidden skill instructions'},{type:'text',text:'User request'}],origin:{kind:'user',skillActivations:[{skillName:'generated'}]}}),
+  event('turn.prompt',{input:[{type:'text',text:'Hidden skill instructions',meta:{source:'skill activation',activationId:'generated'}},{type:'text',text:'Hook instructions',meta:{source:'user prompt submit hook'}},{type:'text',text:'User request'}],origin:{kind:'user',skillActivations:[{activationId:'generated',skillName:'generated'}]}}),
   loop('step.begin'),loop('content.part',{part:{type:'text',text:'Interrupted response'}}),event('turn.ended',{reason:'cancelled'}),
-  prompt('Host notice',{kind:'system_trigger'}),loop('step.begin'),loop('content.part',{part:{type:'text',text:'Host-generated reply'}}),event('turn.ended',{reason:'completed'}),
+  prompt('Host notice',{kind:'system_trigger'}),loop('step.begin'),event('turn.steer',{input:[{type:'text',text:'Host-turn steer'}],origin:{kind:'user'}}),loop('content.part',{part:{type:'text',text:'Host-generated reply'}}),event('turn.ended',{reason:'completed'}),
   prompt('Use a tool'),loop('step.begin'),loop('tool.call',{toolCallId:'generated-call',name:'Read',args:{}}),
   loop('content.part',{part:{type:'text',text:'Text in a tool step'}}),event('turn.ended',{reason:'completed'}),
   prompt('Retry question'),loop('step.begin'),loop('content.part',{part:{type:'text',text:'Failed step'}}),loop('step.end',{finishReason:'error'}),event('turn.ended',{reason:'completed'}),
-  prompt('Next question'),loop('step.begin'),loop('content.part',{part:{type:'text',text:'Successful response'}}),event('turn.ended',{reason:'completed'}),
+  prompt('Next question'),loop('step.begin'),event('turn.steer',{input:[{type:'text',text:'User correction'}],origin:{kind:'user'}}),loop('content.part',{part:{type:'text',text:'Successful response'}}),event('turn.ended',{reason:'completed'}),
  ].join(''));
  const scan=await scanCodingAgent(root,'kimi',DEFAULT_SOURCE_OPTIONS);
  const modelVisible=scan.items.filter(i=>codingConversationEvidence(i.document!.coding!,i.text)).map(i=>i.text);
- expect(modelVisible).toEqual(['User request','Use a tool','Retry question','Next question','Successful response']);
+ expect(modelVisible).toEqual(['User request','Use a tool','Retry question','Next question','User correction','Successful response']);
  expect(JSON.stringify(scan.items)).not.toContain('Hidden skill instructions');
+ expect(JSON.stringify(scan.items)).not.toContain('Hook instructions');
  expect(scan.items.every(i=>i.document?.coding?.sessionId==='session_other')).toBe(true);
+});
+it('retains Kimi prompts with ambiguous skill metadata without treating instructions as human dialogue',async()=>{
+ const main=join(root,'workspace','session_ambiguous','agents','main');await mkdir(main,{recursive:true});
+ const origin={kind:'user',skillActivations:[{activationId:'generated',skillName:'generated'}]};
+ const rows=[
+  {type:'turn.prompt',origin,input:[{type:'text',text:'Unmarked user request'}]},
+  {type:'turn.ended',reason:'cancelled'},
+  {type:'turn.prompt',origin,input:[{type:'text',text:'Unmarked instruction'},{type:'text',text:'Second request'}]},
+  {type:'context.append_loop_event',event:{type:'step.begin'}},
+  {type:'context.append_loop_event',event:{type:'content.part',part:{type:'text',text:'Response to ambiguous input'}}},
+  {type:'turn.ended',reason:'completed'},
+ ];
+ await writeFile(join(main,'wire.jsonl'),rows.map(line).join(''));
+ const scan=await scanCodingAgent(root,'kimi',DEFAULT_SOURCE_OPTIONS);
+ expect(scan.items.filter(i=>i.document?.coding?.role==='user').map(i=>[i.text,i.document?.coding?.attribution])).toEqual([
+  ['Unmarked user request','unknown'],['Unmarked instruction\nSecond request','unknown'],
+ ]);
+ expect(scan.items.filter(i=>codingConversationEvidence(i.document!.coding!,i.text))).toEqual([]);
 });
 it('Codex uses canonical response items, preserves tools, and excludes duplicate event echoes and reasoning',async()=>{
  const p=join(root,'session.jsonl');await writeFile(p,line({type:'session_meta',payload:{id:'session-a',cwd:'/generated/project'}})+line(codex('Use transactions'))+line({type:'event_msg',payload:{type:'user_message',message:'Use transactions'}})+line({type:'response_item',payload:{type:'reasoning',summary:[{text:'hidden'}]}})+line({type:'response_item',payload:{type:'function_call',name:'test',arguments:'{}',call_id:'call-1'}})+line({type:'response_item',payload:{type:'function_call_output',output:'Passed',call_id:'call-1'}}));

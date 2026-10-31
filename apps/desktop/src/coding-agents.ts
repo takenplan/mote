@@ -82,14 +82,17 @@ export function decodeCodingEvent(provider:CodingProvider,row:any,context:Contex
     const clearStep=()=>{context.kimiText='';context.kimiOverflow=false;context.kimiAt=undefined;};
     if(row.type==='config.update'&&typeof row.cwd==='string')context.cwd=row.cwd;
     if(row.type==='turn.prompt'||row.type==='turn.steer'){
-      // Skill activation parts are host instructions even when bundled with
-      // a human prompt. Kimi may omit their tags and place them first.
+      // Only explicitly tagged skill and hook parts can be separated from a
+      // human prompt. Keep unmarked, ambiguous input in the private archive.
       const origin=row.origin,parts=Array.isArray(row.input)?row.input:[];
-      if(row.type==='turn.prompt'){clearStep();context.kimiToolStep=false;context.kimiHostTurn=origin?.kind!=='user';context.kimiCodeTurnId=row.turnId==null?undefined:String(row.turnId);}
-      let activations=Array.isArray(origin?.skillActivations)&&!parts.some((part:any)=>part?.meta?.source==='skill activation')?origin.skillActivations.length:0;
-      const userParts=parts.filter((part:any)=>{if(part?.meta?.source==='skill activation')return false;if(activations&&part?.type==='text'&&part?.meta?.source===undefined){activations--;return false;}return true;});
+      const activations=Array.isArray(origin?.skillActivations)?origin.skillActivations.length:0;
+      const tagged=parts.filter((part:any)=>part?.type==='text'&&part?.meta?.source==='skill activation').length;
+      const ambiguous=activations>tagged,hostSteer=row.type==='turn.steer'&&context.kimiHostTurn!==false;
+      if(row.type==='turn.prompt'){clearStep();context.kimiToolStep=false;context.kimiHostTurn=origin?.kind!=='user'||ambiguous;context.kimiCodeTurnId=row.turnId==null?undefined:String(row.turnId);}
+      const userParts=parts.filter((part:any)=>!['skill activation','user prompt submit hook'].includes(part?.meta?.source));
       add('user',textParts(userParts));
-      if(origin?.kind!=='user')for(const event of events)event.attribution='host';
+      if(origin?.kind!=='user'||hostSteer)for(const event of events)event.attribution='host';
+      else if(ambiguous)for(const event of events)event.attribution='unknown';
     }
     if(row.type==='context.append_loop_event'){
       const event=row.event;
