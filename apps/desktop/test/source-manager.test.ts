@@ -42,6 +42,23 @@ async function manager(url: string, token = 'synthetic-source-token', adapters?:
   if (controlledWatcher) vi.spyOn((value as any).watcher, 'setTargets').mockResolvedValue(undefined);
   managers.push(value); await value.initialize(); return value;
 }
+it('connects the discovered Kimi Code home and queues its main conversation',async()=>{
+  const home=join(directory,'generated-kimi'),root=join(home,'sessions');
+  const main=join(root,'wd_fixture','session_fixture','agents','main');await mkdir(main,{recursive:true});
+  const events=[
+    {type:'turn.prompt',origin:{kind:'user'},input:[{type:'text',text:'Generated coding question'}]},
+    {type:'context.append_loop_event',event:{type:'step.begin'}},
+    {type:'context.append_loop_event',event:{type:'content.part',part:{type:'text',text:'Generated coding answer'}}},
+    {type:'turn.ended',reason:'completed'},
+  ];
+  await writeFile(join(main,'wire.jsonl'),events.map(event=>JSON.stringify(event)).join('\n')+'\n');
+  vi.stubEnv('KIMI_CODE_HOME',home);
+  try{
+    const app=await manager('');const id=await app.addCodingAgent('kimi',DEFAULT_SOURCE_OPTIONS);await app.sync();
+    expect(app.status().find(row=>row.source.id===id)?.source.path).toBe(root);
+    expect(app.pendingContent().map(row=>row.item.text)).toEqual(expect.arrayContaining(['Generated coding question','Generated coding answer']));
+  }finally{vi.unstubAllEnvs();}
+});
 describe('native source lifecycle with local HTTP fixtures', () => {
   it('persists an ACK-lost file, restores after restart, and never invokes calendar permission at startup', async () => {
     const server = await endpoint(true); const file = join(directory, '合成.md'); await writeFile(file, '合成内容 🧑🏽‍💻');

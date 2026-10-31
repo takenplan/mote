@@ -96,7 +96,7 @@ Claude 原生 UUID 用于跨文件稳定去重；compaction sidechain 不作为�
 
 - Claude: `~/.claude/projects/**/*.jsonl` 的 user/assistant 和 tool_use/tool_result；保留 cwd/session 元数据，不从有损目录名称猜项目。
 - Codex: `~/.codex/sessions/**/*.jsonl`，以 response_item 为唯一消息表示，session_meta 提供身份；不重复摄取 event_msg 的同义消息。历史 archived_sessions 不在本期默认根目录内。
-- Kimi: `~/.kimi/sessions/**/wire.jsonl` 优先；没有 wire 时读取 context.jsonl，不能同时读取两种表示。无原始时间的 context 不伪造 authored time；没有 cwd 时范围退回本会话。
+- Kimi Code 默认发现 `~/.kimi-code/sessions`；如客户端进程设置了 `KIMI_CODE_HOME`，使用该目录下的 `sessions`。若两者都未指定且默认目录不存在，则发现 Kimi CLI 的 `~/.kimi/sessions`。两种默认目录同时存在时优先连接 Kimi Code；一个来源只采集优先发现的目录。Kimi Code 读取会话的 `agents/main/wire.jsonl`，不采集子 Agent；Kimi CLI 优先读取 `wire.jsonl`，没有 wire 时读取 `context.jsonl`，不能同时读取两种表示。无原始时间的 context 不伪造 authored time；没有 cwd 时范围退回本会话。
 - 收集用户/助手可读文本、工具输入/结果及原始时间。系统提示、隐藏思考、遥测不收集；图片仅保留附件缺失标记，不读取个人截图或认证文件。这是可追溯的可读对话归档，不是可原生恢复的逐字节备份。
 - 工具正文仍可能含个人信息，按用户设置遮盖和排除，不声称能自动清除所有秘密。正文和测试样本不进 Git。
 

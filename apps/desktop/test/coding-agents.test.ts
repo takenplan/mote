@@ -2,7 +2,7 @@ import {afterAll,afterEach,beforeEach,expect,it} from 'vitest';
 import {mkdtemp,mkdir,writeFile,appendFile,rm,symlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {scanCodingAgent,decodeCodingEvent} from '../src/coding-agents';
+import {scanCodingAgent,decodeCodingEvent,discoverCodingAgents,codingRoot} from '../src/coding-agents';
 import {DEFAULT_SOURCE_OPTIONS} from '../src/source-types';
 import {SourceSync} from '../src/source-sync';
 import {sourceAck} from './fixtures';
@@ -10,6 +10,7 @@ import {builtInSourceAdapters} from '../src/source-adapters';
 import {sourceWork} from '../src/background';
 import {createHash} from 'node:crypto';
 import {createServer} from 'node:http';
+import {codingConversationEvidence,codingEvidenceSchema} from '@mote/shared';
 let root:string;
 beforeEach(async()=>{root=await mkdtemp(join(tmpdir(),'mote-coding-fixture-'));});
 afterEach(async()=>{await rm(root,{recursive:true,force:true});});
@@ -17,6 +18,79 @@ afterAll(async()=>{await sourceWork.close();});
 async function remaining(options=DEFAULT_SOURCE_OPTIONS,checkpoint?:any){const items=[];let scan;do{scan=await scanCodingAgent(root,'codex',options,checkpoint);items.push(...scan.items);checkpoint=scan.checkpoint;}while(!scan.complete);return {items,checkpoint};}
 const line=(v:unknown)=>JSON.stringify(v)+'\n';
 const codex=(text:string)=>({type:'response_item',timestamp:'2026-09-10T01:00:00Z',payload:{type:'message',role:'user',content:[{type:'input_text',text}]}});
+it('finds Kimi Code at its actual data directory and respects an explicitly configured home',async()=>{
+ const defaultRoot=join(root,'.kimi-code','sessions');await mkdir(defaultRoot,{recursive:true});
+ expect((await discoverCodingAgents(root,{})).find(a=>a.provider==='kimi')).toMatchObject({available:true,path:defaultRoot});
+ const cliRoot=join(root,'.kimi','sessions');await mkdir(cliRoot,{recursive:true});
+ expect((await discoverCodingAgents(root,{})).find(a=>a.provider==='kimi')?.path).toBe(defaultRoot);
+ const customHome=join(root,'custom-kimi'),customRoot=join(customHome,'sessions');await mkdir(customRoot,{recursive:true});
+ expect((await discoverCodingAgents(root,{KIMI_CODE_HOME:customHome})).find(a=>a.provider==='kimi')).toMatchObject({available:true,path:customRoot});
+ expect(codingRoot('kimi',root,{KIMI_CODE_HOME:customHome})).toBe(customRoot);
+ await rm(defaultRoot,{recursive:true});
+ expect((await discoverCodingAgents(root,{})).find(a=>a.provider==='kimi')).toMatchObject({available:true,path:cliRoot});
+ const missing=join(root,'missing');expect((await discoverCodingAgents(root,{KIMI_CODE_HOME:missing})).find(a=>a.provider==='kimi')).toMatchObject({available:false,path:join(missing,'sessions')});
+ await symlink(customRoot,defaultRoot);expect((await discoverCodingAgents(root,{})).find(a=>a.provider==='kimi')?.path).toBe(cliRoot);
+});
+it('imports only the main Kimi Code sessions, keeping final answers and attribution across restarts',async()=>{
+ const session=join(root,'wd_generated','session_first'),main=join(session,'agents','main'),subagent=join(session,'agents','agent-0'),cliSubagent=join(session,'subagents','agent-1');
+ await mkdir(main,{recursive:true});await mkdir(subagent,{recursive:true});await mkdir(cliSubagent,{recursive:true});
+ const at=Date.parse('2026-09-10T01:00:00Z'),wire=join(main,'wire.jsonl');
+ const event=(type:string,extra:Record<string,unknown>={})=>line({type,time:at,...extra});
+ await writeFile(wire,[
+  event('config.update',{cwd:'/generated/project'}),
+  event('turn.prompt',{input:[{type:'text',text:'Generated question'}],origin:{kind:'user'}}),
+  event('context.append_message',{message:{role:'user',content:[{type:'text',text:'Generated question'}]}}),
+  event('context.append_loop_event',{event:{type:'step.begin'}}),
+  event('context.append_loop_event',{event:{type:'content.part',part:{type:'text',text:'Intermediate'}}}),
+  event('context.append_loop_event',{event:{type:'tool.call',toolCallId:'call-1',name:'Read',args:{path:'generated'}}}),
+  event('context.append_loop_event',{event:{type:'tool.result',toolCallId:'call-1',result:{output:'Generated output'}}}),
+  event('context.append_loop_event',{event:{type:'step.begin',turnId:'4'}}),
+  event('context.append_loop_event',{event:{type:'content.part',part:{type:'think',think:'Private reasoning'}}}),
+  event('context.append_loop_event',{event:{type:'content.part',part:{type:'text',text:'Final '}}}),
+  event('context.append_loop_event',{event:{type:'content.part',part:{type:'text',text:'answer'}}}),
+ ].join(''));
+ await writeFile(join(subagent,'wire.jsonl'),event('turn.prompt',{input:[{type:'text',text:'Subagent instruction'}],origin:{kind:'user'}}));
+ await writeFile(join(cliSubagent,'wire.jsonl'),event('turn.prompt',{input:[{type:'text',text:'Subagent instruction'}],origin:{kind:'user'}}));
+ const first=await scanCodingAgent(root,'kimi',DEFAULT_SOURCE_OPTIONS);
+ for(const item of first.items)codingEvidenceSchema.parse(item.document!.coding);
+ expect(first.items.filter(i=>i.document?.coding?.role==='user').map(i=>i.text)).toEqual(['Generated question']);
+ expect(first.items.filter(i=>i.document?.coding?.channel==='final')).toEqual([]);
+ expect(first.items.find(i=>i.document?.coding?.role==='tool_call')?.document?.coding?.callId).toBe('call-1');
+ expect(first.items.find(i=>i.document?.coding?.role==='tool_result')?.text).toContain('Generated output');
+ expect(first.items[0].document?.recordedAt).toBe('2026-09-10T01:00:00.000Z');
+ expect(first.items.every(i=>i.document?.coding?.sessionId==='session_first')).toBe(true);
+ expect(first.items[0].document?.coding?.cwd).toBe('/generated/project');
+ expect(JSON.stringify(first.items)).not.toContain('Private reasoning');
+ await appendFile(wire,event('turn.ended',{turnId:5,reason:'completed'}));
+ const otherTurn=await scanCodingAgent(root,'kimi',DEFAULT_SOURCE_OPTIONS,JSON.parse(JSON.stringify(first.checkpoint)));
+ expect(otherTurn.items.filter(i=>i.document?.coding?.channel==='final')).toEqual([]);
+ await appendFile(wire,event('turn.ended',{turnId:4,reason:'completed'})+event('turn.prompt',{input:[{type:'text',text:'Background instruction'}],origin:{kind:'system_trigger'}}));
+ const next=await scanCodingAgent(root,'kimi',DEFAULT_SOURCE_OPTIONS,JSON.parse(JSON.stringify(otherTurn.checkpoint)));
+ expect(next.items.filter(i=>i.document?.coding?.channel==='final').map(i=>i.text)).toEqual(['Final answer']);
+ expect(next.items.find(i=>i.text==='Background instruction')?.document?.coding?.attribution).toBe('host');
+ expect(codingConversationEvidence(next.items.find(i=>i.text==='Background instruction')!.document!.coding!,'Background instruction')).toBe(false);
+ expect((await scanCodingAgent(root,'kimi',DEFAULT_SOURCE_OPTIONS,next.checkpoint)).items).toEqual([]);
+});
+it('does not promote cancelled turns, tool steps, injected prompts, or skill instructions into Kimi dialogue',async()=>{
+ const main=join(root,'wd_generated','session_other','agents','main');await mkdir(main,{recursive:true});const path=join(main,'wire.jsonl');
+ const event=(type:string,extra:Record<string,unknown>={})=>line({type,time:1789000000000,...extra});
+ const prompt=(text:string,origin:unknown={kind:'user'})=>event('turn.prompt',{input:[{type:'text',text}],origin});
+ const loop=(type:string,extra:Record<string,unknown>={})=>event('context.append_loop_event',{event:{type,...extra}});
+ await writeFile(path,[
+  event('turn.prompt',{input:[{type:'text',text:'Hidden skill instructions'},{type:'text',text:'User request'}],origin:{kind:'user',skillActivations:[{skillName:'generated'}]}}),
+  loop('step.begin'),loop('content.part',{part:{type:'text',text:'Interrupted response'}}),event('turn.ended',{reason:'cancelled'}),
+  prompt('Host notice',{kind:'system_trigger'}),loop('step.begin'),loop('content.part',{part:{type:'text',text:'Host-generated reply'}}),event('turn.ended',{reason:'completed'}),
+  prompt('Use a tool'),loop('step.begin'),loop('tool.call',{toolCallId:'generated-call',name:'Read',args:{}}),
+  loop('content.part',{part:{type:'text',text:'Text in a tool step'}}),event('turn.ended',{reason:'completed'}),
+  prompt('Retry question'),loop('step.begin'),loop('content.part',{part:{type:'text',text:'Failed step'}}),loop('step.end',{finishReason:'error'}),event('turn.ended',{reason:'completed'}),
+  prompt('Next question'),loop('step.begin'),loop('content.part',{part:{type:'text',text:'Successful response'}}),event('turn.ended',{reason:'completed'}),
+ ].join(''));
+ const scan=await scanCodingAgent(root,'kimi',DEFAULT_SOURCE_OPTIONS);
+ const modelVisible=scan.items.filter(i=>codingConversationEvidence(i.document!.coding!,i.text)).map(i=>i.text);
+ expect(modelVisible).toEqual(['User request','Use a tool','Retry question','Next question','Successful response']);
+ expect(JSON.stringify(scan.items)).not.toContain('Hidden skill instructions');
+ expect(scan.items.every(i=>i.document?.coding?.sessionId==='session_other')).toBe(true);
+});
 it('Codex uses canonical response items, preserves tools, and excludes duplicate event echoes and reasoning',async()=>{
  const p=join(root,'session.jsonl');await writeFile(p,line({type:'session_meta',payload:{id:'session-a',cwd:'/generated/project'}})+line(codex('Use transactions'))+line({type:'event_msg',payload:{type:'user_message',message:'Use transactions'}})+line({type:'response_item',payload:{type:'reasoning',summary:[{text:'hidden'}]}})+line({type:'response_item',payload:{type:'function_call',name:'test',arguments:'{}',call_id:'call-1'}})+line({type:'response_item',payload:{type:'function_call_output',output:'Passed',call_id:'call-1'}}));
  const scan=await scanCodingAgent(root,'codex',DEFAULT_SOURCE_OPTIONS);expect(scan.items).toHaveLength(3);expect(scan.items.map(i=>i.document?.coding?.role)).toEqual(['user','tool_call','tool_result']);expect(scan.items[0].document?.coding?.sessionId).toBe('session-a');expect(scan.items[0].document?.recordedAt).toBe('2026-09-10T01:00:00.000Z');
