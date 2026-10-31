@@ -18,6 +18,9 @@ object MoteNavigation {
     val libraryPages = listOf("archive", "materials", "coding", "timeline", "files", "memories", "notes", "imports", "insights", "agentView")
     // Legacy Coding transport links retain their library context, but are not content types.
     val libraryBrowsePages = libraryPages.filterNot { it == "coding" }
+    /** Search reads the same archive as the library pages; it is an entry, not another content type. */
+    const val SEARCH = "search"
+    fun libraryRoute(page: String) = page in libraryPages || page == SEARCH
     val groups = listOf(
         MoteNavigationGroup("资料库", libraryBrowsePages),
         MoteNavigationGroup("首页", listOf("overview", "actions", "activity")),

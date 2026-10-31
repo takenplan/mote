@@ -12,7 +12,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 /** Existing archived results only. This independent read never generates a report. */
-internal class HomeDiscoveryView(private val activity: MoteActivity, private val present: (Boolean) -> Unit = {}, private val open: (String?) -> Unit) : LinearLayout(activity) {
+internal class HomeDiscoveryView(private val activity: MoteActivity, private val present: (Boolean) -> Unit = {}, private val open: (String?) -> Unit) : LinearLayout(activity), HomeSection {
     private val task=UiTask(activity)
     private var generation=-1L
     private var origin=""
@@ -23,9 +23,9 @@ internal class HomeDiscoveryView(private val activity: MoteActivity, private val
     private var rendered=""
     init { orientation=VERTICAL;visibility=View.GONE;tag="home-existing-discovery" }
     private fun clear(){removeAllViews();rendered="";visibility=View.GONE;present(false)}
-    fun pause(){active=false;epoch++;clear();nextRead=0L}
-    fun close(){closed=true;pause();task.close()}
-    fun refresh(){
+    override fun pause(){active=false;epoch++;clear();nextRead=0L}
+    override fun close(){closed=true;pause();task.close()}
+    override fun refresh(){
         if(closed)return
         active=true
         val access=runCatching{CentralAccess.resolve(activity)}.getOrNull()

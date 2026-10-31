@@ -37,6 +37,15 @@ class PrimaryNavigationTest {
         assertEquals(MotePrimaryTab.ACTIVITY, MoteNavigation.centralTab("activity"))
     }
 
+    @Test fun searchReadsTheLibraryWithoutBecomingAContentType() {
+        assertTrue(MoteNavigation.libraryRoute(MoteNavigation.SEARCH))
+        assertFalse(MoteNavigation.libraryBrowsePages.contains(MoteNavigation.SEARCH))
+        assertFalse(MoteNavigation.groups.flatMap { it.pages }.contains(MoteNavigation.SEARCH))
+        assertEquals(MotePrimaryTab.LIBRARY, MoteNavigation.centralTab(MoteNavigation.SEARCH))
+        assertNull("Search opens from the home and returns there", MoteNavigation.centralParent(MoteNavigation.SEARCH))
+        assertTrue(CentralScreens.pages.any { it.first == MoteNavigation.SEARCH && it.second == "搜索资料" })
+    }
+
     @Test fun deepLinksHaveBackPathsInsideTheirExistingPrimaryDestination() {
         listOf("files", "memories", "notes", "imports", "insights", "agentView").forEach { page ->
             assertEquals("archive", MoteNavigation.centralParent(page))

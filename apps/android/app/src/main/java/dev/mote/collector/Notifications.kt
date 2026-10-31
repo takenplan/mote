@@ -34,12 +34,17 @@ object Notifications {
     private fun visibleText() = listOfNotNull(screenStatus?.let { MoteI18n.text("屏幕：{0}", it) }, mediaStatus?.let { MoteI18n.text("媒体：{0}", it) }, eventStatus, localState?.imageLabel()).joinToString("\n")
     private fun build(context: Context): Notification {
         val text = visibleText()
-        // Launcher semantics bring the existing task (including a detail screen) forward.
-        val open = PendingIntent.getActivity(context, 0, Intent.makeMainActivity(android.content.ComponentName(context, MainActivity::class.java)), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val stop = PendingIntent.getBroadcast(context, 1, Intent(context, StopReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        // The status panel opens on top of the existing task, so a draft or reader underneath stays where it was.
+        val open = PendingIntent.getActivity(context, 0, Intent(context, CaptureStatusActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        // A quick privacy pause stops only the screen; without screen capture the only choice is the existing full stop.
+        val pause = if (screenStatus != null) Notification.Action.Builder(null, MoteI18n.text("暂停屏幕采集"),
+            PendingIntent.getBroadcast(context, 2, Intent(context, PauseScreenReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build()
+            else Notification.Action.Builder(null, MoteI18n.text("停止采集"),
+            PendingIntent.getBroadcast(context, 1, Intent(context, StopReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build()
+        val record = Notification.Action.Builder(null, MoteQuickEntry.RECORD.label, MoteQuickEntry.RECORD.pendingIntent(context)).build()
         return Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_mote).setContentTitle(MoteI18n.text("Mote · 采集状态"))
             .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text)).setContentIntent(open)
-            .setOngoing(true).setOnlyAlertOnce(true).addAction(Notification.Action.Builder(null, MoteI18n.text("停止采集"), stop).build()).build()
+            .setOngoing(true).setOnlyAlertOnce(true).addAction(pause).addAction(record).build()
     }
     @Synchronized fun show(context: Context, text: String) { screenStatus = text; publish(context) }
     @Synchronized fun clear(context: Context) { screenStatus = null; publish(context) }
@@ -57,18 +62,5 @@ object Notifications {
 }
 
 class StopReceiver : BroadcastReceiver() {
-    companion object { private val actions = java.util.concurrent.Executors.newSingleThreadExecutor() }
-    override fun onReceive(context: Context, intent: Intent) {
-        RuntimeSettings.cancelProjectionConsentRequest()
-        RuntimeSettings.stop(context.applicationContext) { result ->
-            Notifications.showEvents(context, null)
-            if (result.isSuccess) actions.execute { runCatching {
-                val settings = Settings(context.applicationContext)
-                if (!settings.enabled) {
-                    settings.status("paused", MoteI18n.text("你已停止采集，已有记录保留，同步按所选策略运行"))
-                    UploadWorker.schedule(context.applicationContext, settings.read())
-                }
-            } }
-        }
-    }
+    override fun onReceive(context: Context, intent: Intent) = holdUntilDone { done -> CaptureControls.stopAll(context) { done() } }
 }

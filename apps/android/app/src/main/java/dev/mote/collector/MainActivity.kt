@@ -56,6 +56,7 @@ class MainActivity : MoteActivity() {
     private lateinit var homeHeader: LinearLayout
     private lateinit var headerAddAction: Button
     private lateinit var headerSettingsAction: TextView
+    private lateinit var headerSearchAction: ImageView
     private lateinit var headerBackAction: TextView
     private lateinit var headerDivider: View
     private lateinit var headerTitle: TextView
@@ -79,11 +80,9 @@ class MainActivity : MoteActivity() {
     private lateinit var homeScreenAction: Button
     private lateinit var homeSourceList: LinearLayout
     private val homeTask by lazy { UiTask(this) }
-    private var homeConversations: HomeConversationView? = null
-    private var homeDiscovery: HomeDiscoveryView? = null
-    private var homeFindingVisible = false
+    private val homeSections = mutableListOf<HomeSection>()
     private var captureRangeState: TextView? = null
-    private lateinit var homeAttention: TextView
+    private lateinit var homeCaptureRow: HomeCaptureRow
     private lateinit var homeGreeting: TextView
     private lateinit var homeWelcome: TextView
     private lateinit var homeConversationsSection: LinearLayout
@@ -191,7 +190,8 @@ class MainActivity : MoteActivity() {
     private var localStateJob: kotlinx.coroutines.Job? = null
     private data class StatusSnapshot(val title: String, val action: String, val status: String, val sync: String,
         val totals: String, val technical: String, val connectionTitle: String, val connection: String,
-        val media: String, val config: CollectorConfig?, val syncQueue: String, val syncPolicy: String, val syncFacts: String, val captureAttention: Boolean)
+        val media: String, val config: CollectorConfig?, val syncQueue: String, val syncPolicy: String, val syncFacts: String, val captureAttention: Boolean,
+        val overview: CaptureOverview.Line?)
     private val refresh = object : Runnable {
         override fun run() { refreshStatus(); loadHomeContent(); handler.postDelayed(this, 2000) }
     }
@@ -244,6 +244,13 @@ class MainActivity : MoteActivity() {
         })
         headerAddAction = quickNote
         headerActions.addView(quickNote, LinearLayout.LayoutParams(-2, dp(48)))
+        // Finding a material is one tap; Central's evidence reader ranks results and the client never guesses intent.
+        headerSearchAction = ImageView(this).apply {
+            setImageDrawable(MoteNavigationIcon(this@MainActivity, "search", false)); tag = "home-search-action"
+            contentDescription = MoteI18n.text("搜索资料"); isFocusable = true; isClickable = true; setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = MoteUi.clickable(this@MainActivity, NativeColorRole.TRANSPARENT, 24, false); setOnClickListener { openCentral(MoteNavigation.SEARCH) }
+        }
+        headerActions.addView(headerSearchAction, LinearLayout.LayoutParams(dp(48), dp(48)))
         headerSettingsAction = TextView(this).apply {
             text = "☰"; contentDescription = MoteI18n.text("打开菜单"); MoteUi.type(this, NativeFontRole.ACTION)
             MoteUi.textColor(this, NativeColorRole.MUTED); gravity = Gravity.CENTER; minHeight = dp(48); isFocusable = true
@@ -298,6 +305,8 @@ class MainActivity : MoteActivity() {
         pendingPageRuleResult?.let { (result, data) -> pendingPageRuleResult = null; onActivityResult(106, result, data) }
         refreshStatus()
         if (savedInstanceState == null && intent.getStringExtra("page") == "OBSERVATIONS") pagesHost.post { showObservations() }
+        if (savedInstanceState == null) takeCaptureAction(intent)
+        MoteSystemEntries.refresh(applicationContext)
     }
 
     private fun buildToday() {
@@ -305,21 +314,20 @@ class MainActivity : MoteActivity() {
         homeHasRecords = (local.active?.records ?: 0) > 0 || (local.sourcePending ?: 0) > 0
         firstUse = MoteNavigation.isFirstUse(loadedConfig.hasSyncConnection(), settings.enabled, settings.lastCapture(), homeHasRecords,homeArchiveEmpty)
         page(Page.OVERVIEW, null)
-        content.setPadding(dp(20), dp(30), dp(20), dp(28))
-        homeAttention = text("", NativeFontRole.SUPPORT, NativeColorRole.WARNING).apply {
-            tag = "home-attention"; visibility = View.GONE; minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL
-            isFocusable = true; setOnClickListener { showPage(Page.PRIVACY) }
-        }
+        content.setPadding(dp(16), dp(8), dp(16), dp(28))
+        // Look at the top, act at the bottom: one capture line here, Ask and quick records in the thumb zone.
+        homeCaptureRow = HomeCaptureRow(this, open = { startActivity(Intent(this, CaptureStatusActivity::class.java)) }, act = ::runCaptureAction)
+        content.addView(homeCaptureRow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
         homeWelcome = text(MoteI18n.text("欢迎使用 Mote"), NativeFontRole.META, NativeColorRole.MUTED)
         homeGreeting = text(MoteI18n.text("想问什么？"), NativeFontRole.TITLE_MOBILE).apply {
             NativePresentationStyles.bind(this, "home-greeting") { (it as TextView).textSize = 25f; it.typeface = android.graphics.Typeface.create(android.graphics.Typeface.create(MoteTheme.fontFamily(true), android.graphics.Typeface.NORMAL), 500, false) }
             setPadding(0, dp(22), 0, dp(29))
             (layoutParams as LinearLayout.LayoutParams).bottomMargin = 0
         }
-        homeDiscovery?.close()
-        homeDiscovery=HomeDiscoveryView(this,present={visible->homeFindingVisible=visible;homeGreeting.visibility=if(visible&&!firstUse&&!homeReceiptAvailable)View.GONE else View.VISIBLE}){id->
-            startActivity(Intent(this,CentralActivity::class.java).putExtra("page","insights").apply{if(id!=null)putExtra("insightId",id)})
-        }.also(content::addView)
+        homeSections.forEach { it.close() }; homeSections.clear()
+        HomeCalendarNeedsView(this) { startActivity(Intent(this, CalendarActionsActivity::class.java)) }.also {
+            homeSections += it; content.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        }
         homeRecordReceipt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; tag = "home-record-receipt" }.also(content::addView)
         val pageContent = content
         val guide = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
@@ -339,13 +347,12 @@ class MainActivity : MoteActivity() {
         capture.first.text = MoteI18n.text("需要时再选范围、开权限")
         content = pageContent
         homeConversationsSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(homeConversationsSection)
+        content.addView(homeConversationsSection, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
         content = homeConversationsSection
         text(MoteI18n.text("最近对话"), NativeFontRole.META, NativeColorRole.MUTED).apply {
             setPadding(0, dp(9), 0, dp(1))
         }
-        homeConversations?.close()
-        homeConversations = HomeConversationView(this, archiveEmpty = { empty ->
+        HomeConversationView(this, archiveEmpty = { empty ->
             homeArchiveEmpty = empty
             firstUse = MoteNavigation.isFirstUse(loadedConfig.hasSyncConnection(),settings.enabled,settings.lastCapture(),homeHasRecords,empty)
             updateFirstUse()
@@ -354,8 +361,12 @@ class MainActivity : MoteActivity() {
             intent.removeExtra("moteConversationOrigin");intent.removeExtra("moteConversationGeneration");intent.putExtra("conversationId", id)
             centralContent?.captureAskConversationIntent()
             showPage(Page.ASK)
-        }.also(content::addView)
+        }.also { homeSections += it; content.addView(it) }
         content = pageContent
+        // Existing discoveries follow the continuing work; the home never generates a new one.
+        HomeDiscoveryView(this){id->
+            startActivity(Intent(this,CentralActivity::class.java).putExtra("page","insights").apply{if(id!=null)putExtra("insightId",id)})
+        }.also { homeSections += it; content.addView(it) }
         updateFirstUse()
     }
 
@@ -371,7 +382,8 @@ class MainActivity : MoteActivity() {
         homeFirstIntro.visibility = if (firstUse && !firstReceipt) View.VISIBLE else View.GONE
         homeWelcome.visibility = if (firstUse || firstReceipt) View.VISIBLE else View.GONE
         homeConversationsSection.visibility = if (firstUse || firstReceipt) View.GONE else View.VISIBLE
-        homeGreeting.visibility=if(homeFindingVisible&&!firstUse&&!firstReceipt)View.GONE else View.VISIBLE
+        // Ask lives in the thumb zone; the large prompt remains only for the first-use handoff.
+        homeGreeting.visibility = if (firstUse || firstReceipt) View.VISIBLE else View.GONE
         homeGreeting.text = MoteI18n.text(if(firstReceipt) "先留下，再慢慢想。" else if (firstUse) "先记下一件事。" else "想问什么？")
     }
 
@@ -382,6 +394,7 @@ class MainActivity : MoteActivity() {
         fun caption(label: String) { text(label, NativeFontRole.META, NativeColorRole.MUTED).apply { NativePresentationStyles.bind(this, "menu-caption") { (it as TextView).textSize = 11f } } }
         caption(MoteI18n.text("回看"))
         lightMenu(MoteI18n.text("资料与记忆"), "library") { showPage(Page.LIBRARY) }
+        lightMenu(MoteI18n.text("我的记忆"), "memories") { openCentral("memories") }
         lightMenu(MoteI18n.text("发现历史"), "activity") { openCentral("insights") }
         lightMenu(MoteI18n.text("日程与待办"), "overview") { startActivity(Intent(this, CalendarActionsActivity::class.java)) }
         text("", NativeFontRole.META).apply { (layoutParams as LinearLayout.LayoutParams).height = dp(10) }
@@ -389,7 +402,7 @@ class MainActivity : MoteActivity() {
         lightMenu(MoteI18n.text("采集与同步"), "sources") { startActivity(Intent(this,SourcesActivity::class.java)) }
         lightMenu(MoteI18n.text("设置"), "settings") { showPage(Page.SETTINGS) }
         val captureControl = lightControl(MoteI18n.text("屏幕采集"), MoteI18n.text("查看")) {
-            if (settings.enabled && loadedConfig.screenCollectionEnabled) changeRuntimeConfig(loadedConfig.copy(screenCollectionEnabled = false))
+            if (settings.enabled && loadedConfig.screenCollectionEnabled) pauseScreenCapture()
             else showPage(Page.PRIVACY)
         }
         homeCaptureStatus = captureControl.first; homeCaptureStatus.tag = "home-capture-status"; homeScreenAction = captureControl.second
@@ -470,7 +483,7 @@ class MainActivity : MoteActivity() {
     }
 
     private fun loadHomeContent() {
-        if (currentPage == Page.OVERVIEW) { homeConversations?.refresh();homeDiscovery?.refresh() }
+        if (currentPage == Page.OVERVIEW) homeSections.forEach { it.refresh() }
         if (!::homeSourceList.isInitialized || homeTask.busy || currentPage !in setOf(Page.OVERVIEW, Page.MANAGE, Page.SOURCES)) return
         homeTask.start("", {}, {
             val store = applicationContext.localSources()
@@ -1527,6 +1540,45 @@ class MainActivity : MoteActivity() {
             }
         } else if (requestCode == 100) settings.status(if (settings.enabled) "capturing" else "permission_required", MoteI18n.text("你未授予投屏权限，未开始截图") + if (settings.enabled) MoteI18n.text("；媒体采集继续运行") else "")
     }
+    /** Home, panel and tile requests share one mapping; only resume and restart ask for the preview or system consent. */
+    private fun runCaptureAction(action: CaptureOverview.Action) {
+        when (action) {
+            CaptureOverview.Action.RESUME -> resumeCapture()
+            CaptureOverview.Action.RESTART -> if (settings.enabled) requestProjectionConsent() else startCapture()
+            CaptureOverview.Action.PERMISSIONS -> showPage(Page.PERMISSIONS)
+            CaptureOverview.Action.STORAGE -> showPage(Page.STORAGE)
+        }
+    }
+    private fun resumeCapture() {
+        if (ConnectionGuard.changing() || RuntimeSettings.stopping || applyingSettings) { toast(MoteI18n.text("正在应用设置，请稍后重试")); return }
+        if (settings.screenPausedAt() == null || loadedConfig.screenCollectionEnabled) { startCapture(); return }
+        val base = loadedConfig
+        val next = base.copy(screenCollectionEnabled = true)
+        showCapturePreview(next, firstStart = true, expected = base) {
+            val wasEnabled = settings.enabled
+            changeRuntimeConfig(next) {
+                settings.screenPaused(null)
+                // Applying settings resumes accessibility capture and requests consent for a sole projection source itself.
+                if (!wasEnabled) startConfiguredCapture()
+                else if (next.effectiveMode() == "projection" && next.observesSystem() && !ProjectionService.running) requestProjectionConsent()
+            }
+        }
+    }
+    private fun pauseScreenCapture() {
+        if (applyingSettings || uiTask.busy) return
+        applyingSettings = true
+        CaptureControls.pauseScreen(this) { result ->
+            applyingSettings = false
+            if (isDestroyed) return@pauseScreen
+            result.onSuccess { loadedConfig = settings.read(); refreshStatus(); loadHomeContent() }
+                .onFailure { toast(it.message ?: MoteI18n.text("保存或调度失败，请重试；已保存内容不会丢失")) }
+        }
+    }
+    private fun takeCaptureAction(source: Intent) {
+        val action = source.getStringExtra("captureAction")?.let { name -> CaptureOverview.Action.entries.find { it.name == name } } ?: return
+        source.removeExtra("captureAction")
+        pagesHost.post { if (!isDestroyed) runCaptureAction(action) }
+    }
     private fun stopCapture() {
         RuntimeSettings.cancelProjectionConsentRequest()
         RuntimeSettings.stop(this) { result ->
@@ -1579,8 +1631,7 @@ class MainActivity : MoteActivity() {
                         homeSendAction.text = MoteI18n.text(if (loadedConfig.syncPaused) "恢复" else "暂停")
                         homeScreenAction.text = MoteI18n.text(if (settings.enabled && loadedConfig.screenCollectionEnabled) "暂停" else "查看")
                     }
-                    homeAttention.text = snapshot.title + "  ›"
-                    homeAttention.visibility = if (snapshot.captureAttention) View.VISIBLE else View.GONE
+                    snapshot.overview?.let(homeCaptureRow::bind)
                     captureTitle.text = snapshot.title
                     if (captureAction.text != snapshot.action) {
                         captureAction.text = snapshot.action
@@ -1665,7 +1716,8 @@ class MainActivity : MoteActivity() {
             else -> MoteI18n.text("节点：{0} · 最近一次验证成功", c.server)
         }
         val captureState = state + if (c?.screenCollectionEnabled == true && settings.enabled) "\n" + MoteI18n.text("屏幕采集：{0}", settings.screenStatus()) else ""
-        return StatusSnapshot(title, action, captureState, syncText, totalsText, technicalText, connectionTitle, connectionText, MediaCollection.statusLabel(this), c, syncQueue, syncMessage, syncFacts, CaptureAttention.show(settings.enabled, settings.state(), live, missingSource, queueFull))
+        val overview = c?.let { config -> runCatching { CaptureOverview.line(CaptureOverview.facts(this, settings, config, local)) }.getOrNull() }
+        return StatusSnapshot(title, action, captureState, syncText, totalsText, technicalText, connectionTitle, connectionText, MediaCollection.statusLabel(this), c, syncQueue, syncMessage, syncFacts, CaptureAttention.show(settings.enabled, settings.state(), live, missingSource, queueFull), overview)
     }
     private fun mediaPermission() {
         MoteDialogBuilder(this).setTitle(MoteI18n.text("媒体播放状态授权"))
@@ -1732,7 +1784,7 @@ class MainActivity : MoteActivity() {
     }
     override fun onPause() {
         resumed = false
-        homeConversations?.pause();homeDiscovery?.pause()
+        homeSections.forEach { it.pause() }
         centralContent?.pause()
         activityContent?.pause()
         localStateJob?.cancel(); localStateJob = null
@@ -1741,7 +1793,7 @@ class MainActivity : MoteActivity() {
         super.onPause()
     }
     override fun onStop() { super.onStop() }
-    override fun onDestroy() { homeConversations?.close();homeDiscovery?.close(); homeTask.close(); libraryView?.close(); centralContent?.close(); activityContent?.close(); statusExecutor.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy() }
+    override fun onDestroy() { homeSections.forEach { it.close() }; homeTask.close(); libraryView?.close(); centralContent?.close(); activityContent?.close(); statusExecutor.shutdownNow(); handler.removeCallbacksAndMessages(null); super.onDestroy() }
     private fun dp(value: Int) = moteDp(value)
 
     private fun help(title: String, message: String) {
@@ -1807,7 +1859,7 @@ class MainActivity : MoteActivity() {
     }
 
     private fun showPage(page: Page, discardConfirmed: Boolean = false, connectionEntryOrigin: ConnectionOrigin? = null) {
-        if (page != Page.OVERVIEW) { homeConversations?.pause();homeDiscovery?.pause() }
+        if (page != Page.OVERVIEW) homeSections.forEach { it.pause() }
         if (page == Page.DEVELOPER && !RuntimeProfile.current.developerTools) {
             showPage(Page.SETTINGS, discardConfirmed, connectionEntryOrigin)
             return
@@ -1849,6 +1901,7 @@ class MainActivity : MoteActivity() {
         headerDivider.visibility = homeHeader.visibility
         headerAddAction.visibility = View.GONE
         headerSettingsAction.visibility = if (page == Page.OVERVIEW) View.VISIBLE else View.GONE
+        headerSearchAction.visibility = headerSettingsAction.visibility
         val compactHeader = page != Page.OVERVIEW && (resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f)
         homeHeader.orientation = if (compactHeader) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
         headerHeading.layoutParams = if (compactHeader) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f)
@@ -1873,6 +1926,7 @@ class MainActivity : MoteActivity() {
             showPage(it, connectionEntryOrigin = if (it == Page.CONNECTION && next.getBooleanExtra("returnToCentral", false)) ConnectionOrigin.CENTRAL_CALLER else null)
             if (next.getStringExtra("page") == "OBSERVATIONS" && currentPage == Page.PRIVACY) pagesHost.post { showObservations() }
         }
+        if (::pagesHost.isInitialized) takeCaptureAction(next)
     }
 
     // API 33+ uses the native OnBackInvokedDispatcher registered in onCreate; this is the API 29–32 fallback.
@@ -2217,7 +2271,7 @@ class MainActivity : MoteActivity() {
             }.onFailure { error.text = it.message ?: MoteI18n.text("字段规则格式无效") }
         } }; dialog.show()
     }
-    private fun showCapturePreview(config: CollectorConfig, firstStart: Boolean = false, appId: String? = null) {
+    private fun showCapturePreview(config: CollectorConfig, firstStart: Boolean = false, appId: String? = null, expected: CollectorConfig = config, accept: () -> Unit = { startConfiguredCapture() }) {
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(12)) }
         fun detail(value: String) { body.addView(TextView(this).apply { text = value; MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, 0, 0, dp(14)) }) }
         detail(MoteI18n.text("这里是生成的格式示例，不读取你的屏幕。实际记录由已授权应用、版本规则和可见内容决定。"))
@@ -2239,8 +2293,8 @@ class MainActivity : MoteActivity() {
             .setView(ScrollView(this).apply { addView(body) })
             .setNegativeButton(if (firstStart) MoteI18n.text("暂不开始") else MoteI18n.text("关闭预览"), null)
         if (firstStart) builder.setPositiveButton(MoteI18n.text("按此范围开始")) { _, _ ->
-            if (config != loadedConfig) { toast(MoteI18n.text("配置已变化，请重新预览后开始")); return@setPositiveButton }
-            runCatching { settings.capturePreviewAccepted() }.onSuccess { startConfiguredCapture() }.onFailure { toast(it.message ?: MoteI18n.text("无法持久保存设置，请检查存储空间")) }
+            if (expected != loadedConfig) { toast(MoteI18n.text("配置已变化，请重新预览后开始")); return@setPositiveButton }
+            runCatching { settings.capturePreviewAccepted() }.onSuccess { accept() }.onFailure { toast(it.message ?: MoteI18n.text("无法持久保存设置，请检查存储空间")) }
         }
         builder.show()
     }

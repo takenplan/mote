@@ -10089,5 +10089,18 @@
   "使用 {0}。有足够新增资料且达到周期时生成。": "Uses {0}. Generates when enough new material is available and the interval has elapsed.",
   "当前显示本机副本；中央接收仍待确认。正文最多预览 100000 个字符。": "The local copy is shown; Central receipt is still unconfirmed. The preview shows up to 100000 characters.",
   "一次最多选择 4,000 个文件。较多文件可以打包为 ZIP 或分批导入。": "Select up to 4,000 files at a time. For larger collections, use a ZIP archive or import in batches.",
-  "当前默认": "Current default"
+  "当前默认": "Current default",
+  "屏幕采集已暂停": "Screen capture paused",
+  "其他来源照常采集": "Other sources keep collecting",
+  "文件夹照常同步": "Folders keep syncing",
+  "采集已中断": "Collection interrupted",
+  "恢复采集": "Resume",
+  "处理": "Fix",
+  "屏幕": "Screen",
+  "媒体": "Media",
+  "{0} 个文件夹": "Folders: {0}",
+  "{0} 起": "Since {0}",
+  "等你补充": "Needs your input",
+  "暂停全部采集": "Pause all collection",
+  "暂停屏幕采集": "Pause screen capture"
 }

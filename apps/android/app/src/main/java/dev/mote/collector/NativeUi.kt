@@ -265,6 +265,12 @@ class MoteNavigationIcon(context: Context, private val kind: String, private val
             "code" -> { path(7f, 6f, 2f, 12f, 7f, 18f); path(17f, 6f, 22f, 12f, 17f, 18f); line(14f, 4f, 10f, 20f) }
             "sync" -> { canvas.drawArc(4f, 4f, 20f, 20f, 210f, 145f, false, paint); path(16f, 4f, 20f, 8f, 21f, 3f); canvas.drawArc(4f, 4f, 20f, 20f, 30f, 145f, false, paint); path(3f, 21f, 4f, 16f, 8f, 20f) }
             "info" -> { canvas.drawCircle(12f, 12f, 9f, paint); line(12f, 11f, 12f, 17f); canvas.drawPoint(12f, 7f, paint) }
+            "camera" -> { path(3f, 8f, 7f, 8f, 9f, 5f, 15f, 5f, 17f, 8f, 21f, 8f, 21f, 19f, 3f, 19f, 3f, 8f); canvas.drawCircle(12f, 13f, 3.5f, paint) }
+            "microphone" -> { canvas.drawRoundRect(9f, 3f, 15f, 14f, 3f, 3f, paint); canvas.drawArc(5f, 4f, 19f, 18f, 0f, 180f, false, paint); line(12f, 18f, 12f, 21f) }
+            "search" -> { canvas.drawCircle(11f, 11f, 6.5f, paint); line(16f, 16f, 20f, 20f) }
+            "pause" -> { line(9f, 6f, 9f, 18f); line(15f, 6f, 15f, 18f) }
+            "warning" -> { path(12f, 4f, 21f, 20f, 3f, 20f, 12f, 4f); line(12f, 10f, 12f, 14f); canvas.drawPoint(12f, 17f, paint) }
+            "calendar" -> { canvas.drawRoundRect(4f, 5f, 20f, 20f, 2f, 2f, paint); line(4f, 10f, 20f, 10f); line(9f, 3f, 9f, 7f); line(15f, 3f, 15f, 7f) }
             else -> { line(4f, 6f, 20f, 6f); line(4f, 12f, 20f, 12f); line(4f, 18f, 20f, 18f); line(9f, 3f, 9f, 9f); line(16f, 9f, 16f, 15f); line(10f, 15f, 10f, 21f) }
         }
         canvas.restore()
@@ -274,7 +280,7 @@ class MoteNavigationIcon(context: Context, private val kind: String, private val
     @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** The phone home has two actions; management and detail pages have no persistent tabs. */
+/** The phone home keeps Ask and the quick records in the thumb zone; management and detail pages have no persistent tabs. */
 class MotePrimaryNavigation(private val activity: Activity, private val onSelect: (MotePrimaryTab) -> Unit) : LinearLayout(activity) {
     private var selected = MotePrimaryTab.HOME
     private var hasDraft = false
@@ -287,30 +293,49 @@ class MotePrimaryNavigation(private val activity: Activity, private val onSelect
     }
     fun refreshPresentation() {
         removeAllViews()
-        orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; isBaselineAligned = false
-        setPadding(activity.moteDp(20), activity.moteDp(14), activity.moteDp(20), activity.moteDp(16))
+        orientation = VERTICAL; isBaselineAligned = false
+        setPadding(activity.moteDp(16), activity.moteDp(12), activity.moteDp(16), activity.moteDp(16))
         MoteUi.backgroundColor(this, NativeColorRole.BACKGROUND)
         contentDescription = MoteI18n.text("记录与提问")
-        record = TextView(activity).apply {
-            tag = "home-record-action"; gravity = Gravity.CENTER; minHeight = activity.moteDp(53)
-            setPadding(activity.moteDp(18), 0, activity.moteDp(18), 0)
-            MoteUi.type(this, NativeFontRole.ACTION, medium = true)
-            MoteUi.textColor(this, NativeColorRole.BACKGROUND)
-            background = MoteUi.clickable(activity, NativeColorRole.ACCENT, 10, false)
-            isFocusable = true; setOnClickListener { activity.openRecordEditor() }
-        }
-        addView(record, LayoutParams(-2, -2).apply { marginEnd = activity.moteDp(10) })
         val ask = LinearLayout(activity).apply {
-            tag = "home-ask-action"; gravity = Gravity.CENTER_VERTICAL; minimumHeight = activity.moteDp(53)
-            setPadding(activity.moteDp(15), 0, activity.moteDp(15), 0)
-            background = MoteUi.clickable(activity, NativeColorRole.SURFACE, 10, true, NativeColorRole.BORDER)
+            tag = "home-ask-action"; gravity = Gravity.CENTER_VERTICAL; minimumHeight = activity.moteDp(52)
+            setPadding(activity.moteDp(16), 0, activity.moteDp(16), 0)
+            background = MoteUi.clickable(activity, NativeColorRole.SURFACE, 14, true, NativeColorRole.BORDER)
             contentDescription = MoteI18n.text("问一问"); isFocusable = true
             setOnClickListener { onSelect(MotePrimaryTab.ASK) }
         }
+        ask.addView(ImageView(activity).apply { setImageDrawable(MoteNavigationIcon(activity, "ask", true)); importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO },
+            LayoutParams(activity.moteDp(20), activity.moteDp(20)).apply { marginEnd = activity.moteDp(10) })
         ask.addView(TextView(activity).apply { text = MoteI18n.text("问一问…"); MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this, NativeColorRole.MUTED) }, LayoutParams(0, -2, 1f))
-        ask.addView(TextView(activity).apply { text = "↗"; textSize = 17f; MoteUi.textColor(this, NativeColorRole.ACCENT) })
-        addView(ask, LayoutParams(0, -2, 1f))
+        addView(ask, LayoutParams(-1, -2))
+        // Off-screen moments are recorded by hand; on-screen content is already covered by background capture.
+        val actions = LinearLayout(activity).apply { orientation = HORIZONTAL; isBaselineAligned = false }
+        record = TextView(activity).apply {
+            tag = "home-record-action"; gravity = Gravity.CENTER; minHeight = activity.moteDp(52)
+            setPadding(activity.moteDp(12), 0, activity.moteDp(12), 0)
+            MoteUi.type(this, NativeFontRole.ACTION, medium = true)
+            MoteUi.textColor(this, NativeColorRole.BACKGROUND)
+            background = MoteUi.clickable(activity, NativeColorRole.ACCENT, 12, false)
+            isFocusable = true; setOnClickListener { activity.openRecordEditor() }
+        }
+        actions.addView(record, LayoutParams(0, -1, 1f))
+        actions.addView(quickRecord("home-photo-action", "camera", MoteQuickEntry.PHOTO), LayoutParams(activity.moteDp(76), -1).apply { marginStart = activity.moteDp(8) })
+        actions.addView(quickRecord("home-audio-action", "microphone", MoteQuickEntry.AUDIO), LayoutParams(activity.moteDp(76), -1).apply { marginStart = activity.moteDp(8) })
+        addView(actions, LayoutParams(-1, -2).apply { topMargin = activity.moteDp(8) })
         updateDraft(hasDraft); select(selected)
+    }
+    // The same entry definitions back the launcher shortcuts, notification and widget.
+    private fun quickRecord(identity: String, icon: String, entry: MoteQuickEntry) = LinearLayout(activity).apply {
+        orientation = VERTICAL; gravity = Gravity.CENTER; tag = identity; minimumHeight = activity.moteDp(52)
+        setPadding(0, activity.moteDp(6), 0, activity.moteDp(6))
+        background = MoteUi.clickable(activity, NativeColorRole.SIDEBAR, 12, false)
+        contentDescription = entry.label; isFocusable = true; setOnClickListener { activity.openRecordEditor(media = entry.media) }
+        addView(ImageView(activity).apply { setImageDrawable(MoteNavigationIcon(activity, icon, false)); importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO },
+            LayoutParams(activity.moteDp(20), activity.moteDp(20)))
+        addView(TextView(activity).apply {
+            text = entry.label; gravity = Gravity.CENTER; maxLines = 1; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.INK)
+        }, LayoutParams(-2, -2).apply { topMargin = activity.moteDp(2) })
     }
     fun updateDraft(value: Boolean) {
         hasDraft = value
