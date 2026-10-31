@@ -116,7 +116,19 @@ export function registerMemoryRoutes(app:FastifyInstance,{ownerPublication,model
   app.post('/api/memory-jobs/:id/pause',async req=>memoryPipeline.pause(jobId(req.params)));
   app.post('/api/memory-jobs/:id/resume',async req=>{const id=jobId(req.params);memoryPipeline.resume(id);return memoryPipeline.get(id);});
   app.post('/api/memory-jobs/:id/cancel',async req=>memoryPipeline.cancel(jobId(req.params)));
-  app.post('/api/memory-jobs/:id/retry',async(req,reply)=>{const accepted=memoryPipeline.acceptRetry(jobId(req.params),true);void accepted.completion.catch(()=>{});return reply.code(202).send(accepted.job);});
+  app.post('/api/memory-jobs/:id/retry',async(req,reply)=>{
+    const id=jobId(req.params),operationId='memory:'+id,control=modelAuthorizationHost.control;
+    // This owner action covers only the selected job. Existing steps retain
+    // their original authority; previously denied steps have none to resume.
+    const accepted=control.manualCommand('owner-memory-retry:'+randomUUID(),[operationId],availableModelConnections(),()=>{
+      for(const row of store.db.prepare("SELECT id FROM execution_steps WHERE operation_id=? AND (kind='memory.batch' OR kind LIKE 'memory.phase.%' OR kind='memory.input') AND state IN ('waiting','blocked','failed')").all(operationId)){
+        const step=memoryPipeline.engine.get(String(row.id));
+        if(step&&!control.stepAuthority(step.id))control.bindCurrentStep(step);
+      }
+      return memoryPipeline.acceptRetry(id,true);
+    });
+    void accepted.completion.catch(()=>{});return reply.code(202).send(accepted.job);
+  });
   app.post('/api/memories/extract',async req=>{
     const execute=async()=>{
     memoryPipeline.assertNewManualWork();
