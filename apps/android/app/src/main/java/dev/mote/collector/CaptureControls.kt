@@ -36,16 +36,22 @@ internal object CaptureControls {
             }
         }
     }
-    /** Stops every capture source, as the existing notification action did; records and sending are kept. */
+    /** Stops every capture source for the panel and the notification; records and sending are kept. */
     fun stopAll(context: Context, finished: (Result<Unit>) -> Unit = {}) {
         val app = context.applicationContext
         RuntimeSettings.cancelProjectionConsentRequest()
+        // A stop already under way completes on its own and never calls back a second caller.
+        if (RuntimeSettings.stopping) { finished(Result.success(Unit)); return }
         RuntimeSettings.stop(app) { result ->
-            if (result.isSuccess) worker.execute { runCatching {
-                val settings = Settings(app)
-                if (!settings.enabled) { settings.status("paused", MoteI18n.text("你已停止采集，已有记录保留，同步按所选策略运行")); UploadWorker.schedule(app, settings.read()) }
-            } }
-            finished(result)
+            Notifications.showEvents(app, null)
+            if (result.isFailure) { finished(result); return@stop }
+            worker.execute {
+                runCatching {
+                    val settings = Settings(app)
+                    if (!settings.enabled) { settings.status("paused", MoteI18n.text("你已停止采集，已有记录保留，同步按所选策略运行")); UploadWorker.schedule(app, settings.read()) }
+                }
+                main.post { finished(result) }
+            }
         }
     }
     /** Sending pause keeps local saving and capture running. */
@@ -67,18 +73,23 @@ internal object CaptureControls {
     }
 }
 
-/** The notification action. Like the existing stop action, it runs only on the owner's tap. */
+/**
+ * Keeps a notification action's broadcast, and so the process, until its work is saved. Work past the broadcast limit is
+ * released instead of ending as a background ANR; it only runs that long while capture is on, whose service also keeps
+ * the process.
+ */
+internal fun BroadcastReceiver.holdUntilDone(work: (done: () -> Unit) -> Unit) {
+    val pending = goAsync()
+    val main = Handler(Looper.getMainLooper())
+    val released = AtomicBoolean()
+    val release = Runnable { if (released.compareAndSet(false, true)) pending.finish() }
+    main.postDelayed(release, 9_000)
+    work { main.removeCallbacks(release); release.run() }
+}
+
+/** The notification action. Like the stop action, it runs only on the owner's tap. */
 class PauseScreenReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        // The broadcast keeps the process until the pause is saved. A drain past the broadcast limit is released instead
-        // of ending as a background ANR; the pause only acts while capture is on, whose service also keeps the process.
-        val pending = goAsync()
-        val main = Handler(Looper.getMainLooper())
-        val released = AtomicBoolean()
-        val release = Runnable { if (released.compareAndSet(false, true)) pending.finish() }
-        main.postDelayed(release, 9_000)
-        CaptureControls.pauseScreen(context.applicationContext) { main.removeCallbacks(release); release.run() }
-    }
+    override fun onReceive(context: Context, intent: Intent) = holdUntilDone { done -> CaptureControls.pauseScreen(context) { done() } }
 }
 
 /** Quick Settings pauses screen capture in one tap. Starting or resuming opens the app instead. */

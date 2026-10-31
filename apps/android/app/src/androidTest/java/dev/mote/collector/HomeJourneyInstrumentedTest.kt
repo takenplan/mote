@@ -272,19 +272,35 @@ class HomeJourneyInstrumentedTest {
         val settings = Settings(context)
         settings.save(settings.read().copy(screenCollectionEnabled = true, notificationCollectionEnabled = true, syncPaused = false))
         settings.enabled = true
-        val saved = java.util.concurrent.LinkedBlockingQueue<Boolean>()
-        val results = android.os.HandlerThread("pause-result").apply { start() }
-        try {
-            // An ordered broadcast reports back only after the receiver releases it, so the pause must already be saved here.
-            context.sendOrderedBroadcast(Intent(context, PauseScreenReceiver::class.java), null, object : android.content.BroadcastReceiver() {
-                override fun onReceive(context: Context, intent: Intent) { saved.put(!settings.read().screenCollectionEnabled && settings.screenPausedAt() != null) }
-            }, android.os.Handler(results.looper), Activity.RESULT_OK, null, null)
-            assertEquals("The notification action keeps its broadcast until the pause is saved", true, saved.poll(20, TimeUnit.SECONDS))
-        } finally { results.quitSafely() }
+        assertEquals("The notification action keeps its broadcast until the pause is saved", true,
+            whenReleased(PauseScreenReceiver::class.java) { !settings.read().screenCollectionEnabled && settings.screenPausedAt() != null })
         val after = settings.read()
         assertTrue("Notifications keep their own choice", after.notificationCollectionEnabled)
         assertFalse("Sending is not paused", after.syncPaused)
         assertTrue("Other sources keep capture enabled", settings.enabled)
+    }
+
+    @Test fun notificationStopKeepsItsBroadcastUntilCaptureIsStopped() {
+        until("Local storage finished its startup recovery") { !QueueStorage.recovering }
+        val settings = Settings(context)
+        settings.save(settings.read().copy(screenCollectionEnabled = false, notificationCollectionEnabled = true, syncPaused = false))
+        settings.enabled = true; settings.status("capturing", "生成的采集状态")
+        val stopped = MoteI18n.text("你已停止采集，已有记录保留，同步按所选策略运行")
+        assertEquals("The stop action keeps its broadcast until the stop and its status are saved", true,
+            whenReleased(StopReceiver::class.java) { !settings.enabled && settings.state() == "paused" && settings.message() == stopped })
+        assertFalse("Stopping capture leaves sending as chosen", settings.read().syncPaused)
+    }
+
+    /** An ordered broadcast reports back only after its receiver releases it; [check] reads the state at that moment. */
+    private fun whenReleased(receiver: Class<out android.content.BroadcastReceiver>, check: () -> Boolean): Boolean? {
+        val result = java.util.concurrent.LinkedBlockingQueue<Boolean>()
+        val thread = android.os.HandlerThread("broadcast-result").apply { start() }
+        try {
+            context.sendOrderedBroadcast(Intent(context, receiver), null, object : android.content.BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) { result.put(check()) }
+            }, android.os.Handler(thread.looper), Activity.RESULT_OK, null, null)
+            return result.poll(20, TimeUnit.SECONDS)
+        } finally { thread.quitSafely() }
     }
 
     @Test fun normalCaptureIsOneQuietLineAndTheTilePausesOnlyTheScreen() {

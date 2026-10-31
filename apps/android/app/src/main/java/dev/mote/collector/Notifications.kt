@@ -62,18 +62,5 @@ object Notifications {
 }
 
 class StopReceiver : BroadcastReceiver() {
-    companion object { private val actions = java.util.concurrent.Executors.newSingleThreadExecutor() }
-    override fun onReceive(context: Context, intent: Intent) {
-        RuntimeSettings.cancelProjectionConsentRequest()
-        RuntimeSettings.stop(context.applicationContext) { result ->
-            Notifications.showEvents(context, null)
-            if (result.isSuccess) actions.execute { runCatching {
-                val settings = Settings(context.applicationContext)
-                if (!settings.enabled) {
-                    settings.status("paused", MoteI18n.text("你已停止采集，已有记录保留，同步按所选策略运行"))
-                    UploadWorker.schedule(context.applicationContext, settings.read())
-                }
-            } }
-        }
-    }
+    override fun onReceive(context: Context, intent: Intent) = holdUntilDone { done -> CaptureControls.stopAll(context) { done() } }
 }
