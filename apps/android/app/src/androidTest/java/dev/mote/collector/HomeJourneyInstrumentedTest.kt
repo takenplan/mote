@@ -291,6 +291,23 @@ class HomeJourneyInstrumentedTest {
         assertFalse("Stopping capture leaves sending as chosen", settings.read().syncPaused)
     }
 
+    @Test fun aSecondStopReportsOnlyAfterTheStopUnderWay() {
+        until("Local storage finished its startup recovery") { !QueueStorage.recovering }
+        val settings = Settings(context)
+        settings.save(settings.read().copy(screenCollectionEnabled = false, notificationCollectionEnabled = true, syncPaused = false))
+        settings.enabled = true; settings.status("capturing", "生成的采集状态")
+        val stopped = MoteI18n.text("你已停止采集，已有记录保留，同步按所选策略运行")
+        val first = java.util.concurrent.LinkedBlockingQueue<Boolean>(); val second = java.util.concurrent.LinkedBlockingQueue<Boolean>()
+        // One stop is still under way when the notification's stop arrives, as after a panel stop and a quick notification tap.
+        instrumentation.runOnMainSync {
+            RuntimeSettings.stop(context) { first.put(it.isSuccess) }
+            CaptureControls.stopAll(context) { result -> second.put(result.isSuccess && !settings.enabled && settings.state() == "paused" && settings.message() == stopped) }
+        }
+        assertEquals("The stop under way still reports to its own caller", true, first.poll(20, TimeUnit.SECONDS))
+        assertEquals("The joining stop reports only after capture is off and its status is saved", true, second.poll(20, TimeUnit.SECONDS))
+        assertFalse(RuntimeSettings.stopping)
+    }
+
     /** An ordered broadcast reports back only after its receiver releases it; [check] reads the state at that moment. */
     private fun whenReleased(receiver: Class<out android.content.BroadcastReceiver>, check: () -> Boolean): Boolean? {
         val result = java.util.concurrent.LinkedBlockingQueue<Boolean>()

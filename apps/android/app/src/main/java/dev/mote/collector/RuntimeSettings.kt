@@ -14,6 +14,7 @@ object RuntimeSettings {
     private val main = Handler(Looper.getMainLooper())
     private val stopGeneration = java.util.concurrent.atomic.AtomicLong()
     @Volatile var stopping = false; private set
+    private val stopCallers = mutableListOf<(kotlin.Result<Unit>) -> Unit>()
     private val projectionConsent = ProjectionConsentHandoff()
     private var configurationObserver: (() -> Unit)? = null
     fun observeConfiguration(observer: (() -> Unit)?) { configurationObserver = observer }
@@ -28,7 +29,8 @@ object RuntimeSettings {
     data class Applied(val projectionConsentRequired: Boolean)
     fun stop(context: Context, finished: (kotlin.Result<Unit>) -> Unit) {
         check(Looper.myLooper() == Looper.getMainLooper())
-        if (stopping) return
+        // A stop already under way reports to every caller once its work is done.
+        if (stopping) { stopCallers += finished; return }
         stopGeneration.incrementAndGet(); stopping = true
         startedAt = SystemClock.elapsedRealtime(); reportProgress(MoteI18n.text("正在停止采集"))
         val app = context.applicationContext
@@ -47,7 +49,9 @@ object RuntimeSettings {
                 app.stopService(android.content.Intent(app, ProjectionService::class.java))
                 Notifications.clear(app); Notifications.clearMedia(app)
                 MediaCollection.clear(); MediaCollectionService.refresh()
-                stopping = false; finished(result)
+                stopping = false
+                val waiting = stopCallers.toList(); stopCallers.clear()
+                finished(result); waiting.forEach { it(result) }
             }
         }
     }

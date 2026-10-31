@@ -40,8 +40,7 @@ internal object CaptureControls {
     fun stopAll(context: Context, finished: (Result<Unit>) -> Unit = {}) {
         val app = context.applicationContext
         RuntimeSettings.cancelProjectionConsentRequest()
-        // A stop already under way completes on its own and never calls back a second caller.
-        if (RuntimeSettings.stopping) { finished(Result.success(Unit)); return }
+        // Joining a stop under way still reports only after that stop and this status are saved.
         RuntimeSettings.stop(app) { result ->
             Notifications.showEvents(app, null)
             if (result.isFailure) { finished(result); return@stop }
