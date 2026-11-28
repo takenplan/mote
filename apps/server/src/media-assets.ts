@@ -2,8 +2,8 @@ import {createHash,randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {constants,createReadStream,copyFileSync,existsSync,fstatSync,lstatSync,mkdirSync,readFileSync,readSync,realpathSync,renameSync,rmSync,writeFileSync,openSync,closeSync,fsyncSync,type Stats} from 'node:fs';
 import {dirname,join,relative,resolve} from 'node:path';
-import {MEDIA_MODEL_PATHS,MEDIA_MODEL_COMPONENT_PATHS,mediaRoleSchema,type MediaRole,type MediaAssetStatus} from '@mote/shared';
-import {FUNASR_MODEL_IDS} from './funasr-contract.js';
+import {MEDIA_MODEL_PATHS,mediaRoleSchema,type MediaRole,type MediaAssetStatus} from '@mote/shared';
+import {FUNASR_MODEL_IDS,QWEN_DIALOGUE_MODEL_IDS} from './funasr-contract.js';
 import {LOCAL_IMAGE_MODEL} from './local-image-contract.js';
 import {StoreError} from './evidence-store.js';
 
@@ -21,19 +21,22 @@ const sherpa='https://github.com/k2-fsa/sherpa-onnx/releases/download';
 const imageRevision='26328eaab82cdc642fa3b73d8fa0b73db398710d';
 const hfFile=(repo:string,revision:string,name:string)=>`https://huggingface.co/${repo}/resolve/${revision}/${name}`;
 const msFile=(repo:string,revision:string,name:string)=>`https://modelscope.cn/api/v1/models/${repo}/repo?Revision=${revision}&FilePath=${encodeURIComponent(name)}`;
-const component=(key:keyof typeof FUNASR_MODEL_IDS)=>relative(MEDIA_MODEL_PATHS.dialogue,MEDIA_MODEL_COMPONENT_PATHS.dialogue[key]);
 type DialogueComponent={revision:string;license:string;files:{name:string;size:number;sha256:string;url?:string}[]};
 // Shipped with the worker scripts in Native, Docker and packaged Central. Both
 // consumers read these pins; no Python runtime is needed to inspect the catalog.
-const dialogueBundle=JSON.parse(readFileSync(new URL('../../../scripts/funasr-models.json',import.meta.url),'utf8')) as Record<keyof typeof FUNASR_MODEL_IDS,DialogueComponent>;
-function dialogueCatalog():Catalog {
+const dialogueBundle=JSON.parse(readFileSync(new URL('../../../scripts/funasr-models.json',import.meta.url),'utf8')) as Record<string,DialogueComponent>;
+const qwenBundle=JSON.parse(readFileSync(new URL('../../../scripts/qwen-asr-models.json',import.meta.url),'utf8')) as Record<string,DialogueComponent&{id:string}>;
+export function dialogueCatalog(qwen:boolean):Catalog {
   const models:Record<string,ModelSource>={},files:Item[]=[];
-  for(const key of Object.keys(FUNASR_MODEL_IDS) as (keyof typeof FUNASR_MODEL_IDS)[]){
-    const model=dialogueBundle[key],id=FUNASR_MODEL_IDS[key],directory=component(key);
-    models[key]={id,repository:id,revision:model.revision,license:model.license,directory};
-    for(const {name,size,sha256,url} of model.files)files.push({name:`${directory}/${name}`,size,sha256,official:url??msFile(id,model.revision,name)});
+  for(const [directory,id] of Object.entries(qwen?QWEN_DIALOGUE_MODEL_IDS:FUNASR_MODEL_IDS)){
+    const mlx=qwen?qwenBundle[directory]:undefined;
+    if(mlx&&mlx.id!==id)throw Error('Invalid Qwen dialogue model identity');
+    const model=mlx??dialogueBundle[directory];
+    models[directory]={id,repository:id,revision:model.revision,license:model.license,directory};
+    for(const {name,size,sha256,url} of model.files)files.push({name:`${directory}/${name}`,size,sha256,official:url??(mlx?hfFile(id,model.revision,name):msFile(id,model.revision,name))});
   }
-  return {version:'funasr-nano-2512-sdk-1.4.25-2',models,files};
+  const version=qwen?`qwen3-asr-1.7b-8bit-${qwenBundle.asr.revision}-${qwenBundle.aligner.revision}`:'funasr-nano-2512-sdk-1.4.25-2';
+  return {version,models,files};
 }
 export const MEDIA_CATALOG:Record<MediaRole,Catalog>={
   'speaker-wespeaker':{version:'wespeaker-zh-cnceleb-resnet34-f86cd6c5',files:[{name:'speaker.onnx',size:26534363,sha256:'f86cd6c509f331f0e20b07bd48d1b2eb7de54202643401c4e84695ac861a0e5a',official:`${sherpa}/speaker-recongition-models/wespeaker_zh_cnceleb_resnet34.onnx`}]},
@@ -60,7 +63,7 @@ export const MEDIA_CATALOG:Record<MediaRole,Catalog>={
     {name:'vocab.json',size:3383407,sha256:'87a257b04b17642a0688c98cd1df89c398bda4fee532d6f88b38a659ecb4ac8d',official:hfFile('mlx-community/InternVL3-14B-4bit',imageRevision,'vocab.json')},
     {name:'README.md',size:834,sha256:'aee159cbdccf4e079f87f7b41e92e2c254e52cfa674e79caf9582b893343fb17',official:hfFile('mlx-community/InternVL3-14B-4bit',imageRevision,'README.md')},
   ]},
-  dialogue:dialogueCatalog(),
+  dialogue:dialogueCatalog(process.platform==='darwin'&&process.arch==='arm64'),
 };
 // Existing processing consumers still import these pins. ASR-03 removes the
 // segmentation pin when replacing its old processor; it is not installable via
@@ -191,8 +194,9 @@ export class MediaAssets {
   }catch{return false;}}
   status(role:MediaRole):MediaAssetStatus {
     const catalog=catalogFor(role),active=this.active.get(role),totalBytes=catalog.files.reduce((sum,file)=>sum+file.size,0);
-    if(active&&(active.state!=='ready'||this.ready(role)))return {...active};
-    const ready=this.ready(role);return {role,state:ready?'ready':'not_installed',version:catalog.version,bytes:ready?totalBytes:0,totalBytes,source:''};
+    const recognizer=catalog.models?.asr?.id;
+    if(active&&(active.state!=='ready'||this.ready(role)))return {...active,...(recognizer?{recognizer}:{})};
+    const ready=this.ready(role);return {role,state:ready?'ready':'not_installed',version:catalog.version,...(recognizer?{recognizer}:{}),bytes:ready?totalBytes:0,totalBytes,source:''};
   }
   statuses(){return Object.fromEntries(mediaRoleSchema.options.map(role=>[role,this.status(role)])) as Record<MediaRole,MediaAssetStatus>;}
   private available(role:MediaRole){

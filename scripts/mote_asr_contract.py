@@ -46,6 +46,9 @@ MODEL_IDS = {'asr': 'FunAudioLLM/Fun-ASR-Nano-2512',
              'vad': 'iic/speech_fsmn_vad_zh-cn-16k-common-pytorch',
              'speaker': 'iic/speech_campplus_sv_zh-cn_16k-common',
              'punctuation': 'iic/punc_ct-transformer_cn-en-common-vocab471067-large'}
+QWEN_MODEL_IDS = {'asr': 'mlx-community/Qwen3-ASR-1.7B-8bit',
+                  'aligner': 'mlx-community/Qwen3-ForcedAligner-0.6B-8bit',
+                  'vad': MODEL_IDS['vad'], 'speaker': MODEL_IDS['speaker']}
 LIMITS = {'wireBytes': 32*1024*1024, 'checkpointBytes': 16*1024*1024,
           'textBytes': 4*1024*1024, 'durationMs': 86_400_000,
           'vad': 50_000, 'sentences': 50_000, 'acousticSegments': 100_000,
@@ -119,8 +122,10 @@ def validate_identity(identity):
     for key, pin in PINS.items():
         require(identity[key] == pin, 'Pinned implementation mismatch')
     digest(identity['settingsFingerprint'])
-    obj(identity['models'], MODEL_IDS)
-    for role, model_id in MODEL_IDS.items():
+    models = identity['models']
+    ids = QWEN_MODEL_IDS if type(models) is dict and 'aligner' in models else MODEL_IDS
+    obj(models, ids)
+    for role, model_id in ids.items():
         model = identity['models'][role]
         obj(model, ['id', 'revision', 'manifestSha256'])
         require(model['id'] == model_id and type(model['revision']) is str
@@ -188,10 +193,10 @@ def validate_checkpoint(cp, expected=None):
     for sentence in cp['sentences']:
         obj(sentence, ['startMs', 'endMs', 'text', 'precision'])
         text(sentence['text'], 32000, True, 8000)
-        require(sentence['precision'] in ('sentence', 'vad', 'ctc'), 'Unknown timing precision')
+        require(sentence['precision'] in ('sentence', 'vad', 'ctc', 'forced'), 'Unknown timing precision')
     timeline(cp['vad'], cp['source']['durationMs'], True, True)
     timeline(cp['sentences'], cp['source']['durationMs'])
-    observed_ctc = set()
+    observed = set()
     for index, chunk in enumerate(cp['recognitionChunks']):
         if 'tokens' not in chunk:
             continue
@@ -204,10 +209,21 @@ def validate_checkpoint(cp, expected=None):
         require(all(region['startMs'] <= token['startMs'] <= token['endMs'] <= region['endMs']
                     for token in chunk['tokens']), 'CTC token outside its recognition region')
         require(''.join(token['text'] for token in chunk['tokens']) == chunk['text'], 'CTC tokens do not match final ASR text')
-        observed_ctc.update((token['startMs'], token['endMs']) for token in chunk['tokens'])
+        observed.update((token['startMs'], token['endMs']) for token in chunk['tokens'])
     for sentence in cp['sentences']:
-        require(sentence['precision'] != 'ctc' or (sentence['startMs'], sentence['endMs']) in observed_ctc,
-                'CTC sentence has no archived token observation')
+        require(sentence['precision'] not in ('ctc', 'forced') or (sentence['startMs'], sentence['endMs']) in observed,
+                'CTC sentence has no archived token observation' if sentence['precision'] == 'ctc'
+                else 'Aligned sentence has no archived token observation')
+    if 'aligner' in cp['identity']['models']:
+        spoken = [chunk for chunk in cp['recognitionChunks'] if chunk['text'].strip()]
+        expected_rows = []
+        for chunk in spoken:
+            if 'tokens' in chunk:
+                expected_rows.extend({**token, 'precision': 'forced'} for token in chunk['tokens'])
+            else:
+                expected_rows.append({**cp['vad'][chunk['vadIndex']], 'text': chunk['text'], 'precision': 'vad'})
+        require(cp['text'] == '\n'.join(chunk['text'] for chunk in spoken), 'Aligned text must preserve every recognized window')
+        require(cp['sentences'] == expected_rows, 'Aligned passages do not match the archived recognition')
     require(bool(cp['text'].strip()) == bool(cp['sentences']), 'Text and sentence coverage disagree')
     def covered(time):
         lo, hi = 0, len(cp['vad'])

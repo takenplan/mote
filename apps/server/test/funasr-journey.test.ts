@@ -166,7 +166,8 @@ function tar(bytes:Buffer){
 }
 
 test('the installer and actual engine export the same four pinned model identities',()=>{
- const manifest=JSON.parse(execFileSync('python3',[join(scripts,'mote_funasr.py'),'--manifest'],{encoding:'utf8',timeout:30000}));
+ const variant=MEDIA_CATALOG.dialogue.models?.aligner?'True':'False';
+ const manifest=JSON.parse(execFileSync('python3',['-c',`import json,mote_funasr as engine; print(json.dumps(engine.asset_manifest(${variant})))`],{cwd:scripts,encoding:'utf8',timeout:30000}));
  const engine=Object.fromEntries(Object.entries(manifest).map(([role,value])=>{const model=value as any;return [role,{id:model.id,revision:model.revision,manifestSha256:model.manifestSha256}];}));
  assert.deepEqual(mediaModelIdentities('dialogue'),engine,'CORE-01 / ASR-01 must agree on actual bytes and manifest digest before any clean install can infer');
 });
@@ -183,6 +184,17 @@ test('the unmodified production worker health is accepted by Central recognition
  for(const call of f.calls())assert.deepEqual(call.identity,f.health.identity,'both requests retain the complete loaded worker identity');
  const raw=detail.artifacts.find((artifact:any)=>artifact.kind==='transcript');
  assert.deepEqual(parseFunasrArchive(f.artifact(raw.id).output.payload.checkpoint).identity,f.health.identity);
+});
+
+test('speech detection with no recognized words is available to Material at its original time',async t=>{
+ const f=await fixture(t);f.flag('empty-window');const id=await f.upload();await f.settle(id);
+ assert.equal((await f.detail(id)).job.state,'succeeded');
+ assert.deepEqual(await f.chunks(id),[],'processing notices never become fictitious transcript chunks');
+ const material=await until(async()=>{
+  await f.node.materialOrganizer.tick(100);
+  return f.node.materials.get(materialId(sourceId,'generated-1.wav'));
+ },'Material for empty recognition');
+ assert.match(f.node.materials.read(material.ref).text,/"kind":"speech_without_text","startMs":1000,"endMs":2000/);
 });
 
 function clientInput(f:Awaited<ReturnType<typeof fixture>>,overrides:Partial<ProcessorInput>={}):ProcessorInput{
@@ -332,10 +344,13 @@ test('explicit cleanup-off upload preserves raw bytes before CAM, complete tail,
  const entries=tar((await f.request('GET',`/api/files/${id}/export`)).rawPayload),manifest=JSON.parse(entries.get('manifest.json')!.toString());
  assert.equal(manifest.selectedTranscript.kind,'corrected-dialogue');assert.equal(JSON.parse(entries.get(`artifacts/${raw.id}.json`)!.toString()).data.output.payload.checkpoint.json,checkpoint.json);
  await until(async()=>{await f.node.materialOrganizer.tick(100);return f.node.materials.get(materialId(sourceId,'generated-1.wav'));},'actual default Material publication');
- const material=f.node.materials.get(materialId(sourceId,'generated-1.wav'))!;assert.ok(f.node.materials.read(material.ref).text.includes('使用扣迪斯记录。'));
+ const material=f.node.materials.get(materialId(sourceId,'generated-1.wav'))!,materialText=f.node.materials.read(material.ref).text;
+ assert.ok(materialText.includes('使用扣迪斯记录。'));
+ assert.match(materialText,/"uncertain":true,"transcription":\{"automatic":true\}/,'Material evidence keeps the speaker doubt alongside automatic origin');
  const tail=chunks.at(-1)!,result={answer:JSON.stringify({memories:[{title:'Generated tail',statement:'A generated recording retains its tail.',uncertainty:'Fixture only',evidenceIds:[tail.id]}]}),citations:[{id:tail.id,capturedAt:tail.capturedAt,appName:tail.appName,excerpt:tail.ocrText}],trace:[],runId:randomUUID()};
  const memory=f.node.memories.extract(fixtureMemoryResult(f.node.memories,result),'generated-selected-memory').items[0];f.node.memories.publish(memory.id);
  assert.equal(f.node.memories.get(memory.id).evidence![0].fileEvidence!.endMs,4000);
+ assert.equal(f.node.memories.get(memory.id).evidence![0].fileEvidence!.transcription?.automatic,true);
  const queryId=randomUUID(),accepted=await f.node.app.inject({method:'POST',url:'/api/query-runs',headers,payload:{id:queryId,input:{question:'What supports the final recorded point?',anchorMaterialRef:material.ref}}});assert.equal(accepted.statusCode,202,accepted.body);
  const asked=await until(async()=>{const view=(await f.request('GET','/api/query-runs/'+queryId)).json();return view.status!=='running'&&view;},'Ask publication');
  assert.equal(asked.status,'completed',JSON.stringify(asked));assert.equal(f.modelCalls.at(-1)!.model,'generated-selected-ask');

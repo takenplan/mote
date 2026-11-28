@@ -119,14 +119,40 @@ class TimedRuntime(GeneratedRuntime):
             yield SimpleNamespace(generate=generate)
 
 
+class GeneratedQwenRuntime(GeneratedRuntime):
+    def waveform(self, pcm):
+        return SimpleNamespace(numpy=lambda: memoryview(pcm).cast('h'))
+
+    @contextmanager
+    def component(self, role, directory):
+        if role not in ('asr', 'aligner'):
+            with super().component(role, directory) as model:
+                yield model
+            return
+        self.calls.append(('load', role, str(directory)))
+
+        def generate(_audio, **kwargs):
+            self.calls.append(('generate', role, kwargs))
+            if role == 'asr':
+                return SimpleNamespace(text=self.texts.pop(0), language=['Chinese'], generation_tokens=8)
+            items = ([SimpleNamespace(text='甲', start_time=.1, end_time=.5),
+                      SimpleNamespace(text='乙', start_time=.5, end_time=.9)] if kwargs['text'] == '甲。乙？' else [])
+            return SimpleNamespace(items=items)
+
+        try:
+            yield SimpleNamespace(generate=generate)
+        finally:
+            self.released.append(role)
+
+
 @contextmanager
-def generated_engine(frames=64000):
+def generated_engine(frames=64000, qwen=False):
     with tempfile.TemporaryDirectory(prefix='mote-funasr-test-') as temporary:
         root = Path(temporary)
         original = root/'generated.wav'
         pcm = generated_wav(original, frames)
         bundle, models = {}, root/'dialogue'
-        for role in contract.MODEL_IDS:
+        for role in contract.QWEN_MODEL_IDS if qwen else contract.MODEL_IDS:
             directory = models/role
             directory.mkdir(parents=True)
             content = ('Generated inert asset for '+role).encode()
@@ -134,16 +160,18 @@ def generated_engine(frames=64000):
             bundle[role] = {'revision': hashlib.sha256(('generated revision '+role).encode()).hexdigest(),
                             'license': 'Apache-2.0', 'files': [{'name': 'generated.bin', 'size': len(content),
                             'sha256': hashlib.sha256(content).hexdigest()}]}
-        with patch.object(engine, 'BUNDLE', bundle):
+        mlx_models = {role: bundle[role] for role in ('asr', 'aligner')} if qwen else engine.QWEN_BUNDLE
+        backend = 'mps' if qwen else 'cpu'
+        with patch.object(engine, 'BUNDLE', bundle), patch.object(engine, 'QWEN_BUNDLE', mlx_models):
             identity = {'sdkVersion': contract.SDK_VERSION, 'sdkWheelSha256': contract.SDK_WHEEL_SHA256,
                         **copy.deepcopy(contract.PINS), 'settingsFingerprint': engine.SETTINGS_FINGERPRINT,
-                        'models': engine.verify_models(models), 'dependencies': GeneratedRuntime.versions,
-                        'backend': 'cpu', 'threads': 2}
+                        'models': engine.verify_models(models, qwen), 'dependencies': GeneratedRuntime.versions,
+                        'backend': backend, 'threads': 2}
             request = {'protocol': contract.PROTOCOL, 'operation': 'recognize',
                        'audioSha256': hashlib.sha256(original.read_bytes()).hexdigest(),
                        'maxAudioMs': max(1, frames/16), 'identity': identity}
             def run(runtime, supplied=None, **kwargs):
-                return engine.run_audio(supplied or request, original, models, backend='cpu', threads=2,
+                return engine.run_audio(supplied or request, original, models, backend=backend, threads=2,
                                         runtime_factory=lambda _backend, _threads: runtime, **kwargs)
             yield SimpleNamespace(root=root, original=original, pcm=pcm, models=models,
                                   request=request, run=run)
@@ -636,6 +664,24 @@ console.log('actual engine bytes -> FileOutputRegistry / Transcript / Diarizatio
 
 
 class MappingAndRuntime(unittest.TestCase):
+    def test_qwen_checkpoint_preserves_original_text_and_missing_or_coarse_regions(self):
+        with generated_engine(qwen=True) as fixture:
+            runtime = GeneratedQwenRuntime([[0, 1000], [1000, 2000], [2000, 4000]],
+                                           ['甲。乙？', '', '丙。'], [])
+            response = json.loads(fixture.run(runtime))
+            checkpoint = contract.read_checkpoint(response['checkpoint'], fixture.request)
+            self.assertEqual(checkpoint['text'], '甲。乙？\n丙。')
+            self.assertEqual([row['text'] for row in checkpoint['recognitionChunks']], ['甲。乙？', '', '丙。'])
+            self.assertEqual(checkpoint['sentences'], [
+                {'startMs': 100, 'endMs': 500, 'text': '甲。', 'precision': 'forced'},
+                {'startMs': 500, 'endMs': 900, 'text': '乙？', 'precision': 'forced'},
+                {'startMs': 2000, 'endMs': 4000, 'text': '丙。', 'precision': 'vad'},
+            ])
+            self.assertEqual(runtime.released, ['vad', 'asr', 'aligner'])
+            self.assertEqual(checkpoint['identity']['models']['asr']['id'], contract.QWEN_MODEL_IDS['asr'])
+            checkpoint['sentences'][0]['text'] = '改变后的文字。'
+            with self.assertRaisesRegex(ValueError, 'do not match the archived recognition'):
+                contract.archive_checkpoint(checkpoint)
     @unittest.skipUnless(importlib.util.find_spec('funasr'), 'requires pinned audio dependencies; no model weights')
     def test_pinned_fsmn_frame_boundaries_reach_recognition_with_the_rounding_buffer(self):
         import torch
@@ -666,6 +712,7 @@ class MappingAndRuntime(unittest.TestCase):
 
         class PinnedVadRuntime(GeneratedRuntime):
             backend, threads, active = 'cpu', 1, None
+            qwen = False
             auto_model = staticmethod(vad_factory)
             release = engine.SdkRuntime.release
 
@@ -765,6 +812,7 @@ class MappingAndRuntime(unittest.TestCase):
         original_generate = llm.generate
         runtime = engine.SdkRuntime.__new__(engine.SdkRuntime)
         runtime.backend, runtime.threads, runtime.active = 'cpu', 1, None
+        runtime.qwen = False
         runtime.auto_model = lambda **kwargs: SimpleNamespace(kwargs=kwargs, model=SimpleNamespace(llm=llm))
         with runtime.component('asr', '.') as model:
             with self.assertRaisesRegex(engine.EngineError, 'output_limit'):
@@ -831,6 +879,7 @@ class MappingAndRuntime(unittest.TestCase):
                 wrappers.append(self)
         runtime = engine.SdkRuntime.__new__(engine.SdkRuntime)
         runtime.backend, runtime.threads, runtime.active = 'mps', 2, None
+        runtime.qwen = False
         runtime.auto_model = Model
         runtime.torch = SimpleNamespace(mps=SimpleNamespace(synchronize=lambda: released.append('sync'), empty_cache=lambda: released.append('empty')))
         with tempfile.TemporaryDirectory() as directory:

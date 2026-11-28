@@ -89,8 +89,13 @@ identity=generated_identity();identity['models']=json.load(sys.stdin)
 source=generated_source(2000)
 request={'protocol':c.PROTOCOL,'operation':'recognize','audioSha256':source['audioSha256'],'maxAudioMs':2000,'identity':identity}
 rows=[{'start':0,'end':1000,'text':'Generated first voice'},{'start':1000,'end':2000,'text':'Generated second voice'}]
+qwen='aligner' in identity['models']
+if qwen:
+ for row in rows: row['precision']='vad'
 native={'text':'\n'.join(row['text'] for row in rows),'sentence_info':rows}
-recognition=c.recognize_to_checkpoint(request,source,identity,{'value':[[0,2000]]},native,[{'text':native['text']}])
+windows=[[0,1000],[1000,2000]] if qwen else [[0,2000]]
+chunks=[{'text':row['text']} for row in rows] if qwen else [{'text':native['text']}]
+recognition=c.recognize_to_checkpoint(request,source,identity,{'value':windows},native,chunks)
 diarize_request={**request,'operation':'diarize','checkpoint':json.loads(recognition)['checkpoint'],'speakers':{'mode':'exact','count':2}}
 result=c.speakers_from_sdk(c.read_checkpoint(diarize_request['checkpoint']),diarize_request['speakers'],
                          [{**row,'spk':index} for index,row in enumerate(rows)],[[0,1,0],[1,2,1]],[])

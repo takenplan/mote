@@ -24,6 +24,7 @@ from urllib.parse import urlencode, urlparse
 import wave
 
 import mote_asr_contract as contract
+import mote_qwen_asr as qwen_asr
 from mote_audio import (file_sha256, frame_interval, normalize, offline_process,
                         read_pcm, speaker_previews)
 
@@ -55,6 +56,7 @@ SDK_SOURCES = {
 # One checked-in asset authority, shared with Central's installer and identity
 # builder. Every installed file is verified, including the archived SDK wheel.
 BUNDLE = contract.loads(Path(__file__).with_name('funasr-models.json').read_bytes())
+QWEN_BUNDLE = contract.loads(Path(__file__).with_name('qwen-asr-models.json').read_bytes())
 
 
 class EngineError(RuntimeError):
@@ -71,34 +73,40 @@ class DecoderOutputLimit(EngineError):
         super().__init__('output_limit')
 
 
-def component_manifest(role):
-    data = copy.deepcopy(BUNDLE[role])
+def component_manifest(role, qwen=False):
+    ids = contract.QWEN_MODEL_IDS if qwen else contract.MODEL_IDS
+    data = copy.deepcopy(QWEN_BUNDLE[role] if qwen and role in QWEN_BUNDLE else BUNDLE[role])
+    if data.pop('id', ids[role]) != ids[role]:
+        raise EngineError('model_missing')
     # Download locations are transport metadata, not model content identity.
     data['files'] = [{key: item[key] for key in ('name', 'size', 'sha256')} for item in data['files']]
-    return {'id': contract.MODEL_IDS[role], **data}
+    return {'id': ids[role], **data}
 
 
-def asset_manifest():
+def asset_manifest(qwen=False):
     """Handoff values, not a second installer or storage format."""
     components = {}
-    for role in contract.MODEL_IDS:
-        manifest = component_manifest(role)
+    for role in contract.QWEN_MODEL_IDS if qwen else contract.MODEL_IDS:
+        manifest = component_manifest(role, qwen)
         manifest['manifestSha256'] = hashlib.sha256(contract.serialize(manifest).encode()).hexdigest()
         manifest['directory'] = 'dialogue/' + role
-        sources = {item['name']: item for item in BUNDLE[role]['files']}
+        mlx = qwen and role in QWEN_BUNDLE
+        sources = {item['name']: item for item in (QWEN_BUNDLE if mlx else BUNDLE)[role]['files']}
         for item in manifest['files']:
-            item['url'] = sources[item['name']].get('url') or ('https://modelscope.cn/api/v1/models/' + contract.MODEL_IDS[role]
-                           + '/repo?' + urlencode({'Revision': manifest['revision'], 'FilePath': item['name']}))
+            item['url'] = sources[item['name']].get('url') or (
+                f"https://huggingface.co/{manifest['id']}/resolve/{manifest['revision']}/{item['name']}" if mlx else
+                'https://modelscope.cn/api/v1/models/' + manifest['id']
+                + '/repo?' + urlencode({'Revision': manifest['revision'], 'FilePath': item['name']}))
         components[role] = manifest
     return components
 
 
-def verify_models(dialogue_directory):
+def verify_models(dialogue_directory, qwen=False):
     """Inspect the files actually loaded; never echo a requested model identity."""
     root = Path(dialogue_directory).resolve()
     models = {}
-    for role in contract.MODEL_IDS:
-        manifest = component_manifest(role)
+    for role in contract.QWEN_MODEL_IDS if qwen else contract.MODEL_IDS:
+        manifest = component_manifest(role, qwen)
         for item in manifest['files']:
             path = root / role / item['name']
             # Resolved symlinks outside this installation are not a pinned bundle.
@@ -114,12 +122,14 @@ def verify_models(dialogue_directory):
     return models
 
 
-def inspect_dependencies():
+def inspect_dependencies(qwen=False):
     """Critical runtime versions; transitive resolution is locked in requirements."""
     names = ('funasr', 'torch', 'torchaudio', 'transformers', 'numpy', 'scipy',
              'scikit-learn', 'librosa', 'soundfile', 'numba', 'llvmlite',
              'modelscope', 'umap-learn', 'einops', 'tokenizers', 'tiktoken',
              'huggingface-hub', 'omegaconf', 'hydra-core', 'threadpoolctl')
+    if qwen:
+        names += ('mlx', 'mlx-metal', 'mlx-audio')
     try:
         versions = {name.replace('-', '_'): importlib.metadata.version(name) for name in names}
         # Reject drift before constructing models, including locally edited SDKs.
@@ -152,7 +162,14 @@ class SdkRuntime:
             raise EngineError('component_missing')
         for name in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS', 'NUMBA_NUM_THREADS'):
             os.environ[name] = str(threads)
-        self.versions = inspect_dependencies()
+        self.qwen = backend == 'mps'
+        self.settings_fingerprint = hashlib.sha256(contract.serialize({
+            'vadMs': SETTINGS['maxSegmentMs'], 'vadFrameMs': SETTINGS['vadFrameMs'], 'segmentBufferMs': SETTINGS['segmentBufferMs'],
+            'speakerWindowFrames': SETTINGS['speakerWindowFrames'], 'speakerShiftFrames': SETTINGS['speakerShiftFrames'],
+            'qwen': qwen_asr.SETTINGS, 'decoderRecoveryDepth': DECODER_RECOVERY_MAX_DEPTH,
+            'decoderRecoveryMinFrames': DECODER_RECOVERY_MIN_FRAMES,
+        }).encode()).hexdigest() if self.qwen else SETTINGS_FINGERPRINT
+        self.versions = inspect_dependencies(self.qwen)
         try:
             import numpy as np
             import torch
@@ -160,7 +177,8 @@ class SdkRuntime:
             from funasr.register import tables
         except (ImportError, OSError) as error:
             raise EngineError('component_missing') from error
-        if any(tables.model_classes.get(name) is None for name in ('FunASRNano', 'FsmnVADStreaming', 'CAMPPlus', 'CTTransformer')):
+        required = ('FsmnVADStreaming', 'CAMPPlus') if self.qwen else ('FunASRNano', 'FsmnVADStreaming', 'CAMPPlus', 'CTTransformer')
+        if any(tables.model_classes.get(name) is None for name in required):
             raise EngineError('component_missing')
         self.np, self.torch, self.auto_model = np, torch, AutoModel
         self.backend, self.threads = backend, threads
@@ -169,9 +187,41 @@ class SdkRuntime:
         if backend not in ('cpu', 'mps') or backend == 'mps' and not torch.backends.mps.is_available():
             raise EngineError('worker_not_ready')
         torch.set_num_threads(threads)
+        if self.qwen:
+            try:
+                import mlx.core as mx
+                from mlx_audio.stt.utils import load_model
+            except (ImportError, OSError) as error:
+                raise EngineError('component_missing') from error
+            if not mx.metal.is_available():
+                raise EngineError('worker_not_ready')
+            self.mx, self.load_mlx = mx, load_model
+
+    @contextmanager
+    def mlx_component(self, directory):
+        model = None
+        start = time.monotonic()
+        try:
+            model = self.load_mlx(Path(directory).resolve(), strict=True)
+            self.mx.synchronize()
+            self.model_load_ms += (time.monotonic() - start) * 1000
+            yield model
+        finally:
+            start = time.monotonic()
+            del model
+            self.mx.synchronize()
+            self.mx.clear_cache()
+            self.model_release_ms += (time.monotonic() - start) * 1000
 
     @contextmanager
     def component(self, role, directory):
+        if self.qwen and role in ('asr', 'aligner'):
+            with self.mlx_component(directory) as model:
+                try:
+                    yield model
+                finally:
+                    del model
+            return
         options = {'model': str(Path(directory).resolve()), 'device': self.backend,
                    'ncpu': self.threads, 'batch_size': 1, 'disable_update': True,
                    'disable_pbar': True, 'trust_remote_code': False}
@@ -310,7 +360,7 @@ def recognition_regions(value, frames):
     return regions
 
 
-def recognize_intervals(model, pcm, intervals, runtime, cancelled):
+def recognize_intervals(pcm, intervals, decode, cancelled):
     """Retry only capped intervals, preserving completed siblings verbatim.
 
     Binary subdivision uses integer sample boundaries, without overlap, gaps or
@@ -323,8 +373,7 @@ def recognize_intervals(model, pcm, intervals, runtime, cancelled):
         first, last, depth = pending.pop()
         check_cancelled(cancelled)
         try:
-            result = one_result(model.generate(input=runtime.waveform(pcm[first*2:last*2]),
-                                               batch_size=1, fs=16000))
+            result = decode(pcm[first*2:last*2])
         except DecoderOutputLimit:
             check_cancelled(cancelled)
             middle = (first+last)//2
@@ -338,8 +387,7 @@ def recognize_intervals(model, pcm, intervals, runtime, cancelled):
             continue
         check_cancelled(cancelled)
         model_text(result.get('text'), contract.LIMITS['textBytes'])
-        yield first, last, {'text': result['text'], **({'timestamps': copy.deepcopy(result['timestamps'])}
-                                                     if 'timestamps' in result else {})}
+        yield first, last, result
 
 
 def ctc_sentences(chunk, punctuated, first, last):
@@ -409,13 +457,28 @@ def recognize_pcm(request, source, identity, pcm, root, runtime, cancelled):
         raise EngineError('output_limit')
     vad = {**vad, 'value': recognition_regions(vad['value'], frames)}
     intervals = [frame_interval(start, end, frames) for start, end in vad['value']]
+    qwen = 'aligner' in identity['models']
     chunks, completed_regions = [], []
     if intervals:
         with runtime.component('asr', root / 'asr') as model:
-            for first, last, chunk in recognize_intervals(model, pcm, intervals, runtime, cancelled):
+            def decode(samples):
+                if qwen:
+                    output, limit = qwen_asr.generate(model, runtime.waveform(samples).numpy())
+                    if output.generation_tokens >= limit:
+                        raise DecoderOutputLimit()
+                    languages = [output.language] if isinstance(output.language, str) else output.language
+                    return {'text': output.text, 'languages': languages or []}
+                result = one_result(model.generate(input=runtime.waveform(samples), batch_size=1, fs=16000))
+                return {'text': result.get('text'), **({'timestamps': copy.deepcopy(result['timestamps'])}
+                                                      if 'timestamps' in result else {})}
+
+            for first, last, chunk in recognize_intervals(pcm, intervals, decode, cancelled):
                 completed_regions.append([first/16, last/16])
                 chunks.append(chunk)
+            del model
     vad = {**vad, 'value': completed_regions}
+    if qwen:
+        return align_qwen(request, source, identity, pcm, root, runtime, cancelled, vad, chunks)
     # Keep the Nano text verbatim in recognitionChunks. Punctuation is a local
     # model stage, not deduplication or correction. No forced token timestamps.
     sentences, punctuated = [], []
@@ -447,6 +510,34 @@ def recognize_pcm(request, source, identity, pcm, root, runtime, cancelled):
     check_cancelled(cancelled)
     return contract.recognize_to_checkpoint(request, source, identity, vad,
         {'text': '\n'.join(punctuated), 'sentence_info': sentences}, chunks, 'vad')
+
+
+def align_qwen(request, source, identity, pcm, root, runtime, cancelled, vad, chunks):
+    sentences, recognized = [], []
+    if any(chunk['text'].strip() for chunk in chunks):
+        with runtime.component('aligner', root / 'aligner') as model:
+            for (start, end), chunk in zip(vad['value'], chunks):
+                check_cancelled(cancelled)
+                text = chunk['text']
+                if not text.strip():
+                    continue
+                first, last = frame_interval(start, end, len(pcm)//2)
+                samples = runtime.waveform(pcm[first*2:last*2]).numpy()
+                tokens = qwen_asr.align(model, samples, text, chunk['languages'], start, end)
+                recognized.append(text)
+                if tokens is None:
+                    model_text(text, 32000, 8000)
+                    sentences.append({'start': start, 'end': end, 'text': text, 'precision': 'vad'})
+                else:
+                    chunk['tokens'] = tokens
+                    sentences.extend({'start': token['startMs'], 'end': token['endMs'],
+                                      'text': token['text'], 'precision': 'forced'} for token in tokens)
+                if len(sentences) > contract.LIMITS['sentences']:
+                    raise EngineError('output_limit')
+            del model
+    check_cancelled(cancelled)
+    return contract.recognize_to_checkpoint(request, source, identity, vad,
+        {'text': '\n'.join(recognized), 'sentence_info': sentences}, chunks, 'vad')
 
 
 def speaker_windows(vad, pcm):
@@ -594,12 +685,12 @@ def run_audio(request, original, dialogue_directory, *, backend, threads, timeou
                 raise EngineError('contract_mismatch')
             timings['normalizationMs'] = (time.monotonic()-start)*1000
             start = time.monotonic()
-            models = verify_models(dialogue_directory)
+            models = verify_models(dialogue_directory, True) if backend == 'mps' else verify_models(dialogue_directory)
             timings['assetVerificationMs'] = (time.monotonic()-start)*1000
             start = time.monotonic()
             runtime = runtime_factory(backend, threads)
             identity = {'sdkVersion': contract.SDK_VERSION, 'sdkWheelSha256': contract.SDK_WHEEL_SHA256,
-                        **copy.deepcopy(contract.PINS), 'settingsFingerprint': SETTINGS_FINGERPRINT,
+                        **copy.deepcopy(contract.PINS), 'settingsFingerprint': getattr(runtime, 'settings_fingerprint', SETTINGS_FINGERPRINT),
                         'models': models, 'dependencies': runtime.versions, 'backend': backend, 'threads': threads}
             contract.validate_identity(identity)
             if identity != request['identity']:

@@ -7,11 +7,11 @@ Central has separate installation roles for `ocr`, `dialogue`, `speaker-wespeake
 | Role | Current implementation |
 | --- | --- |
 | OCR | Managed OCR worker and pinned asset catalog. |
-| Dialogue | Fun-ASR-Nano-2512, FSMN VAD, CAM++ and CT-Punc under one dialogue installation. |
+| Dialogue | Native Apple Silicon uses Qwen3-ASR 1.7B 8 bit and Qwen3-ForcedAligner 0.6B 8 bit with FSMN VAD and CAM++. Linux and Intel Mac use Fun-ASR-Nano-2512 with FSMN VAD, CAM++ and CT-Punc. |
 | Speaker WeSpeaker | Retained asset role for explicit bundles; no current built-in processing consumer or managed preparation entry. FunASR uses CAM++ from the dialogue installation. |
 | Local image | InternVL3-14B-4bit, first targeting Native macOS Apple Silicon with MLX; optional plugin, default off. |
 
-Exact required files, revisions, sizes, hashes and licenses live in [media-assets.ts](../apps/server/src/media-assets.ts) and [funasr-models.json](../scripts/funasr-models.json). Installation validates the complete catalog before atomically publishing a receipt. Old markers, mixed weights or a directory's existence do not establish readiness. Installation never grants background processing, starts historical scans or enables the image plugin.
+Exact required files, revisions, sizes, hashes and licenses live in [media-assets.ts](../apps/server/src/media-assets.ts), [funasr-models.json](../scripts/funasr-models.json) and [qwen-asr-models.json](../scripts/qwen-asr-models.json). Installation validates the complete catalog before atomically publishing a receipt. Old markers, mixed weights or a directory's existence do not establish readiness. On Apple Silicon, prepare **Recording transcription and speakers** in Settings after upgrading to install the selected dialogue assets and dependencies. Installation never grants background processing, starts historical scans or enables the image plugin.
 
 Local image processing does not silently fall back to cloud. Memory, review and Ask retain their selected models and image-disclosure controls. Native and Linux/container audio paths need their own installation and inference evidence; module or generated-fixture success does not establish all-platform quality.
 
@@ -41,7 +41,7 @@ node scripts/mote.mjs media-import --profile dev --role dialogue --from /absolut
 node scripts/mote.mjs media-import --profile dev --role local-image --from /absolute/path/image-bundle
 ```
 
-Bundles follow the current catalog: dialogue has `asr`, `vad`, `speaker` and `punctuation` subdirectories; image bundles retain required shards, indexes and processor configuration. Keep model volumes separate from original-data volumes. Compose uses its declared interpreters and does not provide macOS MLX.
+Dialogue bundles have `asr`, `vad` and `speaker` subdirectories, plus `aligner` on Apple Silicon or `punctuation` for the CPU worker. Image bundles retain required shards, indexes and processor configuration. Keep model volumes separate from original-data volumes. Compose uses its declared interpreters and does not provide macOS MLX.
 
 ## Worker controls
 

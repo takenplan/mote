@@ -50,6 +50,29 @@ def generated_preview():
     return base64.b64encode(buffer.getvalue()).decode()
 
 
+def generated_qwen_dialogue():
+    source = generated_source(5000)
+    identity = {**generated_identity(), 'backend': 'mps', 'models': {
+        role: {'id': model, 'revision': sha('generated revision '+role), 'manifestSha256': sha('generated manifest '+role)}
+        for role, model in contract.QWEN_MODEL_IDS.items()}}
+    request = {'protocol': contract.PROTOCOL, 'operation': 'recognize', 'audioSha256': source['audioSha256'],
+               'maxAudioMs': 5000, 'identity': identity}
+    timings = [(100, 240, '我们'), (260, 400, '确认。'), (500, 650, '稍后'), (700, 900, '再说'), (1000, 1200, '我来。')]
+    tokens = [{'startMs': start, 'endMs': end, 'text': text} for start, end, text in timings]
+    spoken = ''.join(token['text'] for token in tokens)
+    native = {'text': spoken+'\n粗略时间。', 'sentence_info': [
+        {'start': start, 'end': end, 'text': text, 'precision': 'forced'} for start, end, text in timings] +
+        [{'start': 3500, 'end': 5000, 'text': '粗略时间。', 'precision': 'vad'}]}
+    recognition = contract.recognize_to_checkpoint(request, source, identity,
+        {'value': [[0, 2000], [2000, 3000], [3500, 5000]]}, native,
+        [{'text': spoken, 'tokens': tokens}, {'text': ''}, {'text': '粗略时间。'}])
+    request = {**request, 'operation': 'diarize', 'checkpoint': json.loads(recognition)['checkpoint'], 'speakers': {'mode': 'unknown'}}
+    response = contract.diarize_from_checkpoint(request, source, identity, lambda cp, options: {
+        'timeUnit': 'ms', 'speakers': options, 'assignments': [0, 0, 0, 0, 1, None], 'samples': [],
+        'segments': [{'startMs': 0, 'endMs': 950, 'speaker': 0}, {'startMs': 950, 'endMs': 2000, 'speaker': 1}]})
+    return {'request': request, 'response': response}
+
+
 def generated_bundle():
     source = generated_source()
     request = {'protocol': contract.PROTOCOL, 'operation': 'recognize',
@@ -89,6 +112,7 @@ def generated_bundle():
             'pins': contract.PINS, 'limits': contract.LIMITS, 'modelIds': contract.MODEL_IDS,
             'request': request, 'source': source, 'native': native, 'response': response,
             'diarizeRequest': diarize_request, 'diarizeResponse': diarize_response, 'empty': empty, 'ctcResponse': ctc_response,
+            'qwenDialogue': generated_qwen_dialogue(),
             'failures': [contract.worker_failure('diarize', code) for code in contract.FAILURES]}
 
 

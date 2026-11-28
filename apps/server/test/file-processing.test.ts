@@ -44,7 +44,7 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {buildApp} from '../src/app.js';
 import type {HostDependencies} from '../src/host.js';
 import {} from '../src/config.js';
-import {MediaAssets,MEDIA_CATALOG,mediaModelIdentities} from '../src/media-assets.js';
+import {MediaAssets,MEDIA_CATALOG,dialogueCatalog,mediaModelIdentities} from '../src/media-assets.js';
 import {FUNASR_PINS,FUNASR_PROTOCOL,parseFunasrRequest,parseFunasrResponse,parseFunasrArchive,funasrDialogueOutput,type FunasrRequest} from '../src/funasr-contract.js';
 import {authorizeFixtureModels} from './fixtures/model-authorization.js';
 import type {FileDialogueCleanup} from '../src/file-recipes.js';
@@ -1045,8 +1045,9 @@ else:
 async function nativeFunasrFixture(t:any,options:{authorize?:boolean;cleanup?:boolean;managed?:boolean;deferModels?:boolean}={}){
  const directory=mkdtempSync(join(tmpdir(),'mote-native-funasr-')),bundle=join(directory,'bundle'),previous=MEDIA_CATALOG.dialogue;
  const modelBytes=Buffer.from('Generated ASR component; no model weights.');
- const files=Object.keys(previous.models!).map(role=>({name:role+'/model.bin',size:modelBytes.length,sha256:sha256(modelBytes),official:'https://example.invalid/'+role}));
- MEDIA_CATALOG.dialogue={version:'generated-funasr-v1',files,models:Object.fromEntries(Object.entries(previous.models!).map(([role,model])=>[role,{...model,revision:sha256('generated revision '+role)}]))};
+ const cpu=dialogueCatalog(false).models!;
+ const files=Object.keys(cpu).map(role=>({name:role+'/model.bin',size:modelBytes.length,sha256:sha256(modelBytes),official:'https://example.invalid/'+role}));
+ MEDIA_CATALOG.dialogue={version:'generated-funasr-v1',files,models:Object.fromEntries(Object.entries(cpu).map(([role,model])=>[role,{...model,revision:sha256('generated revision '+role)}]))};
  const identity={sdkVersion:'1.4.25',sdkWheelSha256:'11ab7bd8c7574a94579b83a9f8fe837af46be6229462da5f3004a04a017cee75',...FUNASR_PINS,settingsFingerprint:sha256('generated inference settings'),models:mediaModelIdentities('dialogue'),dependencies:{torch:'2.10.0',numpy:'2.2.0'},backend:'cpu',threads:1};
  const requests:FunasrRequest[]=[],wires:string[]=[],errors:unknown[]=[],modelCalls:{model:string;question:string}[]=[];
  let central:Awaited<ReturnType<typeof buildApp>>|undefined,fail:string|undefined,serial=0,cleanupCalls=0,healthChecks=0,health:Record<string,unknown>|'disconnect'|undefined;

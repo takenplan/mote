@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {fileSpeakerAttributionSchema,imageLocationSchema} from './files.js';
+import {fileSpeakerAttributionSchema,imageLocationSchema,transcriptionEvidenceSchema} from './files.js';
 import {documentSchema,sourceItemKinds} from './sources.js';
 
 export const collectedMaterialVersions: Readonly<Record<string, number>> = {
@@ -12,7 +12,9 @@ export const collectedMaterialVersions: Readonly<Record<string, number>> = {
 
 /** These are organizer-owned serializations, not JSON guessed from captured prose. */
 export type SourceTextFormat='source-record-json-v1'|'speech-json-v1'|'speech-text-v2';
-const speech=z.object({speaker:z.string().max(100).optional(),speakerAttribution:fileSpeakerAttributionSchema.optional(),imageLocation:imageLocationSchema.optional(),text:z.string().max(250000)}).strict().refine(value=>value.speaker!==undefined||value.imageLocation!==undefined);
+const speech=z.object({speaker:z.string().max(100).optional(),speakerAttribution:fileSpeakerAttributionSchema.optional(),imageLocation:imageLocationSchema.optional(),
+  uncertain:z.boolean().optional(),overlap:z.boolean().optional(),transcription:transcriptionEvidenceSchema.optional(),text:z.string().max(250000),
+}).strict().refine(value=>value.speaker!==undefined||value.imageLocation!==undefined||value.transcription!==undefined||value.uncertain!==undefined||value.overlap!==undefined);
 const source=z.object({captureId:z.string().uuid(),capturedAt:z.string().datetime({offset:true}),source:z.enum(sourceItemKinds),appName:z.string().max(300).optional(),text:z.string().max(250000).optional(),documentTime:documentSchema.pick({recordedAt:true,occurredAt:true,timeBasis:true,contentRole:true}).strict().optional()}).passthrough();
 export function sourceTextFormat(block:{id:string;format?:string;locator?:Record<string,unknown>}):SourceTextFormat|undefined {
   if(block.format==='speech-text'&&typeof block.locator?.chunkId==='string')return 'speech-text-v2';

@@ -21,6 +21,10 @@ export function archiveRelativePath(raw:string):string {
   const parts=raw.split('/');if(parts.some(p=>!p||p==='.'||p==='..'))throw new StoreError('Archive paths must be relative and cannot traverse directories');
   return parts.join('/');
 }
+export function listArchivedFilesForCapture(store:Store,captureId:string):ArchivedFile[]{
+  const rows=store.db.prepare('SELECT f.json FROM archived_files f JOIN capture_files c ON c.file_id=f.id WHERE c.capture_id=? ORDER BY f.id').all(captureId) as {json:string}[];
+  return rows.map(row=>JSON.parse(row.json));
+}
 export class ArchivedFileStore {
   readonly directory:string;
   constructor(public store:Store){
@@ -81,7 +85,7 @@ export class ArchivedFileStore {
     if(!this.store.evidence([captureId]).length)throw new StoreError('Attachment evidence is missing',409);
     for(const id of new Set(fileIds)){this.get(id);this.store.db.prepare('INSERT OR IGNORE INTO capture_files(capture_id,file_id) VALUES(?,?)').run(captureId,id);}
   }
-  listForCapture(captureId:string):ArchivedFile[]{return (this.store.db.prepare('SELECT f.json FROM archived_files f JOIN capture_files c ON c.file_id=f.id WHERE c.capture_id=? ORDER BY f.id').all(captureId) as {json:string}[]).map(r=>JSON.parse(r.json));}
+  listForCapture(captureId:string):ArchivedFile[]{return listArchivedFilesForCapture(this.store,captureId);}
   portableEstimate():number{return Number(this.store.db.prepare('SELECT COALESCE(SUM(length(CAST(f.json AS BLOB))+4*((b.bytes+2)/3)+100),0) AS n FROM archived_files f JOIN file_blobs b ON b.hash=f.hash').get()!.n);}
   exportPortable(){return (this.store.db.prepare('SELECT json FROM archived_files ORDER BY id').all() as {json:string}[]).map(row=>{const file=JSON.parse(row.json) as ArchivedFile;return {...file,dataBase64:this.read(file.id).toString('base64')};});}
   preparePortable(raw:unknown):PreparedPortableFile[]{

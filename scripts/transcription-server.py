@@ -137,16 +137,17 @@ def _child(connection, directory, settings, request, started_at):
         offline_process()
         engine = importlib.import_module('mote_funasr')
         if request is None:
-            models = engine.verify_models(settings['model_root'])
+            qwen = settings['backend'] == 'mps'
+            models = engine.verify_models(settings['model_root'], True) if qwen else engine.verify_models(settings['model_root'])
             runtime = engine.SdkRuntime(settings['backend'], settings['threads'])
             try:
                 # Prove all four components can actually load. Directory or
                 # installation receipts alone do not supply this evidence.
-                for role in contract.MODEL_IDS:
+                for role in models:
                     with runtime.component(role, Path(settings['model_root']) / role):
                         pass
                 identity = {'sdkVersion': contract.SDK_VERSION, 'sdkWheelSha256': contract.SDK_WHEEL_SHA256,
-                            **contract.PINS, 'settingsFingerprint': engine.SETTINGS_FINGERPRINT,
+                            **contract.PINS, 'settingsFingerprint': getattr(runtime, 'settings_fingerprint', engine.SETTINGS_FINGERPRINT),
                             'models': models, 'dependencies': runtime.versions,
                             'backend': settings['backend'], 'threads': settings['threads']}
                 contract.validate_identity(identity)
@@ -206,7 +207,7 @@ class OwnedChild:
             self.connection.close()
 
 
-def _signature(root):
+def _signature(root, qwen=False):
     """Invalidate load evidence on any of the engine's required file changes.
 
     The engine remains the only asset/hash authority; no duplicate catalog or
@@ -219,8 +220,9 @@ def _signature(root):
         return None, 'component_missing'
     signature = []
     try:
-        for role in contract.MODEL_IDS:
-            for item in engine.component_manifest(role)['files']:
+        for role in contract.QWEN_MODEL_IDS if qwen else contract.MODEL_IDS:
+            manifest = engine.component_manifest(role, True) if qwen else engine.component_manifest(role)
+            for item in manifest['files']:
                 path = Path(root) / role / item['name']
                 info = path.stat()
                 if not path.is_file():
@@ -286,7 +288,7 @@ class AudioWorker:
         finally:
             self.reap(child)
             with self.lock:
-                current, _ = _signature(self.settings['model_root'])
+                current, _ = _signature(self.settings['model_root'], self.settings['backend'] == 'mps')
                 if not self.stopping.is_set() and current == signature:
                     self.identity, self.signature, self.error = identity, signature, error
                 self.loading = False
@@ -294,7 +296,7 @@ class AudioWorker:
 
     def health(self, prepare=True):
         with self.lock:
-            signature, missing = _signature(self.settings['model_root'])
+            signature, missing = _signature(self.settings['model_root'], self.settings['backend'] == 'mps')
             ffmpeg = bool(shutil.which('ffmpeg'))
             if signature != self.signature or missing:
                 self.identity = None
@@ -584,8 +586,7 @@ def create_server(worker, secret, port=0):
                             return
                         if request_id:
                             if not worker.facts.begin(request_id, scope, self.path[1:]):
-                                self.failure(operation, 'invalid_input', 409)
-                                return
+                                raise Rejected('invalid_input', 409)
                             accepted, self.receipt_id = True, request_id
                         child = worker.spawn(directory, request, deadline)
                         try:
@@ -680,7 +681,7 @@ def create_server(worker, secret, port=0):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model-root', required=True, help='Installed dialogue directory with all four FunASR components')
+    parser.add_argument('--model-root', required=True, help='Installed dialogue model directory for the selected backend')
     parser.add_argument('--backend', choices=('cpu', 'mps'), default='mps' if platform.system() == 'Darwin' and platform.machine() == 'arm64' else 'cpu')
     parser.add_argument('--port', type=int, default=9009)
     parser.add_argument('--threads', type=int, default=4)

@@ -63,16 +63,24 @@ export const transcriptSegmentSchema=z.object({
   imageLocation:imageLocationSchema.optional(),
   words:z.array(z.object({startMs:z.number().finite().nonnegative(),endMs:z.number().finite().nonnegative(),text:z.string().max(1000),probability:z.number().min(0).max(1).optional()}).strict()).max(8000).optional(),
 }).strict();
+export const transcriptionNoticeSchema=z.object({
+  kind:z.enum(['window_boundary','speech_without_text','window_timing']),
+  startMs:z.number().finite().nonnegative(),endMs:z.number().finite().nonnegative(),
+}).strict().refine(({kind,startMs,endMs})=>kind==='window_boundary'?startMs===endMs:startMs<endMs);
+export const transcriptionEvidenceSchema=z.object({
+  automatic:z.literal(true),notices:z.array(transcriptionNoticeSchema).max(150000).optional(),
+}).strict();
+export type TranscriptionEvidence=z.infer<typeof transcriptionEvidenceSchema>;
 export const transcriptSchema=z.object({
   durationMs:z.number().finite().nonnegative(),
   segments:z.array(transcriptSegmentSchema).max(50000),
-  coverage:z.enum(['full','partial','none']).optional(),extraction:fileCoverageSchema.optional(),engine:z.string().max(200).optional(),uncorrected:z.literal(true).optional(),warnings:z.array(z.string().max(1000)).max(30).optional(),
+  coverage:z.enum(['full','partial','none']).optional(),extraction:fileCoverageSchema.optional(),engine:z.string().max(200).optional(),uncorrected:z.literal(true).optional(),warnings:z.array(z.string().max(1000)).max(30).optional(),transcription:transcriptionEvidenceSchema.optional(),
 }).strict().superRefine((v,c)=>{let last=0;for(const s of v.segments){if(s.endMs<s.startMs||s.endMs>v.durationMs+1000||s.startMs<last)c.addIssue({code:'custom',message:'Invalid transcript timeline'});last=s.startMs;
   // Native ASR can place a word outside its sentence while both remain within
   // the recording. Preserve that raw timing; alignment must use the sentence
   // with explicit uncertainty rather than shifting or discarding model words.
   let wordLast=0;for(const w of s.words??[]){if(w.endMs<w.startMs||w.startMs<wordLast||w.endMs>v.durationMs+1000)c.addIssue({code:'custom',message:'Invalid word timeline'});wordLast=w.startMs;}
-}});
+}if(v.transcription?.notices?.some(n=>n.endMs>v.durationMs))c.addIssue({code:'custom',message:'Transcription notice outside its recording'});});
 export type Transcript=z.infer<typeof transcriptSchema>;
 const speakerLabel=z.string().regex(/^SPEAKER_(?:[0-9]{1,5}|UNKNOWN)$/);
 export const speakerRangeSchema=z.object({min:z.number().int().min(1).max(16),max:z.number().int().min(1).max(16)}).strict().refine(v=>v.min<=v.max,'Invalid speaker range');
@@ -94,7 +102,7 @@ export const diarizationSchema=z.object({
 }).strict().superRefine((v,c)=>{for(const s of [...v.segments,...v.samples,...(v.estimate?.candidates.flatMap(candidate=>candidate.segments)??[])])if(s.endMs<=s.startMs||s.endMs>v.durationMs+1000)c.addIssue({code:'custom',message:'Invalid diarization timeline'});});
 export type Diarization=z.infer<typeof diarizationSchema>;
 export const fileSpeakerAttributionSchema=z.object({name:z.string().trim().min(1).max(100),confirmedBy:z.literal('owner'),confirmationId:z.string().uuid(),confirmedAt:z.string().datetime()}).strict();
-export const fileEvidenceSchema=z.object({documentLocation:documentLocationSchema.optional(),imageLocation:imageLocationSchema.optional(),captureId:z.string().uuid(),revision:z.string().max(200),artifactId:z.string().uuid(),chunkId:z.string().uuid(),startMs:z.number().nonnegative().optional(),endMs:z.number().nonnegative().optional(),speaker:z.string().max(100).optional(),speakerAttribution:fileSpeakerAttributionSchema.optional(),uncertain:z.boolean().optional(),overlap:z.boolean().optional()}).strict();
+export const fileEvidenceSchema=z.object({documentLocation:documentLocationSchema.optional(),imageLocation:imageLocationSchema.optional(),captureId:z.string().uuid(),revision:z.string().max(200),artifactId:z.string().uuid(),chunkId:z.string().uuid(),startMs:z.number().nonnegative().optional(),endMs:z.number().nonnegative().optional(),speaker:z.string().max(100).optional(),speakerAttribution:fileSpeakerAttributionSchema.optional(),uncertain:z.boolean().optional(),overlap:z.boolean().optional(),transcription:transcriptionEvidenceSchema.optional()}).strict();
 export const fileProcessingSchema=z.object({
   enabled:z.boolean().default(true),
   endpoint:z.string().max(2000).default('http://127.0.0.1:9009/transcribe'),
@@ -146,7 +154,7 @@ export const MEDIA_MODEL_COMPONENT_PATHS={
 export const mediaAssetStateSchema=z.enum(['not_installed','downloading','verifying','installing','ready','failed','cancelled']);
 export const mediaAssetStatusSchema=z.object({
   role:mediaRoleSchema,state:mediaAssetStateSchema,version:z.string().min(1).max(200),
-  bytes:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  recognizer:z.string().min(1).max(200).optional(),bytes:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   totalBytes:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   source:z.string().max(2000),error:z.string().max(1000).optional(),
 }).strict();

@@ -100,10 +100,14 @@ def run_audio(request, original, dialogue_directory, *, backend, threads, timeou
               'backend': backend, 'threads': threads, 'settingsFingerprint': SETTINGS_FINGERPRINT}
     if actual != request['identity']:
         raise EngineError('contract_mismatch')
-    rows = [] if (ROOT/'silence').exists() else ROWS
+    empty_window = (ROOT/'empty-window').exists()
+    rows = [] if (ROOT/'silence').exists() or empty_window else ROWS
     if operation == 'recognize':
         native = {'text': '  '+''.join(row[2] for row in rows)+'\n  ' if rows else '',
                   'sentence_info': [{'start': start, 'end': end, 'text': text} for start, end, text, _ in rows]}
+        if empty_window:
+            return contract.recognize_to_checkpoint(request, source, actual,
+                {'value': [[1000, 2000]]}, native, [{'text': ''}])
         return contract.recognize_to_checkpoint(request, source, actual,
             {'value': [[0, source['durationMs']]] if rows else []}, native,
             [{'text': native['text']}] if rows else [])

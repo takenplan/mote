@@ -32,11 +32,13 @@ An image context read may be omitted when unnecessary. No host rule forces every
 
 ## Audio
 
-The current local pipeline is FSMN VAD → Fun-ASR-Nano-2512/CT-Punc → persisted recognition checkpoint → CAM++ anonymous separation → aligned dialogue → optional conservative cleanup. It preserves the original recording, raw transcript, speaker-labelled transcript, derived cleanup and mappings. Turning cleanup off uses the retained complete transcript. Rerunning separation reuses recognition; rerunning recognition creates a new product.
+The local pipeline uses FSMN VAD, a persisted recognition checkpoint, CAM++ anonymous separation, aligned dialogue and optional conservative cleanup. Native Apple Silicon uses Qwen3-ASR 1.7B 8 bit and Qwen3-ForcedAligner. The CPU worker uses Fun-ASR-Nano-2512 and CT-Punc. Both preserve the original recording, raw transcript, speaker-labelled transcript, derived cleanup and mappings. Rerunning separation reuses recognition. Rerunning recognition creates a new product.
 
 `SPEAKER_n` names are anonymous clusters, not real people, owner identity or cross-recording identity. Missing attribution remains `SPEAKER_UNKNOWN`; models must not infer a speaker from left/right placement or a phrase. Explicit speaker counts/ranges are validated against available evidence. The current worker supports 1–16 as an explicit count/range; bounded listening previews do not discard later valid speech.
 
 PCM normalization uses mono 16 kHz PCM16 and retains actual-frame duration and trailing silence. Checkpoints preserve model/dependency identity, VAD, raw recognition, punctuation and actual timing precision. All domain times are milliseconds. Word timings are omitted when unavailable; no interpolation creates false precision. Legitimate overlap is retained, while negative, reversed, out-of-range or incomplete output is rejected.
+
+Transcript evidence carries automatic origin, adjoining recognition window boundaries, regions selected by VAD with empty recognition, coarse timing and available speaker uncertainty. Material and file-chunk reads preserve these signals at original recording times. Finish state describes processing coverage. The shared Agent instructions keep consequential doubts in summaries, Memory and Ask. A span with no recognized text retains its timing as evidence, without adding words to the transcript.
 
 The current local protocol is `mote.funasr/1`; native results use the versioned FunASR contracts. Generic text/image and the optional HTTP processor keep their declared transcript contracts. A custom HTTP endpoint receives raw bytes and returns bounded JSON transcript segments; it is not automatically compatible with arbitrary vendor ASR APIs. Adapt those through a registered processor. Remote processing needs explicit enablement and HTTPS.
 

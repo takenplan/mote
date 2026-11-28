@@ -9,24 +9,29 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {MEDIA_MODEL_PATHS,MEDIA_MODEL_COMPONENT_PATHS,mediaAssetStatusSchema} from '@mote/shared';
-import {FUNASR_MODEL_IDS,FUNASR_SDK_WHEEL_SHA256} from '../src/funasr-contract.js';
-import {MEDIA_CATALOG,MediaAssets,mediaModelIdentities} from '../src/media-assets.js';
+import {FUNASR_MODEL_IDS,FUNASR_SDK_WHEEL_SHA256,QWEN_DIALOGUE_MODEL_IDS} from '../src/funasr-contract.js';
+import {MEDIA_CATALOG,MediaAssets,dialogueCatalog,mediaModelIdentities} from '../src/media-assets.js';
 
 const scripts=fileURLToPath(new URL('../../../scripts/',import.meta.url));
-const engineManifest=()=>JSON.parse(execFileSync('python3',[join(scripts,'mote_funasr.py'),'--manifest'],{encoding:'utf8',timeout:30000}));
+const engineManifest=(qwen=false)=>JSON.parse(execFileSync('python3',['-c',
+ `import json,mote_funasr as engine; print(json.dumps(engine.asset_manifest(${qwen?'True':'False'})))`,
+],{cwd:scripts,encoding:'utf8',timeout:30000}));
 
 test('a clean dialogue install publishes exactly the files, sources and identities the actual engine verifies',()=>{
- const manifest=engineManifest(),catalog=MEDIA_CATALOG.dialogue;
- const files=Object.entries(manifest).flatMap(([role,value])=>{
-  const model=value as {id:string;revision:string;license:string;directory:string;manifestSha256:string;files:{name:string;size:number;sha256:string;url:string}[]};
-  const source=catalog.models![role];
-  assert.deepEqual(source,{id:model.id,repository:model.id,revision:model.revision,license:model.license,directory:role});
-  assert.equal(model.directory,`${MEDIA_MODEL_PATHS.dialogue}/${role}`);
-  assert.deepEqual(mediaModelIdentities('dialogue')[role],{id:model.id,revision:model.revision,manifestSha256:model.manifestSha256});
-  return model.files.map(({name,size,sha256,url})=>({name:`${role}/${name}`,size,sha256,official:url}));
- });
- const byName=(a:{name:string},b:{name:string})=>a.name.localeCompare(b.name);
- assert.deepEqual(catalog.files.toSorted(byName),files.toSorted(byName),'every installed asset, including SDK code, must be verified by the engine');
+ const prior=MEDIA_CATALOG.dialogue;
+ try{for(const qwen of [false,true]){
+  const manifest=engineManifest(qwen),catalog=dialogueCatalog(qwen);MEDIA_CATALOG.dialogue=catalog;
+  const identities=mediaModelIdentities('dialogue');
+  const files=Object.entries(manifest).flatMap(([role,value])=>{
+   const model=value as {id:string;revision:string;license:string;directory:string;manifestSha256:string;files:{name:string;size:number;sha256:string;url:string}[]};
+   assert.deepEqual(catalog.models![role],{id:model.id,repository:model.id,revision:model.revision,license:model.license,directory:role});
+   assert.equal(model.directory,`${MEDIA_MODEL_PATHS.dialogue}/${role}`);
+   assert.deepEqual(identities[role],{id:model.id,revision:model.revision,manifestSha256:model.manifestSha256});
+   return model.files.map(({name,size,sha256,url})=>({name:`${role}/${name}`,size,sha256,official:url}));
+  });
+  const byName=(a:{name:string},b:{name:string})=>a.name.localeCompare(b.name);
+  assert.deepEqual(catalog.files.toSorted(byName),files.toSorted(byName),'every installed asset must be verified by the engine');
+ }}finally{MEDIA_CATALOG.dialogue=prior;}
 });
 
 test('an imported generated bundle is read by the actual engine and rejects a different or corrupt model version',async t=>{
@@ -44,7 +49,7 @@ test('an imported generated bundle is read by the actual engine and rejects a di
   }
   models[role]={revision:createHash('sha256').update('generated revision '+role).digest('hex'),license:model.license,files:generated};
  }
- MEDIA_CATALOG.dialogue={version:'generated-catalog-engine',models:Object.fromEntries(Object.entries(prior.models!).map(([role,model])=>[role,{...model,revision:models[role].revision}])),files};
+ MEDIA_CATALOG.dialogue={version:'generated-catalog-engine',models:Object.fromEntries(Object.entries(dialogueCatalog(false).models!).map(([role,model])=>[role,{...model,revision:models[role].revision}])),files};
  await writeFile(description,JSON.stringify(models));
  const assets=new MediaAssets(join(directory,'models'));
  t.after(async()=>{await assets.close();MEDIA_CATALOG.dialogue=prior;await rm(directory,{recursive:true,force:true});});
@@ -71,8 +76,9 @@ test('an imported generated bundle is read by the actual engine and rejects a di
 });
 
 test('the fixed catalog contains both large image shards, pinned model code and all four FunASR components',()=>{
- const image=MEDIA_CATALOG['local-image'],dialogue=MEDIA_CATALOG.dialogue;
- assert.deepEqual(Object.keys(mediaModelIdentities('dialogue')).sort(),Object.keys(FUNASR_MODEL_IDS).sort());
+ const image=MEDIA_CATALOG['local-image'],dialogue=dialogueCatalog(false);
+ const qwen=process.platform==='darwin'&&process.arch==='arm64';
+ assert.deepEqual(Object.keys(mediaModelIdentities('dialogue')).sort(),Object.keys(qwen?QWEN_DIALOGUE_MODEL_IDS:FUNASR_MODEL_IDS).sort());
  for(const [key,model] of Object.entries(dialogue.models!)){
   assert.equal(model.id,FUNASR_MODEL_IDS[key as keyof typeof FUNASR_MODEL_IDS]);assert.match(model.revision,/^[a-f0-9]{40,64}$/);
   assert.equal(`${MEDIA_MODEL_PATHS.dialogue}/${model.directory}`,MEDIA_MODEL_COMPONENT_PATHS.dialogue[key as keyof typeof FUNASR_MODEL_IDS]);

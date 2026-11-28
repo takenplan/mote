@@ -16,13 +16,13 @@ export const cleanedDialogueOutput:FileOutputType={id:'mote.cleaned-dialogue',ve
 export const funasrDialogueCleanup:FileDialogueCleanup={...TRANSCRIPT_CLEANUP,output:cleanedDialogueOutput,
   process({transcript,checkpoint,signal}){
     signal.throwIfAborted();
-    return cleanupTranscript(transcript,{},checkpoint.sentences.map(sentence=>sentence.precision));
+    return cleanupTranscript(transcript,{},'aligner' in checkpoint.identity.models?undefined:checkpoint.sentences.map(sentence=>sentence.precision));
   }};
 export function prepareFunasrDialogue(value:unknown,settings:Partial<TranscriptCleanupSettings>={}){
   const response=parseFunasrResponse(value);
   if(response.status!=='succeeded'||response.operation!=='diarize')throw Error('Expected complete FunASR dialogue');
   const checkpoint=parseFunasrArchive(response.checkpoint);
-  return cleanupTranscript(projectFunasrDialogue(checkpoint,response.diarization),settings,checkpoint.sentences.map(s=>s.precision));
+  return cleanupTranscript(projectFunasrDialogue(checkpoint,response.diarization),settings,'aligner' in checkpoint.identity.models?undefined:checkpoint.sentences.map(s=>s.precision));
 }
 /** The one current artifact envelope, shared by review and export consumers.
  * A plain transcript from another current output type needs no cleanup reader. */
@@ -73,7 +73,7 @@ export function alignDialogue(raw:Transcript,diarization:Diarization):Transcript
     }else {const {sentence,word,...segment}=unit;turns.push(segment);}
     previous=unit;
   }
-  return transcriptSchema.parse({durationMs:raw.durationMs,segments:turns,uncorrected:true,engine:'mote-time-alignment-v2',warnings:[...diarization.warnings,
+  return transcriptSchema.parse({durationMs:raw.durationMs,segments:turns,uncorrected:true,transcription:raw.transcription,engine:'mote-time-alignment-v2',warnings:[...diarization.warnings,
     ...(overlappingWordTimings?[moteText("部分词级时间与相邻片段重叠，已保留整句并标记说话人不确定；原始转写未改动。")]:[]),
     ...(outsideSentenceWordTimings?[moteText("部分词级时间超出句子范围，已保留整句并标记说话人不确定；原始转写未改动。")]:[]),
     ...(diarization.overlapDetection==='unknown'?[moteText("重叠检测范围未知。未标记处仍可能有重叠说话。")]:[])]});

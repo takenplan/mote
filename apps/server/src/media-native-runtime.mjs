@@ -78,7 +78,8 @@ function runtimeSpec(role){
  const base='import json,sys; assert sys.version_info[:2] == (3,11); ';
  if(role==='ocr')return {requirements:['requirements-ocr.txt'],probe:base+'import paddlex,onnxruntime,PIL; print(json.dumps({"python":sys.version.split()[0]}))'};
  if(role==='local-image')return {requirements:['requirements-vlm.txt'],probe:base+'import mlx.core,mlx_vlm,transformers,PIL; print(json.dumps({"python":sys.version.split()[0]}))'};
- return {requirements:['requirements-audio.txt'],probe:base+`sys.path.insert(0,sys.argv[1]); from mote_asr_contract import SDK_VERSION; import importlib.metadata,funasr,torch,numpy,imageio_ffmpeg; assert importlib.metadata.version('funasr') == SDK_VERSION; print(json.dumps({"python":sys.version.split()[0],"ffmpeg":imageio_ffmpeg.get_ffmpeg_exe()}))`};
+ const qwen=process.platform==='darwin'&&process.arch==='arm64'?'import mlx.core,mlx_audio.stt.utils; ':'';
+ return {requirements:['requirements-audio.txt'],probe:base+`sys.path.insert(0,sys.argv[1]); from mote_asr_contract import SDK_VERSION; import importlib.metadata,funasr,torch,numpy,imageio_ffmpeg; ${qwen}assert importlib.metadata.version('funasr') == SDK_VERSION; print(json.dumps({"python":sys.version.split()[0],"ffmpeg":imageio_ffmpeg.get_ffmpeg_exe()}))`};
 }
 const preparations=new Map();
 async function requirementIdentities(paths,root,seen=new Set()){

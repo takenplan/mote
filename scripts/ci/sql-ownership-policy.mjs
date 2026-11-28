@@ -318,7 +318,7 @@ export const consumerScopes={
  "ArchivedFileStore.savePrepared": "archived-files",
  "ArchivedFileStore.get": "archived-files",
  "ArchivedFileStore.attach": "archived-files",
- "ArchivedFileStore.listForCapture": "archived-files",
+ "listArchivedFilesForCapture": "archived-files",
  "ArchivedFileStore.portableEstimate": "archived-files",
  "ArchivedFileStore.exportPortable": "archived-files",
  "ArchivedFileStore.preparePortable": "archived-files",

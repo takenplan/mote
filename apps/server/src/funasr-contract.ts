@@ -8,7 +8,7 @@
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {z} from 'zod';
-import {transcriptSchema,diarizationSchema,type Transcript,type Diarization} from '@mote/shared';
+import {transcriptSchema,diarizationSchema,type Transcript,type Diarization,type TranscriptionEvidence} from '@mote/shared';
 import type {FileOutputType} from './file-recipes.js';
 
 export const FUNASR_PROTOCOL='mote.funasr/1';
@@ -28,9 +28,12 @@ export const FUNASR_LIMITS={wireBytes:32*1024*1024,checkpointBytes:16*1024*1024,
   durationMs:86_400_000,vad:50_000,sentences:50_000,acousticSegments:100_000,samples:16,sampleBytes:768*1024} as const;
 export const FUNASR_MODEL_IDS={asr:'FunAudioLLM/Fun-ASR-Nano-2512',vad:'iic/speech_fsmn_vad_zh-cn-16k-common-pytorch',
   speaker:'iic/speech_campplus_sv_zh-cn_16k-common',punctuation:'iic/punc_ct-transformer_cn-en-common-vocab471067-large'} as const;
+export const QWEN_DIALOGUE_MODEL_IDS={asr:'mlx-community/Qwen3-ASR-1.7B-8bit',aligner:'mlx-community/Qwen3-ForcedAligner-0.6B-8bit',
+  vad:FUNASR_MODEL_IDS.vad,speaker:FUNASR_MODEL_IDS.speaker} as const;
 const digest=z.string().regex(/^[a-f0-9]{64}$/);
 const ms=z.number().finite().min(0).max(FUNASR_LIMITS.durationMs);
 const model=(id:string)=>z.object({id:z.literal(id),revision:z.string().regex(/^[a-f0-9]{40,64}$/),manifestSha256:digest}).strict();
+const acousticModels={vad:model(FUNASR_MODEL_IDS.vad),speaker:model(FUNASR_MODEL_IDS.speaker)};
 const ref=<I extends string,V extends string>(value:{id:I;version:V})=>z.object({id:z.literal(value.id),version:z.literal(value.version)}).strict();
 export const funasrIdentitySchema=z.object({
   sdkVersion:z.literal(FUNASR_SDK_VERSION),sdkWheelSha256:z.literal(FUNASR_SDK_WHEEL_SHA256),
@@ -38,7 +41,10 @@ export const funasrIdentitySchema=z.object({
   // Loaded worker inference settings; excludes host connection/task settings
   // and per-request person-count overrides. Retained unchanged across stages.
   settingsFingerprint:digest,
-  models:z.object({asr:model(FUNASR_MODEL_IDS.asr),vad:model(FUNASR_MODEL_IDS.vad),speaker:model(FUNASR_MODEL_IDS.speaker),punctuation:model(FUNASR_MODEL_IDS.punctuation)}).strict(),
+  models:z.union([
+    z.object({asr:model(FUNASR_MODEL_IDS.asr),...acousticModels,punctuation:model(FUNASR_MODEL_IDS.punctuation)}).strict(),
+    z.object({asr:model(QWEN_DIALOGUE_MODEL_IDS.asr),...acousticModels,aligner:model(QWEN_DIALOGUE_MODEL_IDS.aligner)}).strict(),
+  ]),
   dependencies:z.record(z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9.+_-]{0,99}$/)).refine(v=>Object.keys(v).length>0&&Object.keys(v).length<=32&&Object.keys(v).every(k=>/^[a-z][a-z0-9_-]{0,63}$/.test(k))),
   backend:z.enum(['cpu','mps','cuda']),threads:z.number().int().min(1).max(32),
 }).strict();
@@ -51,7 +57,7 @@ export const funasrSourceSchema=z.object({
 export type FunasrSource=z.infer<typeof funasrSourceSchema>;
 const interval=z.object({startMs:ms,endMs:ms}).strict();
 const utf8Text=z.string().refine(s=>Buffer.from(s,'utf8').toString('utf8')===s,'Invalid Unicode text');
-const sentence=z.object({startMs:ms,endMs:ms,text:utf8Text.refine(s=>s.length>0&&s.length<=8000),precision:z.enum(['sentence','vad','ctc'])}).strict();
+const sentence=z.object({startMs:ms,endMs:ms,text:utf8Text.refine(s=>s.length>0&&s.length<=8000),precision:z.enum(['sentence','vad','ctc','forced'])}).strict();
 export const funasrSpeakersSchema=z.discriminatedUnion('mode',[
   z.object({mode:z.literal('unknown')}).strict(),
   z.object({mode:z.literal('exact'),count:z.number().int().min(1).max(16)}).strict(),
@@ -126,16 +132,25 @@ export function parseFunasrArchive(value:unknown,expected?:Pick<FunasrRequest,'a
   const checkpoint=checkpointSchema.parse(JSON.parse(archive.json)),{source,vad,sentences}=checkpoint;
   timeline(vad,source.durationMs,true,true);timeline(sentences,source.durationMs,false);
   requireContract(checkpoint.recognitionChunks.length===vad.length&&checkpoint.recognitionChunks.every((chunk,i)=>chunk.vadIndex===i),'Incomplete VAD recognition coverage');
-  const observedCtc=new Set<string>();
+  const observed=new Set<string>();
   for(const chunk of checkpoint.recognitionChunks){
     if(!chunk.tokens)continue;
     timeline(chunk.tokens,source.durationMs,false);
     const region=vad[chunk.vadIndex];
     requireContract(chunk.tokens.every(token=>region.startMs<=token.startMs&&token.endMs<=region.endMs),'CTC token outside its recognition region');
     requireContract(chunk.tokens.map(token=>token.text).join('')===chunk.text,'CTC tokens do not match final ASR text');
-    for(const token of chunk.tokens)observedCtc.add(JSON.stringify([token.startMs,token.endMs]));
+    for(const token of chunk.tokens)observed.add(JSON.stringify([token.startMs,token.endMs]));
   }
-  for(const s of sentences)requireContract(s.precision!=='ctc'||observedCtc.has(JSON.stringify([s.startMs,s.endMs])),'CTC sentence has no archived token observation');
+  for(const s of sentences)if(s.precision==='ctc'||s.precision==='forced'){
+    requireContract(observed.has(JSON.stringify([s.startMs,s.endMs])),s.precision==='ctc'?'CTC sentence has no archived token observation':'Aligned sentence has no archived token observation');
+  }
+  if('aligner' in checkpoint.identity.models){
+    const spoken=checkpoint.recognitionChunks.filter(chunk=>chunk.text.trim());
+    requireContract(checkpoint.text===spoken.map(chunk=>chunk.text).join('\n'),'Aligned text must preserve every recognized window');
+    const expected=spoken.flatMap(chunk=>chunk.tokens?chunk.tokens.map(t=>({...t,precision:'forced'})):
+      [{...vad[chunk.vadIndex],text:chunk.text,precision:'vad'}]);
+    requireContract(isDeepStrictEqual(sentences,expected),'Aligned passages do not match the archived recognition');
+  }
   requireContract(Boolean(checkpoint.text.trim())===(sentences.length>0),'Text and sentence coverage disagree');
   // A sentence can span several regions from this SAME VAD. Preserve overlap.
   const covered=(time:number)=>{let lo=0,hi=vad.length;while(lo<hi){const mid=(lo+hi)>>>1;if(vad[mid].startMs<=time)lo=mid+1;else hi=mid;}return lo>0&&vad[lo-1].endMs>=time;};
@@ -194,13 +209,46 @@ export function parseFunasrResponse(value:unknown,expected?:FunasrRequest):Funas
   return response;
 }
 const label=(speaker:number|null)=>speaker===null?'SPEAKER_UNKNOWN':`SPEAKER_${speaker}`;
-export function projectFunasrTranscript(cp:FunasrCheckpoint):Transcript {
-  return transcriptSchema.parse({durationMs:cp.source.durationMs,coverage:'full',uncorrected:true,engine:'Fun-ASR-Nano-2512 / FunASR '+FUNASR_SDK_VERSION,
-    segments:cp.sentences.map(({precision:_,...s})=>s)});
+function transcriptionEvidence(cp:FunasrCheckpoint):TranscriptionEvidence {
+  const notices:NonNullable<TranscriptionEvidence['notices']>=[];
+  for(const [index,region] of cp.vad.entries()){
+    if(index>0&&cp.vad[index-1].endMs===region.startMs)notices.push({kind:'window_boundary',startMs:region.startMs,endMs:region.startMs});
+    if(!cp.recognitionChunks[index].text.trim())notices.push({kind:'speech_without_text',...region});
+  }
+  for(const {startMs,endMs,precision} of cp.sentences)if(precision==='vad'&&endMs>startMs)notices.push({kind:'window_timing',startMs,endMs});
+  return {automatic:true,...(notices.length?{notices:notices.sort((a,b)=>a.startMs-b.startMs||a.endMs-b.endMs)}:{})};
 }
+const sentenceEnd=/[。！？.!?…][”’」』）)]*\s*$/u;
+function qwenPassages(cp:FunasrCheckpoint,assignments?:FunasrDiarizationResult['assignments']):Transcript['segments']{
+  const passages:Transcript['segments']=[];
+  let window=0,lastWindow=-1;
+  for(const [index,{precision,...segment}] of cp.sentences.entries()){
+    while(window+1<cp.vad.length&&cp.vad[window+1].startMs<=segment.startMs)window++;
+    const assignment=assignments?.[index];
+    const speaker=assignment===undefined?undefined:label(assignment);
+    const uncertain=assignment===null?true:undefined;
+    const last=passages.at(-1);
+    if(last&&window===lastWindow&&last.speaker===speaker&&last.uncertain===uncertain&&last.words&&precision==='forced'&&
+      !sentenceEnd.test(last.words.at(-1)!.text)&&segment.startMs-last.endMs<=1200&&last.text.length+segment.text.length<=8000){
+      last.text+=segment.text;last.endMs=Math.max(last.endMs,segment.endMs);last.words.push(segment);
+    }else passages.push({...segment,speaker,uncertain,...(precision==='forced'?{words:[segment]}:{})});
+    lastWindow=window;
+  }
+  return passages;
+}
+function projectTranscript(cp:FunasrCheckpoint,assignments?:FunasrDiarizationResult['assignments']):Transcript {
+  const qwen='aligner' in cp.identity.models;
+  const segments=qwen?qwenPassages(cp,assignments):cp.sentences.map(({precision:_,...s},i)=>{
+    const assigned=assignments?.[i];
+    return assigned===undefined?s:{...s,speaker:label(assigned),...(assigned===null?{uncertain:true}:{})};
+  });
+  return transcriptSchema.parse({durationMs:cp.source.durationMs,coverage:'full',uncorrected:true,transcription:transcriptionEvidence(cp),
+    engine:qwen?'Qwen3-ASR 1.7B 8 bit / MLX':'Fun-ASR-Nano-2512 / FunASR '+FUNASR_SDK_VERSION,segments});
+}
+export function projectFunasrTranscript(cp:FunasrCheckpoint):Transcript {return projectTranscript(cp);}
 export function projectFunasrDialogue(cp:FunasrCheckpoint,result:FunasrDiarizationResult):Transcript {
   validateDiarization(result,cp);
-  return transcriptSchema.parse({...projectFunasrTranscript(cp),segments:cp.sentences.map(({precision:_,...s},i)=>({...s,speaker:label(result.assignments[i]),...(result.assignments[i]===null?{uncertain:true}:{})}))});
+  return projectTranscript(cp,result.assignments);
 }
 export function projectFunasrDiarization(cp:FunasrCheckpoint,result:FunasrDiarizationResult):Diarization {
   validateDiarization(result,cp);

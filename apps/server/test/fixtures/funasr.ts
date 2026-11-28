@@ -19,8 +19,13 @@ identity=generated_identity();identity['models']=data['models']
 source=generated_source(data['durationMs']);source['audioSha256']=data['audioSha256']
 request={'protocol':c.PROTOCOL,'operation':'recognize','audioSha256':source['audioSha256'],'maxAudioMs':data['durationMs'],'identity':identity}
 rows=[{'start':s['startMs'],'end':s['endMs'],'text':s['text']} for s in data['segments']]
+qwen='aligner' in identity['models']
+if qwen:
+ for row in rows: row['precision']='vad'
 native={'text':'\n'.join(row['text'] for row in rows),'sentence_info':rows}
-recognition=c.recognize_to_checkpoint(request,source,identity,{'value':[[0,data['durationMs']]]},native,[{'text':native['text']}])
+windows=[[row['start'],row['end']] for row in rows] if qwen else [[0,data['durationMs']]]
+chunks=[{'text':row['text']} for row in rows] if qwen else [{'text':native['text']}]
+recognition=c.recognize_to_checkpoint(request,source,identity,{'value':windows},native,chunks)
 diarize={**request,'operation':'diarize','checkpoint':json.loads(recognition)['checkpoint'],'speakers':data['speakers']}
 result=c.speakers_from_sdk(c.read_checkpoint(diarize['checkpoint']),diarize['speakers'],
                          [{**row,'spk':s['speaker']} for row,s in zip(rows,data['segments'])],

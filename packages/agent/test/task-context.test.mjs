@@ -186,6 +186,16 @@ test('bounded evidence does not silently change an ordinary answer into memory e
  assert.equal(buildContextEnvelope({question:'Extract',skill:'memory-extraction',evidenceIds:['one']},[]).responseMode,'memory-extraction');
 });
 
+test('archive and bounded Memory share the automatic transcript guidance',()=>{
+ const archive=assembleHostContext({question:'Generated archive question'},[]);
+ const memory=assembleHostContext({question:'Extract from this generated evidence',skill:'memory-extraction',evidenceIds:[record.id]},[record]);
+ for(const {system} of [archive,memory]){
+  assert.match(system,/For automatic speech transcripts, wording, speaker attribution and sentence boundaries may be wrong or incomplete/);
+  assert.match(system,/Leave interrupted or missing speech unresolved/);
+  assert.match(system,/Attribute exact quotations to the transcript unless the spoken wording has been checked against the recording/);
+ }
+});
+
 test('bounded extraction supplies the unchanged procedure, draft and originals without archive discovery instructions',()=>{
  const input={question:'Exact host admission contract',skill:'memory-extraction',evidenceIds:[record.id],evidenceRanges:[{id:record.id,offset:0,length:record.ocrText.length}],taskContext:{untrustedMemoryDraft:{memories:[{statement:'Untrusted draft'}]}}};
  const envelope=buildContextEnvelope(input,[record]);

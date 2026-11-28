@@ -60,6 +60,28 @@ test('CTC precision retains the Python producer raw pair and rejects invented bo
   ]){const changed=structuredClone(cp);mutate(changed);assert.throws(()=>parseFunasrArchive(archive(changed),request));}
 });
 
+test('Qwen alignment joins words within a sentence and speaker turn while retaining exact timings and notices',()=>{
+  const {request,response}=bundle.qwenDialogue;
+  const decoded=parseFunasrResponse(response,parseFunasrRequest(request));
+  if(decoded.status!=='succeeded'||decoded.operation!=='diarize')throw Error('Expected generated Qwen dialogue');
+  const cp=parseFunasrArchive(decoded.checkpoint);
+  const {segments,transcription}=projectFunasrDialogue(cp,decoded.diarization);
+  assert.deepEqual(segments.map(s=>[s.text,s.startMs,s.endMs,s.speaker]),[
+    ['我们确认。',100,400,'SPEAKER_0'],['稍后再说',500,900,'SPEAKER_0'],
+    ['我来。',1000,1200,'SPEAKER_1'],['粗略时间。',3500,5000,'SPEAKER_UNKNOWN'],
+  ]);
+  assert.deepEqual(segments[0].words,cp.recognitionChunks[0].tokens?.slice(0,2));
+  assert.equal(segments[3].words,undefined);
+  assert.equal(segments[3].uncertain,true);
+  assert.deepEqual(transcription,{automatic:true,notices:[
+    {kind:'window_boundary',startMs:2000,endMs:2000},
+    {kind:'speech_without_text',startMs:2000,endMs:3000},
+    {kind:'window_timing',startMs:3500,endMs:5000},
+  ]});
+  cp.sentences[0].text='替换后的字';
+  assert.throws(()=>parseFunasrArchive(archive(cp)),/do not match the archived recognition/);
+});
+
 test('native CAM results project to current dialogue and Diarization without fake sherpa provenance or SPEAKER_None',()=>{
   const outputs=new FileOutputRegistry();outputs.register(funasrDialogueOutput);
   const dialogue=outputs.decode(funasrDialogueOutput,JSON.parse(bundle.diarizeResponse)).transcript;
